@@ -1,0 +1,17 @@
+# limiar-collector — Phase 1 configuration (TOML)
+# Viper reads LIMIAR_-prefixed env vars; this file documents the equivalent
+# keys. Env vars take precedence over file values.
+
+# --- Required ---
+app_id   = 0          # Telegram App ID (https://my.telegram.org/apps)
+api_hash = ""         # Telegram API Hash
+
+# --- Optional (defaults shown) ---
+db_path                = "./limiar.db"
+log_level              = "info"   # debug | info | warn | error
+log_format             = "json"   # json | text
+shutdown_timeout       = 15        # seconds, 1-300
+max_retries            = 10
+io_timeout             = "30s"
+dispatcher_buffer_size = 256       # 64-4096
+db_writer_buffer_size  = 512       # 128-8192

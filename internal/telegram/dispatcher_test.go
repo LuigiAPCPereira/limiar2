@@ -1,0 +1,149 @@
+package telegram_test
+
+import (
+	"context"
+	stderrors "errors"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/limiar/collector/internal/telegram"
+)
+
+// countingHandler records how many updates it received.
+type countingHandler struct {
+	count atomic.Int64
+	got   chan struct{}
+}
+
+func (h *countingHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
+	h.count.Add(1)
+	if h.got != nil {
+		h.got <- struct{}{}
+	}
+	return nil
+}
+
+// panicHandler always panics, to verify the dispatcher isolates and recovers.
+type panicHandler struct{}
+
+func (panicHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
+	panic("boom")
+}
+
+// errHandler returns an error, to verify the dispatcher logs without crashing.
+type errHandler struct{ called atomic.Bool }
+
+func (h *errHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
+	h.called.Store(true)
+	return stderrors.New("handler failed")
+}
+
+func TestDispatcherFansOutToAllHandlers(t *testing.T) {
+	d := telegram.NewDispatcher(256, nil)
+	h1 := &countingHandler{got: make(chan struct{}, 10)}
+	h2 := &countingHandler{got: make(chan struct{}, 10)}
+	d.Register(h1)
+	d.Register(h2)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d.Start(ctx)
+
+	d.Dispatch(ctx, telegram.Update{ChannelID: 1, MessageID: 1, Payload: []byte(`{}`)})
+
+	waitN(t, h1.got, 1)
+	waitN(t, h2.got, 1)
+
+	if h1.count.Load() != 1 || h2.count.Load() != 1 {
+		t.Fatalf("fan-out failed: h1=%d h2=%d", h1.count.Load(), h2.count.Load())
+	}
+	_ = d.Shutdown(ctx)
+}
+
+func TestDispatcherDeliversManyUpdates(t *testing.T) {
+	d := telegram.NewDispatcher(256, nil)
+	h := &countingHandler{got: make(chan struct{}, 1000)}
+	d.Register(h)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d.Start(ctx)
+
+	const n = 500
+	for i := 0; i < n; i++ {
+		d.Dispatch(ctx, telegram.Update{Payload: []byte(`{}`)})
+	}
+	waitN(t, h.got, n)
+	if h.count.Load() != n {
+		t.Fatalf("delivered %d, want %d", h.count.Load(), n)
+	}
+	_ = d.Shutdown(ctx)
+}
+
+// A panicking handler must not crash the dispatcher; other handlers keep working.
+func TestDispatcherRecoversFromHandlerPanic(t *testing.T) {
+	d := telegram.NewDispatcher(256, nil)
+	good := &countingHandler{got: make(chan struct{}, 10)}
+	d.Register(panicHandler{})
+	d.Register(good)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d.Start(ctx)
+
+	d.Dispatch(ctx, telegram.Update{Payload: []byte(`{}`)})
+	waitN(t, good.got, 1)
+
+	if good.count.Load() != 1 {
+		t.Fatalf("good handler should still receive despite sibling panic")
+	}
+	_ = d.Shutdown(ctx)
+}
+
+func TestDispatcherShutdownIsClean(t *testing.T) {
+	d := telegram.NewDispatcher(256, nil)
+	d.Register(&countingHandler{})
+	ctx := context.Background()
+	d.Start(ctx)
+	if err := d.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+}
+
+// Concurrent dispatch from multiple producers must be race-free (run -race).
+func TestDispatcherConcurrentDispatch(t *testing.T) {
+	d := telegram.NewDispatcher(512, nil)
+	h := &countingHandler{got: make(chan struct{}, 4000)}
+	d.Register(h)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d.Start(ctx)
+
+	var wg sync.WaitGroup
+	for p := 0; p < 4; p++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 250; i++ {
+				d.Dispatch(ctx, telegram.Update{Payload: []byte(`{}`)})
+			}
+		}()
+	}
+	wg.Wait()
+	waitN(t, h.got, 1000)
+	_ = d.Shutdown(ctx)
+}
+
+// waitN blocks until n signals arrive on ch or the test times out.
+func waitN(t *testing.T, ch <-chan struct{}, n int) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for i := 0; i < n; i++ {
+		select {
+		case <-ch:
+		case <-deadline:
+			t.Fatalf("timed out waiting for signal %d/%d", i+1, n)
+		}
+	}
+}
