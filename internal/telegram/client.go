@@ -209,7 +209,7 @@ func (c *Client) Auth(ctx context.Context) error {
 
 // ResolveChannel resolves a username to a Peer and caches it.
 func (c *Client) ResolveChannel(ctx context.Context, username string) (*storage.Peer, error) {
-	username = normalizeUsername(username)
+	username = NormalizeUsername(username)
 	var peer *storage.Peer
 	err := c.runOnce(ctx, func(ctx context.Context) error {
 		resolved, err := c.tg.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
@@ -241,7 +241,7 @@ func (c *Client) ResolveChannel(ctx context.Context, username string) (*storage.
 // ResolveChannelChecked verifies authentication and resolves a channel in a
 // single connection lifecycle, avoiding the double-Run problem.
 func (c *Client) ResolveChannelChecked(ctx context.Context, username string) (*storage.Peer, error) {
-	username = normalizeUsername(username)
+	username = NormalizeUsername(username)
 	var peer *storage.Peer
 	err := c.runOnce(ctx, func(ctx context.Context) error {
 		st, err := c.tg.Auth().Status(ctx)
@@ -362,7 +362,7 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-func normalizeUsername(u string) string {
+func NormalizeUsername(u string) string {
 	// Accept t.me links: https://t.me/foo or t.me/foo
 	for _, prefix := range []string{"https://t.me/", "http://t.me/", "t.me/"} {
 		if len(u) > len(prefix) && u[:len(prefix)] == prefix {

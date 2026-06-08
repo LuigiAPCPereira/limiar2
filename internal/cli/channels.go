@@ -7,6 +7,7 @@ import (
 
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/telegram"
 )
 
 // newChannelsCmd builds the `channels` subcommand group: list / add / remove.
@@ -148,7 +149,7 @@ func newChannelsRemoveCmd(p Provider) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return withAuthenticatedStore(cmd, p, func(repo *storage.Repository, log logging) error {
-				username := normalize(args[0])
+				username := telegram.NormalizeUsername(args[0])
 				if err := repo.RemoveChannel(cmd.Context(), username); err != nil {
 					return err
 				}
@@ -160,11 +161,3 @@ func newChannelsRemoveCmd(p Provider) *cobra.Command {
 	}
 }
 
-// normalize strips a leading @ from a username (t.me links are handled by
-// normalizeUsername in the telegram package before hitting the API).
-func normalize(u string) string {
-	for len(u) > 0 && u[0] == '@' {
-		u = u[1:]
-	}
-	return u
-}
