@@ -214,6 +214,9 @@ func (c *Client) doResolveChannel(ctx context.Context, username string) (*storag
 	if err != nil {
 		return nil, apperrors.Wrap("telegram", "resolve_username", err)
 	}
+	if resolved == nil {
+		return nil, apperrors.Wrap("telegram", "resolve_username", fmt.Errorf("resolved response is nil"))
+	}
 	ch, err := firstChannel(resolved.Chats)
 	if err != nil {
 		return nil, apperrors.Wrap("telegram", "resolve_channel", err)
@@ -234,9 +237,12 @@ func (c *Client) ResolveChannel(ctx context.Context, username string) (*storage.
 	username = normalizeUsername(username)
 	var peer *storage.Peer
 	err := c.runOnce(ctx, func(ctx context.Context) error {
-		var err error
-		peer, err = c.doResolveChannel(ctx, username)
-		return err
+		p, err := c.doResolveChannel(ctx, username)
+		if err != nil {
+			return err
+		}
+		peer = p
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -257,8 +263,12 @@ func (c *Client) ResolveChannelChecked(ctx context.Context, username string) (*s
 		if !st.Authorized {
 			return apperrors.ErrNotAuthenticated
 		}
-		peer, err = c.doResolveChannel(ctx, username)
-		return err
+		p, err := c.doResolveChannel(ctx, username)
+		if err != nil {
+			return err
+		}
+		peer = p
+		return nil
 	})
 	if err != nil {
 		return nil, err
