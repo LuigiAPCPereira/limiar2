@@ -14,25 +14,27 @@ func TestBroker_SubscribeUnsubscribe(t *testing.T) {
 	}
 
 	broker.mu.RLock()
-	if len(broker.clients) != 1 {
-		broker.mu.RUnlock()
-		t.Fatalf("expected 1 client, got %d", len(broker.clients))
+	numClients := len(broker.clients)
+	_, exists := broker.clients[ch]
+	broker.mu.RUnlock()
+
+	if numClients != 1 {
+		t.Fatalf("expected 1 client, got %d", numClients)
 	}
-	if _, exists := broker.clients[ch]; !exists {
-		broker.mu.RUnlock()
+	if !exists {
 		t.Fatal("client channel not found in broker.clients")
 	}
-	broker.mu.RUnlock()
 
 	// Test Unsubscribe
 	broker.Unsubscribe(ch)
 
 	broker.mu.RLock()
-	if len(broker.clients) != 0 {
-		broker.mu.RUnlock()
-		t.Fatalf("expected 0 clients, got %d", len(broker.clients))
-	}
+	numClients = len(broker.clients)
 	broker.mu.RUnlock()
+
+	if numClients != 0 {
+		t.Fatalf("expected 0 clients, got %d", numClients)
+	}
 
 	// Verify channel is closed
 	select {
