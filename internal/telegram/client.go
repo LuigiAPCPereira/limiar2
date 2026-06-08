@@ -207,29 +207,41 @@ func (c *Client) Auth(ctx context.Context) error {
 	})
 }
 
+func (c *Client) doResolveChannel(ctx context.Context, username string) (*storage.Peer, error) {
+	resolved, err := c.tg.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
+		Username: username,
+	})
+	if err != nil {
+		return nil, apperrors.Wrap("telegram", "resolve_username", err)
+	}
+	if resolved == nil {
+		return nil, apperrors.Wrap("telegram", "resolve_username", fmt.Errorf("resolved response is nil"))
+	}
+	ch, err := firstChannel(resolved.Chats)
+	if err != nil {
+		return nil, apperrors.Wrap("telegram", "resolve_channel", err)
+	}
+	accessHash, _ := ch.GetAccessHash()
+	peer := &storage.Peer{
+		ID:         ch.GetID(),
+		AccessHash: accessHash,
+		Type:       "channel",
+		Username:   username,
+	}
+	c.peers.Set(peer)
+	return peer, nil
+}
+
 // ResolveChannel resolves a username to a Peer and caches it.
 func (c *Client) ResolveChannel(ctx context.Context, username string) (*storage.Peer, error) {
 	username = NormalizeUsername(username)
 	var peer *storage.Peer
 	err := c.runOnce(ctx, func(ctx context.Context) error {
-		resolved, err := c.tg.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
-			Username: username,
-		})
+		p, err := c.doResolveChannel(ctx, username)
 		if err != nil {
-			return apperrors.Wrap("telegram", "resolve_username", err)
+			return err
 		}
-		ch, err := firstChannel(resolved.Chats)
-		if err != nil {
-			return apperrors.Wrap("telegram", "resolve_channel", err)
-		}
-		accessHash, _ := ch.GetAccessHash()
-		peer = &storage.Peer{
-			ID:         ch.GetID(),
-			AccessHash: accessHash,
-			Type:       "channel",
-			Username:   username,
-		}
-		c.peers.Set(peer)
+		peer = p
 		return nil
 	})
 	if err != nil {
@@ -251,24 +263,11 @@ func (c *Client) ResolveChannelChecked(ctx context.Context, username string) (*s
 		if !st.Authorized {
 			return apperrors.ErrNotAuthenticated
 		}
-		resolved, err := c.tg.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
-			Username: username,
-		})
+		p, err := c.doResolveChannel(ctx, username)
 		if err != nil {
-			return apperrors.Wrap("telegram", "resolve_username", err)
+			return err
 		}
-		ch, err := firstChannel(resolved.Chats)
-		if err != nil {
-			return apperrors.Wrap("telegram", "resolve_channel", err)
-		}
-		accessHash, _ := ch.GetAccessHash()
-		peer = &storage.Peer{
-			ID:         ch.GetID(),
-			AccessHash: accessHash,
-			Type:       "channel",
-			Username:   username,
-		}
-		c.peers.Set(peer)
+		peer = p
 		return nil
 	})
 	if err != nil {
