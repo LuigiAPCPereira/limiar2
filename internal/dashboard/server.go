@@ -41,7 +41,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		mux.HandleFunc("/api/events", s.handleEvents)
 	}
 
-	addr := fmt.Sprintf(":%d", s.port)
+	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 	srv := &http.Server{Addr: addr, Handler: mux}
 
 	errCh := make(chan error, 1)

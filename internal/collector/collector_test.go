@@ -82,10 +82,10 @@ type fakeClient struct {
 	runStarted chan struct{}
 }
 
-func (c *fakeClient) Auth(context.Context) error                 { return nil }
+func (c *fakeClient) Auth(context.Context) error                    { return nil }
 func (c *fakeClient) IsAuthenticated(context.Context) (bool, error) { return true, nil }
-func (c *fakeClient) LoadPeers(context.Context) error              { return nil }
-func (c *fakeClient) AddUpdateHandler(telegram.UpdateHandler)    {}
+func (c *fakeClient) LoadPeers(context.Context) error               { return nil }
+func (c *fakeClient) AddUpdateHandler(telegram.UpdateHandler)       {}
 
 func (c *fakeClient) ResolveChannel(context.Context, string) (*storage.Peer, error) {
 	return &storage.Peer{ID: 1, Type: "channel"}, nil

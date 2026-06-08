@@ -25,10 +25,10 @@ type WriteJob struct {
 // RawMessage and forwards it to the DBWriter via writeCh. It is stateless and
 // safe for concurrent invocation without locks.
 type MessageHandler struct {
-	classifier         Classifier
-	writeCh            chan<- WriteJob
-	log                logger.Logger
-	monitoredChannels  map[int64]struct{}
+	classifier        Classifier
+	writeCh           chan<- WriteJob
+	log               logger.Logger
+	monitoredChannels map[int64]struct{}
 }
 
 // NewMessageHandler builds a handler that classifies via classifier and emits

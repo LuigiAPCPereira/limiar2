@@ -1,9 +1,9 @@
 package storage
 
 import (
-	stderrors "errors"
 	"context"
 	"database/sql"
+	stderrors "errors"
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
@@ -359,10 +359,10 @@ type scanner interface {
 
 func scanChannel(s scanner) (*Channel, error) {
 	var (
-		ch          Channel
-		active      int
-		addedAt     string
-		lastColl    sql.NullString
+		ch       Channel
+		active   int
+		addedAt  string
+		lastColl sql.NullString
 	)
 	if err := s.Scan(&ch.ID, &ch.Username, &ch.Title, &active, &addedAt,
 		&ch.LastMessageID, &lastColl); err != nil {
@@ -381,9 +381,9 @@ func scanChannel(s scanner) (*Channel, error) {
 
 func scanMessage(s scanner) (*RawMessage, error) {
 	var (
-		msg       RawMessage
-		payload   string
-		received  string
+		msg      RawMessage
+		payload  string
+		received string
 	)
 	if err := s.Scan(&msg.ID, &msg.ChannelID, &msg.MessageID, &payload, &received, &msg.SchemaVersion); err != nil {
 		if stderrors.Is(err, sql.ErrNoRows) {
