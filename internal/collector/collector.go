@@ -36,9 +36,16 @@ type Collector struct {
 	log           logger.Logger
 	writeBuffer   int
 	maxWriteRetry int
+	onMessage     func(*storage.RawMessage)
 
 	writeCh chan WriteJob
 	wg      sync.WaitGroup
+}
+
+// SetOnMessage registers a callback invoked after each successful database
+// write. It is safe to call before Run. Pass nil to disable.
+func (c *Collector) SetOnMessage(fn func(*storage.RawMessage)) {
+	c.onMessage = fn
 }
 
 // NewCollector builds a collector. writeBuffer sizes the fan-in channel;
@@ -179,6 +186,9 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 		}
 		if err := c.repo.UpdateChannelLastMessage(ctx, job.Message.ChannelID, job.Message.MessageID, job.Message.ReceivedAt); err != nil {
 			c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", err)
+		}
+		if c.onMessage != nil {
+			c.onMessage(job.Message)
 		}
 		return
 	}

@@ -30,7 +30,7 @@ func newDashboardCmd(p Provider) *cobra.Command {
 			defer func() { _ = closeStore() }()
 
 			log := p.Logger("text")
-			srv := dashboard.NewServer(repo, log, port)
+			srv := dashboard.NewServer(repo, log, port, nil)
 
 			fmt.Fprintf(cmd.OutOrStdout(), "\n  🌐 Dashboard: http://localhost:%d\n  Pressione Ctrl+C para encerrar\n\n", port)
 			return srv.ListenAndServe(ctx)

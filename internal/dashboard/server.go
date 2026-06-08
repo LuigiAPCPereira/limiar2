@@ -12,18 +12,22 @@ import (
 )
 
 // Server is a minimal HTTP dashboard for inspecting captured messages.
+// When broker is non-nil, the /api/events SSE endpoint is enabled for
+// real-time updates.
 type Server struct {
-	repo *storage.Repository
-	log  logger.Logger
-	port int
+	repo   *storage.Repository
+	log    logger.Logger
+	port   int
+	broker *Broker
 }
 
-// NewServer builds a dashboard server on the given port.
-func NewServer(repo *storage.Repository, log logger.Logger, port int) *Server {
+// NewServer builds a dashboard server on the given port. broker may be nil
+// to disable SSE (the dashboard falls back to polling).
+func NewServer(repo *storage.Repository, log logger.Logger, port int, broker *Broker) *Server {
 	if log == nil {
 		log = logger.NopLogger{}
 	}
-	return &Server{repo: repo, log: log, port: port}
+	return &Server{repo: repo, log: log, port: port, broker: broker}
 }
 
 // ListenAndServe starts the HTTP server and blocks until ctx is cancelled.
@@ -33,6 +37,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/api/channels", s.handleChannels)
 	mux.HandleFunc("/api/messages", s.handleMessages)
 	mux.HandleFunc("/api/message/", s.handleMessage)
+	if s.broker != nil {
+		mux.HandleFunc("/api/events", s.handleEvents)
+	}
 
 	addr := fmt.Sprintf(":%d", s.port)
 	srv := &http.Server{Addr: addr, Handler: mux}
@@ -102,6 +109,34 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, msg)
+}
+
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := s.broker.Subscribe()
+	defer s.broker.Unsubscribe(ch)
+
+	for {
+		select {
+		case event, ok := <-ch:
+			if !ok {
+				return
+			}
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, event.Data)
+			flusher.Flush()
+		case <-r.Context().Done():
+			return
+		}
+	}
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -258,8 +293,25 @@ function escapeHtml(s) {
 
 loadStats();
 loadMessages();
-setInterval(loadStats, 30000);
-setInterval(loadMessages, 30000);
+
+if (window.EventSource) {
+  const es = new EventSource('/api/events');
+  es.addEventListener('message', function() {
+    loadMessages();
+    loadStats();
+  });
+  es.addEventListener('stats', function() {
+    loadStats();
+  });
+  es.onerror = function() {
+    // Fallback to polling if SSE fails
+    setInterval(loadStats, 30000);
+    setInterval(loadMessages, 30000);
+  };
+} else {
+  setInterval(loadStats, 30000);
+  setInterval(loadMessages, 30000);
+}
 </script>
 </body>
 </html>`

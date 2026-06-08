@@ -2,20 +2,26 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/limiar/collector/internal/dashboard"
 	apperrors "github.com/limiar/collector/internal/errors"
+	"github.com/limiar/collector/internal/storage"
 )
 
 // newRunCmd builds the `run` subcommand: the non-interactive collector service.
 // It uses a JSON-format logger, requires an authenticated session, and shuts
 // down gracefully on SIGTERM/SIGINT within the configured timeout.
 func newRunCmd(p Provider) *cobra.Command {
-	return &cobra.Command{
+	var withDashboard bool
+
+	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the collector service (non-interactive, production-ready)",
 		Args:  cobra.NoArgs,
@@ -23,7 +29,6 @@ func newRunCmd(p Provider) *cobra.Command {
 			cfg := p.Config()
 			log := p.Logger(cfg.LogFormat)
 
-			// Signal-aware root context: SIGTERM/SIGINT cancels it.
 			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
 
@@ -36,8 +41,22 @@ func newRunCmd(p Provider) *cobra.Command {
 			client := p.NewClient(log, repo)
 			col := p.NewCollector(client, repo, log)
 
-			// Run in a goroutine so we can enforce the shutdown timeout once the
-			// context is cancelled by a signal.
+			if withDashboard {
+				broker := dashboard.NewBroker()
+				srv := dashboard.NewServer(repo, log, 8080, broker)
+
+				col.SetOnMessage(func(msg *storage.RawMessage) {
+					data, err := json.Marshal(msg)
+					if err != nil {
+						return
+					}
+					broker.Publish(dashboard.Event{Type: "message", Data: data})
+				})
+
+				go func() { _ = srv.ListenAndServe(ctx) }()
+				fmt.Fprintf(cmd.OutOrStdout(), "\n  🌐 Dashboard: http://localhost:8080\n\n")
+			}
+
 			runErr := make(chan error, 1)
 			go func() { runErr <- col.Run(ctx) }()
 
@@ -60,4 +79,7 @@ func newRunCmd(p Provider) *cobra.Command {
 			}
 		},
 	}
+
+	cmd.Flags().BoolVar(&withDashboard, "dashboard", false, "Iniciar dashboard web em http://localhost:8080")
+	return cmd
 }
