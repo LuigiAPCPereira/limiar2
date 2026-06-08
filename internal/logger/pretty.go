@@ -14,10 +14,10 @@ var levelConfig = map[slog.Level]struct {
 	name  string
 	color string
 }{
-	slog.LevelDebug: {"DEBUG", "\x1b[90m"},   // grey
-	slog.LevelInfo:  {"INFO ", "\x1b[36m"},  // cyan
-	slog.LevelWarn:  {"WARN ", "\x1b[33m"},  // yellow
-	slog.LevelError: {"ERROR", "\x1b[31m"},  // red
+	slog.LevelDebug: {"DEBUG", "\x1b[90m"}, // grey
+	slog.LevelInfo:  {"INFO ", "\x1b[36m"}, // cyan
+	slog.LevelWarn:  {"WARN ", "\x1b[33m"}, // yellow
+	slog.LevelError: {"ERROR", "\x1b[31m"}, // red
 }
 
 const resetCode = "\x1b[0m"
@@ -156,4 +156,3 @@ func formatValue(v slog.Value) string {
 		return fmt.Sprintf("%v", v.Any())
 	}
 }
-
