@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/storage"
@@ -42,7 +43,14 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
-	srv := &http.Server{Addr: addr, Handler: mux}
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
