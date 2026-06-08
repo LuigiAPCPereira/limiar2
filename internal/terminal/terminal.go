@@ -18,12 +18,20 @@ func ReadPasswordMasked(fd int) (string, error) {
 		return "", err
 	}
 
+	restored := false
+	restore := func() {
+		if !restored {
+			_ = term.Restore(fd, oldState)
+			restored = true
+		}
+	}
+	defer restore()
+
 	var buf []byte
+	b := make([]byte, 1)
 	for {
-		b := make([]byte, 1)
 		n, err := os.Stdin.Read(b)
 		if err != nil {
-			_ = term.Restore(fd, oldState)
 			return "", err
 		}
 		if n == 0 {
@@ -33,15 +41,15 @@ func ReadPasswordMasked(fd int) (string, error) {
 		case '\r', '\n': // Enter
 			// Restore terminal FIRST so the newline below is rendered in
 			// cooked mode and doesn't drift on a quirky TTY driver.
-			_ = term.Restore(fd, oldState)
+			restore()
 			fmt.Println()
 			return string(buf), nil
 		case 0x03: // Ctrl+C
-			_ = term.Restore(fd, oldState)
+			restore()
 			fmt.Println("^C")
 			return "", fmt.Errorf("interrompido pelo usuário")
 		case 0x04: // Ctrl+D (EOF)
-			_ = term.Restore(fd, oldState)
+			restore()
 			fmt.Println()
 			return string(buf), nil
 		case 0x7f, 0x08: // Backspace / Delete
