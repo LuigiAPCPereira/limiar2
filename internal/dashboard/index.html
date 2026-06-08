@@ -86,7 +86,7 @@ async function loadStats() {
 
   document.getElementById('channels').innerHTML = data.map(c =>
     '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')">' +
-    '<div class="username">@' + c.Username + '</div>' +
+    '<div class="username">@' + escapeHtml(c.Username) + '</div>' +
     '<div class="count">' + c.MessageCount + ' mensagens</div></div>'
   ).join('');
 }
@@ -144,6 +144,15 @@ function escapeHtml(s) {
 loadStats();
 loadMessages();
 
+let pollingInterval = null;
+function startPolling() {
+  if (pollingInterval) return;
+  pollingInterval = setInterval(function() {
+    loadStats();
+    loadMessages();
+  }, 30000);
+}
+
 if (window.EventSource) {
   const es = new EventSource('/api/events');
   es.addEventListener('message', function() {
@@ -155,12 +164,10 @@ if (window.EventSource) {
   });
   es.onerror = function() {
     // Fallback to polling if SSE fails
-    setInterval(loadStats, 30000);
-    setInterval(loadMessages, 30000);
+    startPolling();
   };
 } else {
-  setInterval(loadStats, 30000);
-  setInterval(loadMessages, 30000);
+  startPolling();
 }
 </script>
 </body>
