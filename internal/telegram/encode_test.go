@@ -149,6 +149,24 @@ func TestExtractFromMessage(t *testing.T) {
 			t.Fatal("expected ok=false for peer that is not a channel")
 		}
 	})
+
+	t.Run("nil message class", func(t *testing.T) {
+		_, _, ok := extractFromMessage(nil)
+		if ok {
+			t.Fatal("expected ok=false for nil message class")
+		}
+	})
+
+	t.Run("nil peer ID", func(t *testing.T) {
+		mc := &tg.Message{
+			ID:     42,
+			PeerID: nil,
+		}
+		_, _, ok := extractFromMessage(mc)
+		if ok {
+			t.Fatal("expected ok=false for nil peer ID")
+		}
+	})
 }
 
 func TestExtractFromUpdate(t *testing.T) {
@@ -192,6 +210,16 @@ func TestExtractFromUpdate(t *testing.T) {
 			update: &tg.UpdateChatParticipantAdd{},
 			expectOk: false,
 		},
+		{
+			name: "Nil update",
+			update: nil,
+			expectOk: false,
+		},
+		{
+			name: "UpdateNewChannelMessage with nil message",
+			update: &tg.UpdateNewChannelMessage{Message: nil},
+			expectOk: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -227,6 +255,9 @@ func TestExtractMessages(t *testing.T) {
 		if msgs[0].MessageID != 1 || msgs[1].MessageID != 3 {
 			t.Fatalf("unexpected message IDs extracted")
 		}
+		if len(msgs[0].Payload) == 0 || len(msgs[1].Payload) == 0 {
+			t.Fatalf("expected non-empty JSON payload for extracted messages")
+		}
 	})
 
 	t.Run("MessagesMessages", func(t *testing.T) {
@@ -243,6 +274,9 @@ func TestExtractMessages(t *testing.T) {
 		if len(msgs) != 1 {
 			t.Fatalf("expected 1 message, got %d", len(msgs))
 		}
+		if len(msgs[0].Payload) == 0 {
+			t.Fatalf("expected non-empty JSON payload for extracted messages")
+		}
 	})
 
 	t.Run("MessagesMessagesSlice", func(t *testing.T) {
@@ -258,6 +292,9 @@ func TestExtractMessages(t *testing.T) {
 		}
 		if len(msgs) != 1 {
 			t.Fatalf("expected 1 message, got %d", len(msgs))
+		}
+		if len(msgs[0].Payload) == 0 {
+			t.Fatalf("expected non-empty JSON payload for extracted messages")
 		}
 	})
 
