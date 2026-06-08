@@ -14,6 +14,7 @@ import (
 	"github.com/gotd/td/tg"
 
 	"github.com/limiar/collector/internal/logger"
+	"github.com/limiar/collector/internal/terminal"
 )
 
 // terminalAuthenticator implements gotd's auth.UserAuthenticator by prompting
@@ -70,7 +71,7 @@ func (a *terminalAuthenticator) promptMasked(label string) (string, error) {
 	}
 	fd := int(os.Stdin.Fd())
 	if term.IsTerminal(fd) {
-		val, err := readLoginMasked(fd)
+		val, err := terminal.ReadPasswordMasked(fd)
 		if err != nil {
 			return "", err
 		}
@@ -120,51 +121,4 @@ func (a *terminalAuthenticator) AcceptTermsOfService(_ context.Context, _ tg.Hel
 // SignUp is not supported: limiar-collector never registers a new account.
 func (a *terminalAuthenticator) SignUp(_ context.Context) (auth.UserInfo, error) {
 	return auth.UserInfo{}, fmt.Errorf("telegram: cadastro de nova conta não é suportado")
-}
-
-// readLoginMasked reads from the given TTY file descriptor echoing '*' per
-// character. Backspace erases, Enter submits, Ctrl+C interrupts.
-func readLoginMasked(fd int) (string, error) {
-	oldState, err := term.MakeRaw(fd)
-	if err != nil {
-		return "", err
-	}
-
-	var buf []byte
-	for {
-		b := make([]byte, 1)
-		n, err := os.Stdin.Read(b)
-		if err != nil {
-			_ = term.Restore(fd, oldState)
-			return "", err
-		}
-		if n == 0 {
-			continue
-		}
-		switch b[0] {
-		case '\r', '\n': // Enter
-			_ = term.Restore(fd, oldState)
-			fmt.Println()
-			return string(buf), nil
-		case 0x03: // Ctrl+C
-			_ = term.Restore(fd, oldState)
-			fmt.Println("^C")
-			return "", fmt.Errorf("interrompido pelo usuário")
-		case 0x04: // Ctrl+D (EOF)
-			_ = term.Restore(fd, oldState)
-			fmt.Println()
-			return string(buf), nil
-		case 0x7f, 0x08: // Backspace / Delete
-			if len(buf) > 0 {
-				buf = buf[:len(buf)-1]
-				fmt.Print("\b \b")
-			}
-		default:
-			if b[0] < 0x20 || b[0] > 0x7e {
-				continue
-			}
-			buf = append(buf, b[0])
-			fmt.Print("*")
-		}
-	}
 }
