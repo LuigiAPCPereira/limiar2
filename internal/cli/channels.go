@@ -160,4 +160,3 @@ func newChannelsRemoveCmd(p Provider) *cobra.Command {
 		},
 	}
 }
-
