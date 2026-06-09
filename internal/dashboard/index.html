@@ -17,18 +17,19 @@
   .stat-card .value { font-size: 1.75rem; font-weight: 700; margin-top: 0.25rem; }
   .channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
   .channel-card { background: #1e293b; border-radius: 0.5rem; padding: 1rem; border: 1px solid #334155; cursor: pointer; transition: border-color 0.2s; }
-  .channel-card:hover, .channel-card.active { border-color: #38bdf8; }
+  .channel-card:hover, .channel-card.active, .channel-card:focus-visible { border-color: #38bdf8; outline: none; }
   .channel-card .username { font-weight: 600; color: #38bdf8; }
   .channel-card .count { font-size: 0.875rem; color: #94a3b8; margin-top: 0.25rem; }
   .messages { background: #1e293b; border-radius: 0.5rem; border: 1px solid #334155; }
   .messages h2 { padding: 1rem; border-bottom: 1px solid #334155; font-size: 1rem; }
   .msg-list { max-height: 600px; overflow-y: auto; }
   .msg-item { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; cursor: pointer; transition: background 0.15s; }
-  .msg-item:hover { background: #334155; }
+  .msg-item:hover, .msg-item:focus-visible { background: #334155; outline: 1px solid #38bdf8; outline-offset: -1px; }
   .msg-item .meta { font-size: 0.75rem; color: #94a3b8; }
   .msg-item .preview { font-size: 0.875rem; margin-top: 0.25rem; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .msg-detail { position: fixed; top: 0; right: 0; width: 500px; height: 100vh; background: #1e293b; border-left: 1px solid #334155; padding: 1.5rem; overflow-y: auto; z-index: 10; }
   .msg-detail .close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; }
+  .msg-detail .close:hover, .msg-detail .close:focus-visible { color: #e2e8f0; outline: 1px solid #38bdf8; border-radius: 0.25rem; }
   .msg-detail h3 { margin-bottom: 1rem; }
   .msg-detail pre { background: #0f172a; padding: 1rem; border-radius: 0.25rem; font-size: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
   .empty { text-align: center; padding: 3rem; color: #64748b; }
@@ -43,13 +44,13 @@
   <div class="channels" id="channels"></div>
   <div class="messages">
     <h2 id="msg-title">Mensagens recentes</h2>
-    <div class="msg-list" id="msg-list">
+    <div class="msg-list" id="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens">
       <div class="empty">Carregando...</div>
     </div>
   </div>
 </div>
 <div class="msg-detail" id="msg-detail" style="display:none">
-  <button class="close" onclick="closeDetail()">&times;</button>
+  <button class="close" aria-label="Fechar painel de detalhes" onclick="closeDetail()">&times;</button>
   <h3>Detalhes da mensagem</h3>
   <pre id="msg-json"></pre>
 </div>
@@ -85,7 +86,7 @@ async function loadStats() {
     '<div class="stat-card"><div class="label">Total de mensagens</div><div class="value">' + total + '</div></div>';
 
   document.getElementById('channels').innerHTML = data.map(c =>
-    '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')">' +
+    '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
     '<div class="username">@' + escapeHtml(c.Username) + '</div>' +
     '<div class="count">' + c.MessageCount + ' mensagens</div></div>'
   ).join('');
@@ -109,7 +110,7 @@ async function loadMessages() {
       const p = decodePayload(m.Payload);
       preview = extractText(p) || JSON.stringify(p).substring(0, 150);
     } catch(e) { preview = '(erro ao decodificar: ' + e.message + ')'; }
-    return '<div class="msg-item" onclick="showDetail(' + m.ID + ')">' +
+    return '<div class="msg-item" onclick="showDetail(' + m.ID + ')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showDetail(' + m.ID + ');}">' +
       '<div class="meta">ID: ' + m.MessageID + ' | Canal: ' + m.ChannelID + ' | ' + new Date(m.ReceivedAt).toLocaleString('pt-BR') + '</div>' +
       '<div class="preview">' + escapeHtml(preview) + '</div></div>';
   }).join('');
