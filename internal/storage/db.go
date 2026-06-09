@@ -26,7 +26,7 @@ type DB struct {
 // Open opens (or creates) the Tursogo database at dbPath and applies all
 // embedded migrations. The returned DB must be closed by the caller.
 func Open(ctx context.Context, dbPath string) (*DB, error) {
-	// Segurança: Garante que o arquivo do banco seja criado/mantido com
+	// Garante que o arquivo do banco seja criado/mantido com
 	// permissões restritas (0600) para proteger a sessão do Telegram e as mensagens.
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0600)
