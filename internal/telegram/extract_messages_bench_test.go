@@ -22,6 +22,7 @@ func init() {
 }
 
 func BenchmarkExtractMessages(b *testing.B) {
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_, _ = extractMessages(testExtractMessagesUpdate)
 	}
