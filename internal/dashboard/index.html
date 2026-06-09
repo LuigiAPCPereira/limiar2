@@ -110,7 +110,7 @@ async function loadMessages() {
       const p = decodePayload(m.Payload);
       preview = extractText(p) || JSON.stringify(p).substring(0, 150);
     } catch(e) { preview = '(erro ao decodificar: ' + e.message + ')'; }
-    return '<div class="msg-item" onclick="showDetail(this, ' + m.ID + ')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showDetail(this, ' + m.ID + ');}">' +
+    return '<div class="msg-item" onclick="showDetail(' + m.ID + ')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \\'){event.preventDefault();showDetail(' + m.ID + ');}">' +
       '<div class="meta">ID: ' + m.MessageID + ' | Canal: ' + m.ChannelID + ' | ' + new Date(m.ReceivedAt).toLocaleString('pt-BR') + '</div>' +
       '<div class="preview">' + escapeHtml(preview) + '</div></div>';
   }).join('');
