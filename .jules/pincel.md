@@ -1,3 +1,6 @@
 ## 2024-06-09 - Acessibilidade básica no Dashboard Vanilla
 **Aprendizado:** O dashboard utiliza `<div>` como elementos interativos (cards de canal e itens de mensagem) sem semântica ou suporte a teclado, além de omitir ARIA labels em botões e live regions na lista SSE.
 **Ação:** Em componentes vanilla, sempre que um `<div>` for clicável, deve receber `role="button"`, `tabindex="0"`, event handler para teclado (`onkeydown`), e estilo de `:focus-visible`.
+## 2025-02-28 - Acessibilidade em Dashboards Vanilla (Sem Framework)
+**Aprendizado:** Em um dashboard construído com HTML/JS vanilla (sem frameworks UI como React ou libs externas), componentes interativos customizados (como `div`s que agem como botões ou cards clicáveis) não ganham suporte a teclado ou semântica automaticamente. Leitores de tela precisam de atributos `aria` explícitos. Além disso, listas atualizadas via Server-Sent Events (SSE) são invisíveis para screen readers se não tiverem as roles apropriadas.
+**Ação:** Ao usar `<div onclick="...">`, sempre garanta que há `role="button"`, `tabindex="0"`, event handler para teclado (`onkeydown` com Enter ou Espaço), e estilos visíveis para estado de foco (`:focus-visible`). Para listas que recebem novos itens assincronamente (como via SSE), use `role="log"` e `aria-live="polite"` na div contêiner.

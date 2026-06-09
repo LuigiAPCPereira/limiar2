@@ -25,6 +25,8 @@
   .msg-list { max-height: 600px; overflow-y: auto; }
   .msg-item { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; cursor: pointer; transition: background 0.15s; }
   .msg-item:hover, .msg-item:focus-visible { background: #334155; outline: 1px solid #38bdf8; outline-offset: -1px; }
+  .msg-item:hover { background: #334155; }
+  .channel-card:focus-visible, .msg-item:focus-visible, .close:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
   .msg-item .meta { font-size: 0.75rem; color: #94a3b8; }
   .msg-item .preview { font-size: 0.875rem; margin-top: 0.25rem; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .msg-detail { position: fixed; top: 0; right: 0; width: 500px; height: 100vh; background: #1e293b; border-left: 1px solid #334155; padding: 1.5rem; overflow-y: auto; z-index: 10; }
@@ -52,6 +54,9 @@
 <div class="msg-detail" id="msg-detail" style="display:none">
   <button class="close" aria-label="Fechar painel de detalhes" onclick="closeDetail()">&times;</button>
   <h3>Detalhes da mensagem</h3>
+<div class="msg-detail" id="msg-detail" style="display:none" role="dialog" aria-labelledby="msg-detail-title">
+  <button class="close" onclick="closeDetail()" aria-label="Fechar painel de detalhes">&times;</button>
+  <h3 id="msg-detail-title">Detalhes da mensagem</h3>
   <pre id="msg-json"></pre>
 </div>
 <script>
@@ -87,6 +92,8 @@ async function loadStats() {
 
   document.getElementById('channels').innerHTML = data.map(c =>
     '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
+    '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" ' +
+    'onclick="selectChannel(' + c.ChannelID + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
     '<div class="username">@' + escapeHtml(c.Username) + '</div>' +
     '<div class="count">' + c.MessageCount + ' mensagens</div></div>'
   ).join('');
@@ -111,6 +118,8 @@ async function loadMessages() {
       preview = extractText(p) || JSON.stringify(p).substring(0, 150);
     } catch(e) { preview = '(erro ao decodificar: ' + e.message + ')'; }
     return '<div class="msg-item" onclick="showDetail(' + m.ID + ')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showDetail(' + m.ID + ');}">' +
+    return '<div class="msg-item" role="button" tabindex="0" ' +
+      'onclick="showDetail(' + m.ID + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showDetail(' + m.ID + ');}">' +
       '<div class="meta">ID: ' + m.MessageID + ' | Canal: ' + m.ChannelID + ' | ' + new Date(m.ReceivedAt).toLocaleString('pt-BR') + '</div>' +
       '<div class="preview">' + escapeHtml(preview) + '</div></div>';
   }).join('');
