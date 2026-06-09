@@ -17,7 +17,7 @@
   .stat-card .value { font-size: 1.75rem; font-weight: 700; margin-top: 0.25rem; }
   .channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
   .channel-card { background: #1e293b; border-radius: 0.5rem; padding: 1rem; border: 1px solid #334155; cursor: pointer; transition: border-color 0.2s; }
-  .channel-card:hover, .channel-card.active, .channel-card:focus-visible { border-color: #38bdf8; outline: 1px solid #38bdf8; outline-offset: -1px; }
+  .channel-card:hover, .channel-card.active, .channel-card:focus-visible { border-color: #38bdf8; outline: none; }
   .channel-card .username { font-weight: 600; color: #38bdf8; }
   .channel-card .count { font-size: 0.875rem; color: #94a3b8; margin-top: 0.25rem; }
   .messages { background: #1e293b; border-radius: 0.5rem; border: 1px solid #334155; }
@@ -44,7 +44,7 @@
   <div class="channels" id="channels"></div>
   <div class="messages">
     <h2 id="msg-title">Mensagens recentes</h2>
-    <div class="msg-list" id="msg-list" aria-label="Lista de mensagens">
+    <div class="msg-list" id="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens">
       <div class="empty">Carregando...</div>
     </div>
   </div>
@@ -86,7 +86,7 @@ async function loadStats() {
     '<div class="stat-card"><div class="label">Total de mensagens</div><div class="value">' + total + '</div></div>';
 
   document.getElementById('channels').innerHTML = data.map(c =>
-    '<div id="channel-card-' + c.ChannelID + '" class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
+    '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
     '<div class="username">@' + escapeHtml(c.Username) + '</div>' +
     '<div class="count">' + c.MessageCount + ' mensagens</div></div>'
   ).join('');
@@ -110,7 +110,7 @@ async function loadMessages() {
       const p = decodePayload(m.Payload);
       preview = extractText(p) || JSON.stringify(p).substring(0, 150);
     } catch(e) { preview = '(erro ao decodificar: ' + e.message + ')'; }
-    return '<div class="msg-item" onclick="showDetail(' + m.ID + ')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \\'){event.preventDefault();showDetail(' + m.ID + ');}">' +
+    return '<div class="msg-item" onclick="showDetail(' + m.ID + ')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showDetail(' + m.ID + ');}">' +
       '<div class="meta">ID: ' + m.MessageID + ' | Canal: ' + m.ChannelID + ' | ' + new Date(m.ReceivedAt).toLocaleString('pt-BR') + '</div>' +
       '<div class="preview">' + escapeHtml(preview) + '</div></div>';
   }).join('');
