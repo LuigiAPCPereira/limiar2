@@ -86,7 +86,7 @@ async function loadStats() {
     '<div class="stat-card"><div class="label">Total de mensagens</div><div class="value">' + total + '</div></div>';
 
   document.getElementById('channels').innerHTML = data.map(c =>
-    '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
+    '<div id="channel-card-' + c.ChannelID + '" class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
     '<div class="username">@' + escapeHtml(c.Username) + '</div>' +
     '<div class="count">' + c.MessageCount + ' mensagens</div></div>'
   ).join('');
