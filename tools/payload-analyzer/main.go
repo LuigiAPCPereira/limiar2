@@ -161,7 +161,11 @@ func analyzePayloads(messages []RawMessage) {
 				if fieldTypes[k] == nil {
 					fieldTypes[k] = make(map[string]bool)
 				}
-				fieldTypes[k][reflect.TypeOf(v).String()] = true
+				typeName := "null"
+				if v != nil {
+					typeName = reflect.TypeOf(v).String()
+				}
+				fieldTypes[k][typeName] = true
 
 				// Analyze nested objects
 				if nested, ok := v.(map[string]interface{}); ok {

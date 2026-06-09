@@ -71,7 +71,7 @@ func (p *provider) NewClient(log logger.Logger, repo *storage.Repository) telegr
 func (p *provider) NewCollector(client telegram.TelegramClient, repo *storage.Repository, log logger.Logger) *collector.Collector {
 	return collector.NewCollector(
 		client, repo, collector.NoopClassifier{}, log.WithComponent("collector"),
-		p.cfg.DBWriterBufferSize, p.cfg.MaxRetries,
+		p.cfg.DBWriterBufferSize, p.cfg.MaxRetries, p.cfg.HistoryMax, p.cfg.HistoryMaxDays,
 	)
 }
 

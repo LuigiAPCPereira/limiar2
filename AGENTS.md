@@ -232,6 +232,8 @@ interactive wizard collects them.
 | `LIMIAR_IO_TIMEOUT` | `30s` | Go duration |
 | `LIMIAR_DISPATCHER_BUFFER_SIZE` | `256` | 64–4096 |
 | `LIMIAR_DB_WRITER_BUFFER_SIZE` | `512` | 128–8192 |
+| `LIMIAR_HISTORY_MAX` | `5000` | 100–100000 (per-channel backfill ceiling) |
+| `LIMIAR_HISTORY_MAX_DAYS` | `30` | 1–365 (temporal cutoff; backfill stops at older messages) |
 
 ---
 

@@ -15,10 +15,14 @@ import (
 const schemaVersion = 1
 
 // WriteJob is a unit of work for the DBWriter: a message to persist and an
-// optional error channel for write-failure notification.
+// optional error channel for write-failure notification. Backfill is true for
+// jobs produced by the history backfill loop; the dbWriter skips cursor
+// advancement for those because the backfill orchestrator advances the cursor
+// once per channel with the true max id (avoiding the descending-order race).
 type WriteJob struct {
-	Message *storage.RawMessage
-	ErrCh   chan<- error
+	Message  *storage.RawMessage
+	ErrCh    chan<- error
+	Backfill bool
 }
 
 // MessageHandler is the Adapter and Observer: it converts a raw update into a
@@ -50,11 +54,12 @@ func NewMessageHandler(classifier Classifier, writeCh chan<- WriteJob, monitored
 // for persistence. The original payload bytes are preserved verbatim.
 // Updates from non-monitored channels are silently discarded.
 func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Update) error {
-	// Filter out updates from non-monitored channels
-	if update.ChannelID != 0 {
-		if _, ok := h.monitoredChannels[update.ChannelID]; !ok {
-			return nil // silently discard non-monitored channel updates
-		}
+	// Filter out updates from non-monitored channels. channel_id=0 covers DMs,
+	// system events, and any update that is not a channel message — all of
+	// which must be discarded in Phase 1 (collection is scoped to monitored
+	// channels only).
+	if _, ok := h.monitoredChannels[update.ChannelID]; !ok {
+		return nil
 	}
 
 	msg := &storage.RawMessage{

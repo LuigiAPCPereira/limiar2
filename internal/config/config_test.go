@@ -23,6 +23,8 @@ func valid() *config.Config {
 		IOTimeout:            30 * time.Second,
 		DispatcherBufferSize: 256,
 		DBWriterBufferSize:   512,
+		HistoryMax:           5000,
+		HistoryMaxDays:       30,
 	}
 }
 
@@ -61,6 +63,12 @@ func TestProperty12Defaults(t *testing.T) {
 	}
 	if c.DBWriterBufferSize != 512 {
 		t.Errorf("DBWriterBufferSize default = %d, want 512", c.DBWriterBufferSize)
+	}
+	if c.HistoryMax != 5000 {
+		t.Errorf("HistoryMax default = %d, want 5000", c.HistoryMax)
+	}
+	if c.HistoryMaxDays != 30 {
+		t.Errorf("HistoryMaxDays default = %d, want 30", c.HistoryMaxDays)
 	}
 }
 

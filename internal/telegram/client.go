@@ -41,14 +41,22 @@ type TelegramClient interface {
 	// is looked up from the peer store; if the peer is unknown, it returns an
 	// error. minID filters out messages with id <= minID (0 means no filter).
 	FetchHistory(ctx context.Context, channelID int64, minID int64, limit int) ([]HistoryMessage, error)
+	// FetchHistoryWithOffset returns up to limit raw message payloads with
+	// id < offsetID for the channel (newest-first when offsetID == 0). It is
+	// the pagination primitive used by the collector's walk-backward backfill:
+	// each subsequent call uses offsetID = min(id) of the previous page.
+	FetchHistoryWithOffset(ctx context.Context, channelID int64, offsetID int64, limit int) ([]HistoryMessage, error)
 	// Run connects and blocks, dispatching updates until ctx is cancelled.
 	Run(ctx context.Context) error
 }
 
-// HistoryMessage is a single historical message captured during first-run
-// backfill: its Telegram message id plus the raw JSON payload.
+// HistoryMessage is a single historical message captured during backfill: its
+// Telegram message id, the send timestamp (Date), and the raw JSON payload.
+// Date is used by the collector to stop paginating when messages are older
+// than the configured temporal cutoff (LIMIAR_HISTORY_MAX_DAYS).
 type HistoryMessage struct {
 	MessageID int64
+	Date      time.Time
 	Payload   []byte
 }
 
@@ -279,6 +287,20 @@ func (c *Client) ResolveChannelChecked(ctx context.Context, username string) (*s
 // FetchHistory backfills recent messages for a channel. minID excludes
 // messages with id <= minID, so repeated runs only fetch what is new.
 func (c *Client) FetchHistory(ctx context.Context, channelID int64, minID int64, limit int) ([]HistoryMessage, error) {
+	return c.fetchHistory(ctx, channelID, minID, 0, limit)
+}
+
+// FetchHistoryWithOffset fetches up to limit messages with id < offsetID
+// (newest-first when offsetID == 0). It is the pagination primitive used by
+// the collector's walk-backward backfill.
+func (c *Client) FetchHistoryWithOffset(ctx context.Context, channelID int64, offsetID int64, limit int) ([]HistoryMessage, error) {
+	return c.fetchHistory(ctx, channelID, 0, offsetID, limit)
+}
+
+// fetchHistory is the shared implementation for FetchHistory and
+// FetchHistoryWithOffset. At most one of minID/offsetID should be non-zero;
+// if both are zero, the newest `limit` messages are returned.
+func (c *Client) fetchHistory(ctx context.Context, channelID int64, minID int64, offsetID int64, limit int) ([]HistoryMessage, error) {
 	peer, ok := c.peers.Get(channelID)
 	if !ok {
 		return nil, apperrors.Wrap("telegram", "fetch_history", fmt.Errorf("peer not found for channel %d", channelID))
@@ -291,6 +313,9 @@ func (c *Client) FetchHistory(ctx context.Context, channelID int64, minID int64,
 		}
 		if minID > 0 {
 			req.MinID = int(minID)
+		}
+		if offsetID > 0 {
+			req.OffsetID = int(offsetID)
 		}
 		res, err := c.tg.API().MessagesGetHistory(ctx, req)
 		if err != nil {

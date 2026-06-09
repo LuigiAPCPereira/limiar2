@@ -27,6 +27,8 @@ const (
 	defaultIOTimeout       = 30 * time.Second
 	defaultDispatcherBuf   = 256
 	defaultDBWriterBuf     = 512
+	defaultHistoryMax      = 5000
+	defaultHistoryMaxDays  = 30
 )
 
 // Validation bounds.
@@ -37,6 +39,10 @@ const (
 	maxDispatcherBuf   = 4096
 	minDBWriterBuf     = 128
 	maxDBWriterBuf     = 8192
+	minHistoryMax      = 100
+	maxHistoryMax      = 100000
+	minHistoryMaxDays  = 1
+	maxHistoryMaxDays  = 365
 )
 
 // envPrefix is the prefix for all environment variables.
@@ -54,6 +60,8 @@ type Config struct {
 	IOTimeout            time.Duration `mapstructure:"io_timeout"`
 	DispatcherBufferSize int           `mapstructure:"dispatcher_buffer_size"`
 	DBWriterBufferSize   int           `mapstructure:"db_writer_buffer_size"`
+	HistoryMax           int           `mapstructure:"history_max"`
+	HistoryMaxDays       int           `mapstructure:"history_max_days"`
 }
 
 // Load reads configuration from LIMIAR_-prefixed environment variables and
@@ -79,6 +87,7 @@ func Load(v *viper.Viper) (*Config, error) {
 		"app_id", "api_hash", "db_path", "log_level", "log_format",
 		"shutdown_timeout", "max_retries", "io_timeout",
 		"dispatcher_buffer_size", "db_writer_buffer_size",
+		"history_max", "history_max_days",
 	} {
 		if err := v.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("config: bind_env %s: %w", key, err)
@@ -180,6 +189,12 @@ func (c *Config) ApplyDefaults() {
 	if c.DBWriterBufferSize == 0 {
 		c.DBWriterBufferSize = defaultDBWriterBuf
 	}
+	if c.HistoryMax == 0 {
+		c.HistoryMax = defaultHistoryMax
+	}
+	if c.HistoryMaxDays == 0 {
+		c.HistoryMaxDays = defaultHistoryMaxDays
+	}
 }
 
 // Validate checks every field and returns all validation problems joined into
@@ -209,6 +224,12 @@ func (c *Config) Validate() error {
 	if c.DBWriterBufferSize < minDBWriterBuf || c.DBWriterBufferSize > maxDBWriterBuf {
 		errs = append(errs, fmt.Errorf("db_writer_buffer_size %d out of range [%d,%d]", c.DBWriterBufferSize, minDBWriterBuf, maxDBWriterBuf))
 	}
+	if c.HistoryMax < minHistoryMax || c.HistoryMax > maxHistoryMax {
+		errs = append(errs, fmt.Errorf("history_max %d out of range [%d,%d]", c.HistoryMax, minHistoryMax, maxHistoryMax))
+	}
+	if c.HistoryMaxDays < minHistoryMaxDays || c.HistoryMaxDays > maxHistoryMaxDays {
+		errs = append(errs, fmt.Errorf("history_max_days %d out of range [%d,%d]", c.HistoryMaxDays, minHistoryMaxDays, maxHistoryMaxDays))
+	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("config: validation failed: %w", stderrors.Join(errs...))
@@ -221,10 +242,10 @@ func (c *Config) String() string {
 	return fmt.Sprintf(
 		"Config{AppID:%d, APIHash:%s, DBPath:%s, LogLevel:%s, LogFormat:%s, "+
 			"ShutdownTimeout:%d, MaxRetries:%d, IOTimeout:%s, "+
-			"DispatcherBufferSize:%d, DBWriterBufferSize:%d}",
+			"DispatcherBufferSize:%d, DBWriterBufferSize:%d, HistoryMax:%d, HistoryMaxDays:%d}",
 		c.AppID, maskSecret(c.APIHash), c.DBPath, c.LogLevel, c.LogFormat,
 		c.ShutdownTimeout, c.MaxRetries, c.IOTimeout,
-		c.DispatcherBufferSize, c.DBWriterBufferSize,
+		c.DispatcherBufferSize, c.DBWriterBufferSize, c.HistoryMax, c.HistoryMaxDays,
 	)
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -55,11 +56,11 @@ func (f *fakeRepo) ListChannels(_ context.Context) ([]*storage.Channel, error) {
 	return f.channels, nil
 }
 
-func (f *fakeRepo) SaveRawMessage(_ context.Context, msg *storage.RawMessage) error {
+func (f *fakeRepo) SaveRawMessage(_ context.Context, msg *storage.RawMessage) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.saved = append(f.saved, msg)
-	return nil
+	return true, nil
 }
 
 func (f *fakeRepo) UpdateChannelLastMessage(_ context.Context, channelID, messageID int64, _ time.Time) error {
@@ -95,12 +96,33 @@ func (c *fakeClient) ResolveChannelChecked(context.Context, string) (*storage.Pe
 	return &storage.Peer{ID: 1, Type: "channel"}, nil
 }
 
-func (c *fakeClient) FetchHistory(_ context.Context, _ int64, minID int64, _ int) ([]telegram.HistoryMessage, error) {
+func (c *fakeClient) FetchHistory(_ context.Context, _ int64, minID int64, limit int) ([]telegram.HistoryMessage, error) {
 	var out []telegram.HistoryMessage
 	for _, m := range c.history {
 		if m.MessageID > minID {
 			out = append(out, m)
 		}
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// FetchHistoryWithOffset returns up to limit messages with id < offsetID
+// (newest-first when offsetID == 0), sorted descending to mirror Telegram's
+// messages.getHistory ordering.
+func (c *fakeClient) FetchHistoryWithOffset(_ context.Context, _ int64, offsetID int64, limit int) ([]telegram.HistoryMessage, error) {
+	var out []telegram.HistoryMessage
+	for _, m := range c.history {
+		if offsetID == 0 || m.MessageID < offsetID {
+			out = append(out, m)
+		}
+	}
+	// Sort descending (newest first) like the real API.
+	sort.Slice(out, func(i, j int) bool { return out[i].MessageID > out[j].MessageID })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }
@@ -119,7 +141,7 @@ func TestProperty16ShutdownWithinTimeout(t *testing.T) {
 	repo := newFakeRepo()
 	started := make(chan struct{})
 	client := &fakeClient{runStarted: started}
-	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3)
+	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3, 5000, 30)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -148,7 +170,7 @@ func TestFirstRunBackfillsHistory(t *testing.T) {
 	}
 	started := make(chan struct{})
 	client := &fakeClient{history: history, runStarted: started}
-	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3)
+	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3, 5000, 30)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -176,7 +198,7 @@ func TestResumeBackfillFetchesOnlyNewMessages(t *testing.T) {
 	}
 	started := make(chan struct{})
 	client := &fakeClient{history: history, runStarted: started}
-	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3)
+	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3, 5000, 30)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -190,5 +212,41 @@ func TestResumeBackfillFetchesOnlyNewMessages(t *testing.T) {
 	}
 	if repo.cursors[1] != 101 {
 		t.Fatalf("expected cursor advanced to 101, got %d", repo.cursors[1])
+	}
+}
+
+// Regression: backfill must respect the temporal cutoff (LIMIAR_HISTORY_MAX_DAYS).
+// Messages older than now-historyMaxDays are skipped, and pagination stops when
+// the page straddles the cutoff. The cursor advances to the newest seen id.
+func TestBackfillRespectsTemporalCutoff(t *testing.T) {
+	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 0}
+	repo := newFakeRepo(ch)
+	now := time.Now()
+	history := []telegram.HistoryMessage{
+		{MessageID: 10, Date: now.Add(-24 * time.Hour), Payload: []byte(`{}`)},    // 1 day old — keep
+		{MessageID: 20, Date: now.Add(-3 * 24 * time.Hour), Payload: []byte(`{}`)}, // 3 days old — keep
+		{MessageID: 30, Date: now.Add(-15 * 24 * time.Hour), Payload: []byte(`{}`)}, // 15 days old — skip
+		{MessageID: 40, Date: now.Add(-60 * 24 * time.Hour), Payload: []byte(`{}`)}, // 60 days old — skip
+	}
+	started := make(chan struct{})
+	client := &fakeClient{history: history, runStarted: started}
+	// historyMaxDays=7 → only messages <= 7 days old are persisted.
+	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3, 5000, 7)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- col.Run(ctx) }()
+	<-started
+	cancel()
+	<-done
+
+	if repo.savedCount() != 2 {
+		t.Fatalf("expected 2 messages within the 7-day window, got %d", repo.savedCount())
+	}
+	// Cursor tracks the scan frontier (newest seen, id=40), not the newest
+	// persisted. This is intentional: messages 30 and 40 were filtered by the
+	// temporal cutoff but there is no point re-walking them on the next run.
+	if repo.cursors[1] != 40 {
+		t.Fatalf("expected cursor advanced to 40 (newest seen), got %d", repo.cursors[1])
 	}
 }

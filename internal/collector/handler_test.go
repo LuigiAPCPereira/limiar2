@@ -96,3 +96,42 @@ func TestMessageHandlerExtractsChannelAndMessageID(t *testing.T) {
 		t.Errorf("schema version = %d, want 1", job.Message.SchemaVersion)
 	}
 }
+
+// Regression: updates with channel_id=0 (DMs, system events, non-channel
+// updates) must be silently discarded. Previously the filter skipped the
+// monitored-channels check when ChannelID==0, letting these through.
+func TestMessageHandlerDiscardsZeroChannelID(t *testing.T) {
+	ctx := context.Background()
+	writeCh := make(chan collector.WriteJob, 4)
+	monitored := map[int64]struct{}{100: {}}
+	h := collector.NewMessageHandler(collector.NoopClassifier{}, writeCh, monitored, nil)
+
+	update := telegram.Update{ChannelID: 0, MessageID: 0, Payload: []byte(`{}`)}
+	if err := h.HandleUpdate(ctx, update); err != nil {
+		t.Fatalf("HandleUpdate: %v", err)
+	}
+	select {
+	case job := <-writeCh:
+		t.Fatalf("channel_id=0 update should be discarded, but got: %+v", job)
+	default:
+	}
+}
+
+// Regression: updates from channels not in the monitored set must be silently
+// discarded, regardless of ChannelID value.
+func TestMessageHandlerDiscardsNonMonitoredChannel(t *testing.T) {
+	ctx := context.Background()
+	writeCh := make(chan collector.WriteJob, 4)
+	monitored := map[int64]struct{}{100: {}}
+	h := collector.NewMessageHandler(collector.NoopClassifier{}, writeCh, monitored, nil)
+
+	update := telegram.Update{ChannelID: 999, MessageID: 7, Payload: []byte(`{"text":"x"}`)}
+	if err := h.HandleUpdate(ctx, update); err != nil {
+		t.Fatalf("HandleUpdate: %v", err)
+	}
+	select {
+	case job := <-writeCh:
+		t.Fatalf("non-monitored channel update should be discarded, but got: %+v", job)
+	default:
+	}
+}

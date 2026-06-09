@@ -248,15 +248,24 @@ func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, me
 // --- Raw Messages ---
 
 // SaveRawMessage persists a captured message. Duplicate (channel_id,
-// message_id) pairs are ignored (safe-persistence dedup).
-func (r *Repository) SaveRawMessage(ctx context.Context, msg *RawMessage) error {
-	_, err := r.stmtSaveMessage.ExecContext(ctx,
+// message_id) pairs are silently ignored via ON CONFLICT DO NOTHING. The
+// returned inserted flag is true when a new row was written and false when
+// the message was already present (a duplicate). This lets callers produce
+// accurate new-vs-duplicate observability counts.
+func (r *Repository) SaveRawMessage(ctx context.Context, msg *RawMessage) (inserted bool, err error) {
+	res, err := r.stmtSaveMessage.ExecContext(ctx,
 		msg.ChannelID, msg.MessageID, string(msg.Payload),
 		msg.ReceivedAt.UTC().Format(dbTimeLayout), msg.SchemaVersion)
 	if err != nil {
-		return apperrors.Wrap("storage", "save_raw_message", err)
+		return false, apperrors.Wrap("storage", "save_raw_message", err)
 	}
-	return nil
+	affected, err := res.RowsAffected()
+	if err != nil {
+		// RowsAffected errors are rare and driver-specific; treat as "unknown"
+		// rather than failing the save — the message was persisted either way.
+		return true, nil
+	}
+	return affected > 0, nil
 }
 
 // CountRawMessages returns the total number of stored raw messages.

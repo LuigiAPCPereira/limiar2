@@ -3,6 +3,7 @@ package telegram
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/gotd/td/tg"
 )
@@ -92,7 +93,11 @@ func extractMessages(res tg.MessagesMessagesClass) ([]HistoryMessage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("marshal history message %d: %w", msg.ID, err)
 		}
-		out = append(out, HistoryMessage{MessageID: int64(msg.ID), Payload: payload})
+		out = append(out, HistoryMessage{
+			MessageID: int64(msg.ID),
+			Date:      time.Unix(int64(msg.Date), 0),
+			Payload:   payload,
+		})
 	}
 	return out, nil
 }

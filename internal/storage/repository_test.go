@@ -193,8 +193,15 @@ func TestSaveRawMessagePersistsJSON(t *testing.T) {
 		ReceivedAt:    time.Now().UTC(),
 		SchemaVersion: 1,
 	}
-	if err := repo.SaveRawMessage(ctx, msg); err != nil {
+	if inserted, err := repo.SaveRawMessage(ctx, msg); err != nil {
 		t.Fatalf("SaveRawMessage: %v", err)
+	} else if !inserted {
+		t.Fatalf("first SaveRawMessage should report inserted=true")
+	}
+	if inserted, err := repo.SaveRawMessage(ctx, msg); err != nil {
+		t.Fatalf("SaveRawMessage (re-insert): %v", err)
+	} else if inserted {
+		t.Fatalf("second SaveRawMessage should report inserted=false (duplicate)")
 	}
 
 	n, err := repo.CountRawMessages(ctx)
@@ -214,9 +221,20 @@ func TestSaveRawMessageDedupsByChannelAndMessageID(t *testing.T) {
 		t.Fatalf("AddChannel: %v", err)
 	}
 	msg := &storage.RawMessage{ChannelID: 101, MessageID: 7, Payload: []byte(`{}`), ReceivedAt: time.Now().UTC(), SchemaVersion: 1}
+	insertedFlags := make([]bool, 3)
 	for i := 0; i < 3; i++ {
-		if err := repo.SaveRawMessage(ctx, msg); err != nil {
+		inserted, err := repo.SaveRawMessage(ctx, msg)
+		if err != nil {
 			t.Fatalf("SaveRawMessage #%d: %v", i, err)
+		}
+		insertedFlags[i] = inserted
+	}
+	if !insertedFlags[0] {
+		t.Fatalf("first SaveRawMessage should report inserted=true")
+	}
+	for i := 1; i < 3; i++ {
+		if insertedFlags[i] {
+			t.Fatalf("SaveRawMessage #%d should report inserted=false (duplicate)", i)
 		}
 	}
 	n, err := repo.CountRawMessages(ctx)
