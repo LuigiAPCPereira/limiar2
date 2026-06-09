@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 
 	_ "turso.tech/database/tursogo" // registers the "turso" driver
 )
@@ -25,6 +26,21 @@ type DB struct {
 // Open opens (or creates) the Tursogo database at dbPath and applies all
 // embedded migrations. The returned DB must be closed by the caller.
 func Open(ctx context.Context, dbPath string) (*DB, error) {
+	// Segurança: Garante que o arquivo do banco seja criado/mantido com
+	// permissões restritas (0600) para proteger a sessão do Telegram e as mensagens.
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0600)
+		if err != nil {
+			return nil, fmt.Errorf("storage: create db %q: %w", dbPath, err)
+		}
+		_ = f.Close()
+	} else {
+		// Enforce permissões restritas mesmo se o arquivo já existir
+		if err := os.Chmod(dbPath, 0600); err != nil {
+			return nil, fmt.Errorf("storage: chmod db %q: %w", dbPath, err)
+		}
+	}
+
 	conn, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("storage: open %q: %w", dbPath, err)
