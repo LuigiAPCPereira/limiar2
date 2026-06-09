@@ -58,6 +58,10 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Updat
 	// system events, and any update that is not a channel message — all of
 	// which must be discarded in Phase 1 (collection is scoped to monitored
 	// channels only).
+
+	// Otimização do Raio: A validação do channel monitorado acontece
+	// ANTES da alocação do struct *storage.RawMessage ou processamentos,
+	// funcionando como um early return no hot path (evita alocações e ciclos de GC).
 	if _, ok := h.monitoredChannels[update.ChannelID]; !ok {
 		return nil
 	}

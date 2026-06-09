@@ -82,6 +82,10 @@ func extractMessages(res tg.MessagesMessagesClass) ([]HistoryMessage, error) {
 		return nil, fmt.Errorf("unsupported messages response type %T", res)
 	}
 
+	// Otimização de performance (Raio ⚡):
+	// O slice 'out' está sendo pré-alocado com o tamanho de 'raw'.
+	// Isso evita realocações ao longo das iterações, pois sabemos
+	// o número máximo de mensagens retornadas e já pre-alocamos.
 	out := make([]HistoryMessage, 0, len(raw))
 	for _, mc := range raw {
 		msg, ok := mc.(*tg.Message)
