@@ -12,7 +12,7 @@ func TestNoopClassifier_Classify(t *testing.T) {
 	classifier := collector.NoopClassifier{}
 	ctx := context.Background()
 
-	t.Run("returns original pointer", func(t *testing.T) {
+	t.Run("retorna o ponteiro original", func(t *testing.T) {
 		input := &storage.RawMessage{
 			ChannelID: 1,
 			MessageID: 2,
@@ -21,22 +21,22 @@ func TestNoopClassifier_Classify(t *testing.T) {
 
 		output, err := classifier.Classify(ctx, input)
 		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
+			t.Fatalf("esperava não obter erro, obteve %v", err)
 		}
 
 		if output != input {
-			t.Errorf("expected same pointer %p, got %p", input, output)
+			t.Errorf("esperava o mesmo ponteiro %p, obteve %p", input, output)
 		}
 	})
 
-	t.Run("handles nil input gracefully", func(t *testing.T) {
+	t.Run("lida com entrada nil graciosamente", func(t *testing.T) {
 		output, err := classifier.Classify(ctx, nil)
 		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
+			t.Fatalf("esperava não obter erro, obteve %v", err)
 		}
 
 		if output != nil {
-			t.Errorf("expected nil output, got %v", output)
+			t.Errorf("esperava saída nil, obteve %v", output)
 		}
 	})
 }

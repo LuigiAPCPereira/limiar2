@@ -1,57 +1,57 @@
-# ADR 007 — Retry, Backoff, and Flood-Wait Policy
+# ADR 007 — Política de Retry, Backoff e Flood-Wait
 
 ## Status
 
-Accepted
+Aceito
 
-## Context
+## Contexto
 
-A long-running collector must survive transient failures without manual
-intervention: Telegram connections drop, and Telegram rate-limits clients with
-`FLOOD_WAIT` signals that specify an exact wait duration. Database writes can
-also fail transiently. We need a resilience policy that recovers automatically,
-bounds its effort, and respects server-mandated waits, while still terminating
-cleanly on context cancellation.
+Um collector de longa duração deve sobreviver a falhas transitórias sem intervenção
+manual: conexões com o Telegram caem, e o Telegram aplica rate-limits (limite de taxa) aos clientes com
+sinais de `FLOOD_WAIT` que especificam uma duração de espera exata. Escritas em banco de
+dados também podem falhar temporariamente. Precisamos de uma política de resiliência que se recupere
+automaticamente, limite o seu esforço, e respeite as esperas exigidas pelo servidor, enquanto
+ainda termina de forma limpa no cancelamento de contexto.
 
-## Decision
+## Decisão
 
-**Connection backoff.** On connection loss, `Client.Run` reconnects using
-exponential backoff via `CalculateBackoff`:
+**Backoff de Conexão.** Na perda de conexão, `Client.Run` se reconecta usando
+backoff exponencial via `CalculateBackoff`:
 
-- base delay **1s**, multiplier **2x**, **10%** jitter, ceiling **5m**;
-- bounded by `MaxRetries` — once attempts are exhausted, `CalculateBackoff`
-  returns `ErrMaxRetriesExceeded` and `Run` stops reconnecting;
-- the attempt counter resets to 0 on each successful connect;
-- the backoff sleep selects on `ctx.Done()`, so cancellation wins immediately.
+- atraso (delay) base **1s**, multiplicador **2x**, **10%** de jitter, teto **5m**;
+- delimitado por `MaxRetries` — uma vez que as tentativas se esgotam, `CalculateBackoff`
+  retorna `ErrMaxRetriesExceeded` e o `Run` para de se reconectar;
+- o contador de tentativas é zerado a cada conexão bem-sucedida;
+- a espera do backoff (sleep) faz select em `ctx.Done()`, então o cancelamento vence imediatamente.
 
-`DefaultBackoff(maxRetries)` constructs this policy; it is wired in
-`main.go`'s `NewClient`.
+`DefaultBackoff(maxRetries)` constrói essa política; ela é injetada no `NewClient`
+em `main.go`.
 
-**Flood-wait.** When Telegram signals `FLOOD_WAIT`, the client waits exactly the
-duration the server specifies before retrying (no jitter applied to a
-server-mandated wait).
+**Flood-wait.** Quando o Telegram sinaliza `FLOOD_WAIT`, o cliente aguarda exatamente a
+duração que o servidor especificar antes de tentar novamente (nenhum jitter é aplicado a uma
+espera exigida pelo servidor).
 
-**DB writes.** The DBWriter retries each `WriteJob` up to `maxWriteRetry` times
-(`writeWithRetry`); on persistent failure it logs the lost message explicitly
-and, if an `ErrCh` is present, reports an error satisfying
+**Gravações no Banco (DB writes).** O DBWriter repete (retries) cada `WriteJob` até `maxWriteRetry` vezes
+(`writeWithRetry`); em caso de falha persistente ele loga a mensagem perdida explicitamente
+e, se um `ErrCh` estiver presente, relata um erro que satisfaz a condição
 `errors.Is(err, ErrDBWriteFailed)`.
 
-## Consequences
+## Consequências
 
-- The collector self-heals from dropped connections and rate limits without
-  operator action.
-- Jitter avoids thundering-herd reconnect storms; the 5m ceiling caps backoff.
-- Bounded retries prevent infinite spinning; exhaustion is an explicit,
-  inspectable error.
-- Respecting the exact flood-wait duration keeps the userbot compliant and
-  avoids escalating bans.
-- All waits honor context, so shutdown stays within `ShutdownTimeout`.
+- O collector se recupera sozinho de conexões perdidas e rate limits sem
+  ação do operador.
+- O Jitter evita tempestades de reconexão sincronizadas (thundering-herd); o teto de 5m limita o backoff.
+- Tentativas limitadas (Bounded retries) previnem giros infinitos; o esgotamento é um erro explícito
+  e inspecionável.
+- O respeito à duração exata do flood-wait mantém o userbot em conformidade e
+  evita banimentos progressivos.
+- Todas as esperas respeitam o contexto, logo o desligamento (shutdown) fica dentro de `ShutdownTimeout`.
 
-## Alternatives considered
+## Alternativas consideradas
 
-- **Fixed-interval retry** — simpler but prone to synchronized reconnect storms
-  and ignores flood-wait semantics. Rejected.
-- **Unbounded retries** — could spin forever on a permanent failure; rejected in
-  favor of `MaxRetries`.
-- **Ignoring the server's flood-wait duration** (using our own backoff instead) —
-  risks bans; rejected.
+- **Retry com intervalo fixo** — mais simples, mas propenso a tempestades sincronizadas de reconexão
+  e ignora as regras semânticas do flood-wait. Rejeitado.
+- **Tentativas ilimitadas (Unbounded retries)** — poderia ficar rodando para sempre numa falha permanente; rejeitado em
+  favor de `MaxRetries`.
+- **Ignorar a duração do flood-wait do servidor** (usando nosso próprio backoff) —
+  arrisca banimentos; rejeitado.

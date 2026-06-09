@@ -1,7 +1,7 @@
-// Package collector owns Phase 1 message capture: it adapts raw gotd/td
-// updates into RawMessage records and persists them through a single DBWriter
-// goroutine (fan-in). It performs no enrichment, classification, or
-// deduplication beyond safe persistence.
+// Package collector é o responsável pela captura de mensagens na Fase 1: ele adapta updates
+// brutos (raw) do gotd/td em registros RawMessage e os persiste através de uma única
+// goroutine DBWriter (fan-in). Ele não realiza enriquecimento, classificação ou
+// desduplicação além da persistência segura.
 package collector
 
 import (
@@ -10,22 +10,22 @@ import (
 	"github.com/limiar/collector/internal/storage"
 )
 
-// Classifier is the Strategy interface for message classification, pluggable
-// from the start. Phase 1 ships only NoopClassifier; later phases swap in
-// rule- and LLM-based classifiers without touching the pipeline.
+// Classifier é a interface Strategy para classificação de mensagens, plugável
+// desde o início. A Fase 1 entrega apenas o NoopClassifier; fases posteriores podem substituir
+// por classificadores baseados em regras e em LLMs sem precisar alterar o pipeline.
 type Classifier interface {
-	// Classify returns a (possibly transformed) message. Phase 1's
-	// implementation returns its input unchanged.
+	// Classify retorna uma mensagem (possivelmente transformada). A implementação
+	// da Fase 1 retorna a sua entrada inalterada.
 	Classify(ctx context.Context, raw *storage.RawMessage) (*storage.RawMessage, error)
 }
 
-// NoopClassifier is the Phase 1 pass-through Classifier: it returns its input
-// unchanged, preserving identity.
+// NoopClassifier é o Classifier "pass-through" (de passagem) da Fase 1: ele retorna a
+// sua entrada inalterada, preservando a identidade.
 type NoopClassifier struct{}
 
 var _ Classifier = NoopClassifier{}
 
-// Classify returns raw unchanged.
+// Classify retorna raw inalterado.
 func (NoopClassifier) Classify(_ context.Context, raw *storage.RawMessage) (*storage.RawMessage, error) {
 	return raw, nil
 }

@@ -1,45 +1,45 @@
-# Guideline — Extending the Collector Layer
+# Diretrizes — Estendendo a Camada Collector
 
-The collector layer (`internal/collector`) adapts raw Telegram updates into
-`storage.RawMessage` records and persists them through a single DBWriter
-goroutine. Phase 1 does capture only — no enrichment. Follow these rules.
+A camada collector (`internal/collector`) adapta os updates brutos (raw) do Telegram
+em registros `storage.RawMessage` e os persiste através de uma única goroutine DBWriter.
+A Fase 1 realiza apenas captura — sem enriquecimento. Siga estas regras.
 
-## Rules
+## Regras
 
-1. **`MessageHandler` stays stateless.** It holds only its `classifier`,
-   `writeCh`, and `log`, acquires no locks, and is safe for concurrent
-   invocation. Do not add mutable fields or per-channel state.
-2. **Only the DBWriter writes.** `Collector.dbWriter` is the single goroutine
-   that calls `Repository.SaveRawMessage` / `UpdateChannelLastMessage` (fan-in
-   via `writeCh chan WriteJob`). Handlers and backfill **enqueue** jobs; they
-   never write to the DB directly.
-3. **The classifier is pluggable.** Go through the `Classifier` Strategy
-   interface. Phase 1 ships `NoopClassifier` (pass-through, identity). Later
-   phases swap in rule/LLM classifiers without touching the pipeline.
-4. **No enrichment in Phase 1.** The handler preserves the original payload
-   bytes verbatim (`Payload: update`) and stamps `SchemaVersion = 1`. No
-   normalization, dedup beyond safe persistence, or semantic processing.
-5. **Lost writes are logged, never silently dropped.** `writeWithRetry` retries
-   up to `maxWriteRetry`, then logs an explicit error (and notifies `ErrCh` if
-   set) — see Requirement 3.10.
-6. **Context-first and cancellation-aware.** Sends to `writeCh` select on
-   `ctx.Done()`; `shutdown` closes `writeCh` and `wg.Wait()`s the writer.
-7. **Backfill is first-run only.** `backfill` skips channels with
-   `LastMessageID > 0` (resume mode) and fetches `historyBatchSize` (20) for
-   first-run channels — see ADR 006.
-8. **Depend on the `Repository` interface**, not the concrete struct, so the
-   collector stays testable with a fake.
+1. **`MessageHandler` permanece sem estado (stateless).** Ele contém apenas o seu `classifier`,
+   `writeCh`, e `log`, não adquire nenhum lock, e é seguro para invocação
+   concorrente. Não adicione campos mutáveis ou estado por canal.
+2. **Apenas o DBWriter escreve.** `Collector.dbWriter` é a única goroutine
+   que chama `Repository.SaveRawMessage` / `UpdateChannelLastMessage` (fan-in
+   via `writeCh chan WriteJob`). Os handlers e o backfill **enfileiram** (enqueue) jobs; eles
+   nunca escrevem diretamente no banco de dados.
+3. **O classifier é plugável.** Utilize a interface Strategy `Classifier`.
+   A Fase 1 entrega apenas o `NoopClassifier` (pass-through, identidade). Fases
+   posteriores trocam por classificadores baseados em regras/LLMs sem mexer no pipeline.
+4. **Sem enriquecimento na Fase 1.** O handler preserva os bytes originais
+   do payload literalmente (`Payload: update`) e estampa `SchemaVersion = 1`. Nenhuma
+   normalização, desduplicação além da persistência segura, ou processamento semântico.
+5. **Gravações perdidas são logadas, nunca descartadas silenciosamente.** `writeWithRetry` tenta novamente
+   até `maxWriteRetry`, depois registra um erro explícito (e notifica `ErrCh` se
+   definido) — veja o Requisito 3.10.
+6. **Prioridade ao Contexto e consciente de cancelamento.** Envios para `writeCh` fazem select no
+   `ctx.Done()`; `shutdown` fecha o `writeCh` e faz `wg.Wait()` no escritor.
+7. **Backfill é apenas na primeira execução.** `backfill` pula os canais com
+   `LastMessageID > 0` (modo de retomada) e busca `historyBatchSize` (20) para
+   os canais na primeira execução — veja o ADR 006.
+8. **Dependa da interface `Repository`**, não da struct concreta, para que o
+   collector permaneça testável usando um fake.
 
-## Correct
+## Correto
 
 ```go
-// Stateless handler: adapt, classify via Strategy, enqueue — never write.
+// Handler stateless: adapta, classifica via Strategy, enfileira — nunca escreve.
 func (h *MessageHandler) HandleUpdate(ctx context.Context, update []byte) error {
     msg := &storage.RawMessage{
-        Payload:       update,        // preserved verbatim
+        Payload:       update,        // preservado literalmente (verbatim)
         ReceivedAt:    time.Now().UTC(),
         SchemaVersion: schemaVersion, // 1
-        // ChannelID / MessageID from the envelope projection
+        // ChannelID / MessageID extraídos do envelope
     }
     classified, err := h.classifier.Classify(ctx, msg)
     if err != nil {
@@ -55,45 +55,45 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update []byte) error 
 ```
 
 ```go
-// A future classifier plugs in without changing the handler or DBWriter.
-type RuleClassifier struct{ /* rules */ }
+// Um classificador futuro se acopla sem mudar o handler ou o DBWriter.
+type RuleClassifier struct{ /* regras */ }
 func (c RuleClassifier) Classify(ctx context.Context, raw *storage.RawMessage) (*storage.RawMessage, error) {
-    // Phase 2+: return a transformed copy. Phase 1 stays Noop.
+    // Fase 2+: retorna uma cópia transformada. A Fase 1 permanece como Noop.
     return raw, nil
 }
 ```
 
-## Incorrect
+## Incorreto
 
 ```go
-// WRONG: handler writes to the DB directly, breaking the single-writer invariant.
+// ERRADO: o handler escreve no banco de dados diretamente, quebrando o invariante do single-writer.
 func (h *MessageHandler) HandleUpdate(ctx context.Context, update []byte) error {
-    return h.repo.SaveRawMessage(ctx, adapt(update)) // must enqueue to writeCh instead
+    return h.repo.SaveRawMessage(ctx, adapt(update)) // deveria enfileirar no writeCh em vez disso
 }
 ```
 
 ```go
-// WRONG: enrichment in Phase 1 (mutating/normalizing the raw payload).
-msg.Payload = normalize(update)   // Phase 1 must store raw bytes unchanged
+// ERRADO: enriquecimento na Fase 1 (modificar/normalizar o payload bruto).
+msg.Payload = normalize(update)   // A Fase 1 deve armazenar os bytes brutos inalterados
 ```
 
 ```go
-// WRONG: spawning extra DB-writing goroutines (fan-out to multiple writers).
+// ERRADO: criar goroutines de escrita extra no BD (fan-out para múltiplos writers).
 for _, job := range jobs {
-    go c.repo.SaveRawMessage(ctx, job.Message)  // only dbWriter may write
+    go c.repo.SaveRawMessage(ctx, job.Message)  // apenas o dbWriter pode escrever
 }
 ```
 
 ```go
-// WRONG: silently dropping a message that failed to persist.
+// ERRADO: descartar silenciosamente uma mensagem que falhou ao persistir.
 if err := c.repo.SaveRawMessage(ctx, msg); err != nil {
-    return // lost without a log — violates Requirement 3.10
+    return // perdida sem log — viola o Requisito 3.10
 }
 ```
 
-## Never do
+## O que nunca fazer
 
-- Write to the database from anywhere but `Collector.dbWriter` (ADR 003).
-- Add normalization, dedup, classification, or LLM calls in Phase 1.
-- Make `MessageHandler` stateful or lock-dependent.
-- Drop a failed write without logging the lost message.
+- Escrever no banco de dados de qualquer outro lugar que não seja o `Collector.dbWriter` (ADR 003).
+- Adicionar normalização, desduplicação, classificação ou chamadas a LLMs na Fase 1.
+- Tornar o `MessageHandler` dependente de estado (stateful) ou de locks.
+- Descartar uma gravação falha sem registrar a mensagem perdida no log.

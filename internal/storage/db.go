@@ -1,9 +1,9 @@
-// Package storage owns all persistence for limiar-collector against the
-// embedded Tursogo database. Every SQL statement lives in this package; no
-// other layer touches database/sql directly.
+// Package storage possui toda a persistência do limiar-collector contra o
+// banco de dados embutido Tursogo. Toda instrução SQL reside neste pacote; nenhuma
+// outra camada toca o database/sql diretamente.
 //
-// The driver is tursogo ("turso"), used through database/sql with ? as the
-// only placeholder token. No SQLite, GORM, or other ORM is permitted.
+// O driver é o tursogo ("turso"), usado através de database/sql usando ? como
+// o único token (marcador) para parâmetros. Nenhum SQLite, GORM ou outro ORM é permitido.
 package storage
 
 import (
@@ -14,16 +14,16 @@ import (
 	_ "turso.tech/database/tursogo" // registers the "turso" driver
 )
 
-// driverName is the database/sql driver registered by tursogo.
+// driverName é o driver database/sql registrado pelo tursogo.
 const driverName = "turso"
 
-// DB wraps the Tursogo database/sql connection and its lifecycle.
+// DB envolve a conexão database/sql do Tursogo e o seu ciclo de vida.
 type DB struct {
 	conn *sql.DB
 }
 
-// Open opens (or creates) the Tursogo database at dbPath and applies all
-// embedded migrations. The returned DB must be closed by the caller.
+// Open abre (ou cria) o banco de dados Tursogo em dbPath e aplica todas as
+// migrations embutidas. O DB retornado deve ser fechado pelo chamador.
 func Open(ctx context.Context, dbPath string) (*DB, error) {
 	conn, err := sql.Open(driverName, dbPath)
 	if err != nil {
@@ -40,13 +40,13 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
-// Conn returns the underlying *sql.DB. Only the DBWriter goroutine may issue
-// writes through it; concurrent writes from multiple goroutines are forbidden.
+// Conn retorna o *sql.DB subjacente. Apenas a goroutine DBWriter pode emitir
+// gravações através dele; gravações concorrentes de múltiplas goroutines são proibidas.
 func (db *DB) Conn() *sql.DB {
 	return db.conn
 }
 
-// Close closes the database connection.
+// Close fecha a conexão com o banco de dados.
 func (db *DB) Close() error {
 	if err := db.conn.Close(); err != nil {
 		return fmt.Errorf("storage: close: %w", err)

@@ -8,9 +8,9 @@ import (
 	"github.com/gotd/td/tg"
 )
 
-// encodeUpdate serializes a gotd update container to JSON. gotd's tg types are
-// plain Go structs with exported fields, so encoding/json captures the full
-// raw shape — which is exactly what Phase 1 needs to discover the real data.
+// encodeUpdate serializa um contêiner de atualização do gotd para JSON. Os tipos tg do gotd
+// são structs Go simples com campos exportados, então encoding/json captura todo o formato
+// bruto — o que é exatamente o que a Fase 1 precisa para descobrir os dados reais.
 func encodeUpdate(u tg.UpdatesClass) ([]byte, error) {
 	payload, err := json.Marshal(u)
 	if err != nil {
@@ -19,9 +19,8 @@ func encodeUpdate(u tg.UpdatesClass) ([]byte, error) {
 	return payload, nil
 }
 
-// extractUpdateMeta extracts channelID and messageID from a gotd update
-// container. Returns (0, 0, false) if the update does not contain a channel
-// message.
+// extractUpdateMeta extrai channelID e messageID de um contêiner de atualização do gotd.
+// Retorna (0, 0, false) se a atualização não contiver uma mensagem de canal.
 func extractUpdateMeta(u tg.UpdatesClass) (channelID, messageID int64, ok bool) {
 	switch upd := u.(type) {
 	case *tg.Updates:
@@ -38,7 +37,7 @@ func extractUpdateMeta(u tg.UpdatesClass) (channelID, messageID int64, ok bool) 
 	return 0, 0, false
 }
 
-// extractFromUpdate pulls channelID and messageID from a single UpdateClass.
+// extractFromUpdate extrai channelID e messageID de um único UpdateClass.
 func extractFromUpdate(u tg.UpdateClass) (channelID, messageID int64, ok bool) {
 	switch upd := u.(type) {
 	case *tg.UpdateNewChannelMessage:
@@ -53,7 +52,7 @@ func extractFromUpdate(u tg.UpdateClass) (channelID, messageID int64, ok bool) {
 	return 0, 0, false
 }
 
-// extractFromMessage extracts channelID and messageID from a MessageClass.
+// extractFromMessage extrai channelID e messageID de um MessageClass.
 func extractFromMessage(mc tg.MessageClass) (channelID, messageID int64, ok bool) {
 	msg, ok := mc.(*tg.Message)
 	if !ok {
@@ -66,9 +65,9 @@ func extractFromMessage(mc tg.MessageClass) (channelID, messageID int64, ok bool
 	return peer.ChannelID, int64(msg.ID), true
 }
 
-// extractMessages pulls individual messages out of a messages.getHistory
-// response, serializing each to JSON. It handles both the channel and slice
-// response variants gotd may return.
+// extractMessages extrai mensagens individuais de uma resposta de messages.getHistory,
+// serializando cada uma para JSON. Ele lida com as variantes de resposta de canal (channel)
+// e de fatia (slice) que o gotd pode retornar.
 func extractMessages(res tg.MessagesMessagesClass) ([]HistoryMessage, error) {
 	var raw []tg.MessageClass
 	switch m := res.(type) {
@@ -79,14 +78,14 @@ func extractMessages(res tg.MessagesMessagesClass) ([]HistoryMessage, error) {
 	case *tg.MessagesMessagesSlice:
 		raw = m.Messages
 	default:
-		return nil, fmt.Errorf("unsupported messages response type %T", res)
+		return nil, fmt.Errorf("tipo de resposta de mensagens não suportado: %T", res)
 	}
 
 	out := make([]HistoryMessage, 0, len(raw))
 	for _, mc := range raw {
 		msg, ok := mc.(*tg.Message)
 		if !ok {
-			// Skip service messages and other non-message variants.
+			// Ignora mensagens de serviço e outras variantes que não são mensagens comuns.
 			continue
 		}
 		payload, err := json.Marshal(msg)

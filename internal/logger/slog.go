@@ -8,7 +8,7 @@ import (
 	"golang.org/x/term"
 )
 
-// redactedKeys are attribute keys whose values must never reach log output.
+// redactedKeys são chaves de atributos cujos valores nunca devem chegar à saída do log.
 var redactedKeys = map[string]struct{}{
 	"api_hash":  {},
 	"apihash":   {},
@@ -20,19 +20,19 @@ var redactedKeys = map[string]struct{}{
 
 const redactedValue = "****"
 
-// SlogLogger is the default Logger implementation, wrapping log/slog. This is
-// the only place in the codebase where a concrete logger is instantiated.
+// SlogLogger é a implementação padrão do Logger, envolvendo (wrapping) log/slog. Este é
+// o único lugar na base de código onde um logger concreto é instanciado.
 type SlogLogger struct {
 	inner *slog.Logger
 }
 
-// compile-time assertion that SlogLogger satisfies Logger.
+// asserção em tempo de compilação de que SlogLogger satisfaz Logger.
 var _ Logger = (*SlogLogger)(nil)
 
-// NewSlogLogger builds a SlogLogger writing to w at the given level. format
-// "json" selects a JSON handler; "pretty" selects a coloured human-readable
-// handler (falls back to plain text when w is not a TTY); any other value
-// selects a plain text handler. Sensitive attributes are redacted from output.
+// NewSlogLogger constrói um SlogLogger escrevendo para w no nível (level) fornecido. format
+// "json" seleciona um handler JSON; "pretty" seleciona um handler legível e colorido
+// (faz fallback para texto simples quando w não é um TTY); qualquer outro valor
+// seleciona um handler de texto simples. Atributos sensíveis são omitidos (redacted) da saída.
 func NewSlogLogger(w io.Writer, level slog.Level, format string) *SlogLogger {
 	opts := &slog.HandlerOptions{
 		Level:       level,
@@ -47,7 +47,7 @@ func NewSlogLogger(w io.Writer, level slog.Level, format string) *SlogLogger {
 		if isTerminalWriter(w) {
 			handler = NewPrettyHandler(w, level)
 		} else {
-			// Fallback to plain text when stdout is piped or redirected
+			// Fallback para texto simples quando stdout é canalizado ou redirecionado
 			handler = slog.NewTextHandler(w, opts)
 		}
 	default:
@@ -55,14 +55,14 @@ func NewSlogLogger(w io.Writer, level slog.Level, format string) *SlogLogger {
 	}
 
 	inner := slog.New(handler)
-	// Add service identity to every JSON log record
+	// Adiciona a identidade do serviço a cada registro de log JSON
 	if format == "json" {
 		inner = inner.With("service", "limiar-collector")
 	}
 	return &SlogLogger{inner: inner}
 }
 
-// isTerminalWriter reports whether w is an *os.File backed by a terminal.
+// isTerminalWriter relata se w é um *os.File apoiado por um terminal.
 func isTerminalWriter(w io.Writer) bool {
 	if f, ok := w.(*os.File); ok {
 		return term.IsTerminal(int(f.Fd()))
@@ -70,7 +70,7 @@ func isTerminalWriter(w io.Writer) bool {
 	return false
 }
 
-// redactSensitive replaces values of known-sensitive keys with a fixed marker.
+// redactSensitive substitui valores de chaves sabidamente sensíveis por um marcador fixo.
 func redactSensitive(_ []string, a slog.Attr) slog.Attr {
 	if _, ok := redactedKeys[a.Key]; ok {
 		return slog.String(a.Key, redactedValue)
@@ -78,30 +78,30 @@ func redactSensitive(_ []string, a slog.Attr) slog.Attr {
 	return a
 }
 
-// Debug logs at debug level.
+// Debug faz o log em nível debug.
 func (l *SlogLogger) Debug(msg string, args ...any) { l.inner.Debug(msg, args...) }
 
-// Info logs at info level.
+// Info faz o log em nível info.
 func (l *SlogLogger) Info(msg string, args ...any) { l.inner.Info(msg, args...) }
 
-// Warn logs at warn level.
+// Warn faz o log em nível warn.
 func (l *SlogLogger) Warn(msg string, args ...any) { l.inner.Warn(msg, args...) }
 
-// Error logs at error level.
+// Error faz o log em nível error.
 func (l *SlogLogger) Error(msg string, args ...any) { l.inner.Error(msg, args...) }
 
-// With returns a child SlogLogger carrying the given key/value pairs.
+// With retorna um SlogLogger filho (child) contendo os pares chave/valor fornecidos.
 func (l *SlogLogger) With(args ...any) Logger {
 	return &SlogLogger{inner: l.inner.With(args...)}
 }
 
-// WithComponent returns a child SlogLogger with the component name bound.
+// WithComponent retorna um SlogLogger filho com o nome do componente vinculado.
 func (l *SlogLogger) WithComponent(name string) Logger {
 	return &SlogLogger{inner: l.inner.With("component", name)}
 }
 
-// ParseLevel maps a config log level string to slog.Level, defaulting to Info
-// for unrecognized values (Validate rejects those before this is reached).
+// ParseLevel mapeia uma string de nível de log da configuração para slog.Level, definindo como padrão Info
+// para valores não reconhecidos (Validate rejeita esses valores antes que este ponto seja alcançado).
 func ParseLevel(level string) slog.Level {
 	switch level {
 	case "debug":

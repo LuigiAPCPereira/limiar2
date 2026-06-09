@@ -17,22 +17,22 @@ import (
 	"github.com/limiar/collector/internal/terminal"
 )
 
-// terminalAuthenticator implements gotd's auth.UserAuthenticator by prompting
-// on an io.Writer and reading answers from an io.Reader (stdin/stdout in
-// production). It supports the phone -> code -> optional 2FA flow. Sign-up is
-// not supported: limiar-collector authenticates an existing userbot account.
+// terminalAuthenticator implementa auth.UserAuthenticator do gotd solicitando
+// entrada em um io.Writer e lendo as respostas de um io.Reader (stdin/stdout em
+// produção). Ele suporta o fluxo telefone -> código -> senha 2FA opcional. O registro
+// de nova conta (sign-up) não é suportado: limiar-collector autentica uma conta userbot existente.
 type terminalAuthenticator struct {
 	in       *bufio.Scanner
 	out      io.Writer
 	log      logger.Logger
-	password string // optional pre-supplied 2FA password; prompted if empty
+	password string // senha 2FA opcional pré-fornecida; solicita se estiver vazia
 }
 
-// compile-time assertion that we satisfy gotd's authenticator contract.
+// asserção em tempo de compilação de que satisfazemos o contrato de authenticator do gotd.
 var _ auth.UserAuthenticator = (*terminalAuthenticator)(nil)
 
-// newTerminalAuthenticator builds an interactive authenticator and prints the
-// authentication section header so the user knows which step they are in.
+// newTerminalAuthenticator constrói um authenticator interativo e imprime o
+// cabeçalho da seção de autenticação para que o usuário saiba em qual etapa está.
 func newTerminalAuthenticator(in io.Reader, out io.Writer, log logger.Logger) *terminalAuthenticator {
 	printAuthSection(out)
 	return &terminalAuthenticator{
@@ -42,8 +42,8 @@ func newTerminalAuthenticator(in io.Reader, out io.Writer, log logger.Logger) *t
 	}
 }
 
-// printAuthSection prints the "Login da conta" section header that visually
-// connects this step to the config wizard that precedes it.
+// printAuthSection imprime o cabeçalho da seção "Login da conta" que conecta visualmente
+// esta etapa ao assistente de configuração (wizard) que a precede.
 func printAuthSection(out io.Writer) {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "  📱 Etapa 2/2 · Login da conta Telegram")
@@ -87,15 +87,15 @@ func (a *terminalAuthenticator) promptMasked(label string) (string, error) {
 	return strings.TrimSpace(a.in.Text()), nil
 }
 
-// Phone prompts for the account phone number.
+// Phone solicita o número de telefone da conta.
 func (a *terminalAuthenticator) Phone(_ context.Context) (string, error) {
 	fmt.Fprintln(a.out, "  Informe o número de telefone da conta (formato internacional).")
 	return a.prompt("  📞 Telefone › ")
 }
 
-// Password prompts for the 2FA password. gotd calls this only when 2FA is
-// required (it surfaces as the password step rather than ErrPasswordRequired
-// to the caller of Flow.Run).
+// Password solicita a senha 2FA. O gotd chama isso apenas quando a 2FA é
+// requerida (ele apresenta isso como a etapa da senha, em vez de ErrPasswordRequired
+// para o chamador de Flow.Run).
 func (a *terminalAuthenticator) Password(_ context.Context) (string, error) {
 	if a.password != "" {
 		return a.password, nil
@@ -105,20 +105,20 @@ func (a *terminalAuthenticator) Password(_ context.Context) (string, error) {
 	return a.promptMasked("  🔐 Senha 2FA › ")
 }
 
-// Code prompts for the login code Telegram sends to the account.
+// Code solicita o código de login que o Telegram envia para a conta.
 func (a *terminalAuthenticator) Code(_ context.Context, _ *tg.AuthSentCode) (string, error) {
 	fmt.Fprintln(a.out)
 	fmt.Fprintln(a.out, "  Telegram enviou um código para o seu aplicativo ou SMS.")
 	return a.promptMasked("  🔢 Código › ")
 }
 
-// AcceptTermsOfService is unreachable for an existing account sign-in, but the
-// interface requires it. We decline by signalling sign-up is unsupported.
+// AcceptTermsOfService é inacessível para o login de uma conta existente, mas a
+// interface o exige. Recusamos sinalizando que o registro (sign-up) não é suportado.
 func (a *terminalAuthenticator) AcceptTermsOfService(_ context.Context, _ tg.HelpTermsOfService) error {
 	return &auth.SignUpRequired{}
 }
 
-// SignUp is not supported: limiar-collector never registers a new account.
+// SignUp não é suportado: limiar-collector nunca registra uma nova conta.
 func (a *terminalAuthenticator) SignUp(_ context.Context) (auth.UserInfo, error) {
 	return auth.UserInfo{}, fmt.Errorf("telegram: cadastro de nova conta não é suportado")
 }

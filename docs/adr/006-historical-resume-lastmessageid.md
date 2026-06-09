@@ -1,54 +1,54 @@
-# ADR 006 — First-Run Backfill + Resume from LastMessageID
+# ADR 006 — Backfill Inicial + Retomada a partir do LastMessageID
 
 ## Status
 
-Accepted
+Aceito
 
-## Context
+## Contexto
 
-When the collector starts monitoring a channel, two situations exist: the
-channel has never been collected (no cursor), or it was collected before and we
-want to avoid reprocessing what we already have. We need a deterministic cursor
-to resume from, and on a brand-new channel we want some immediate history so the
-downstream pipeline has data to work with rather than waiting for the next live
-message.
+Quando o collector começa a monitorar um canal, existem duas situações: o
+canal nunca foi coletado (sem cursor), ou já foi coletado antes e
+queremos evitar o reprocessamento do que já temos. Precisamos de um cursor determinístico
+de onde retomar, e em um canal totalmente novo queremos algum histórico imediato para que o
+pipeline subsequente (downstream) tenha dados para trabalhar, em vez de esperar pela próxima mensagem
+ao vivo.
 
-The `channels` table carries `last_message_id` (default 0) and
-`last_collected_at` as the per-channel cursor.
+A tabela `channels` carrega `last_message_id` (padrão 0) e
+`last_collected_at` como o cursor por canal.
 
-## Decision
+## Decisão
 
-On `run`, the `Collector` distinguishes first run from resume by
+No `run`, o `Collector` distingue a primeira execução de uma retomada (resume) usando
 `Channel.LastMessageID`:
 
-- **First run (`LastMessageID == 0`)** — `backfill` calls
-  `client.FetchHistory(ctx, channelID, accessHash, historyBatchSize)` with
-  `historyBatchSize = 20`, enqueues each payload as a `WriteJob`, and advances
-  the channel cursor to the newest fetched message id before live capture
-  begins.
-- **Resume (`LastMessageID > 0`)** — `backfill` skips the channel; live capture
-  continues from the existing cursor, and the DBWriter advances the cursor as new
-  messages persist (`UpdateChannelLastMessage`). The
-  `UNIQUE(channel_id, message_id)` constraint plus `ON CONFLICT DO NOTHING`
-  guards against duplicates.
+- **Primeira execução (`LastMessageID == 0`)** — `backfill` chama
+  `client.FetchHistory(ctx, channelID, accessHash, historyBatchSize)` com
+  `historyBatchSize = 20`, enfileira cada payload como um `WriteJob`, e avança
+  o cursor do canal para a ID de mensagem mais nova recuperada antes do início da captura
+  ao vivo.
+- **Retomada (`LastMessageID > 0`)** — `backfill` pula o canal; a captura ao vivo
+  continua do cursor existente, e o DBWriter avança o cursor conforme novas
+  mensagens são persistidas (`UpdateChannelLastMessage`). A constraint
+  `UNIQUE(channel_id, message_id)` juntamente com `ON CONFLICT DO NOTHING`
+  protege contra duplicatas.
 
-Backfill failure is logged but not fatal — live capture still starts.
+A falha no backfill é logada mas não é fatal — a captura ao vivo inicia mesmo assim.
 
-## Consequences
+## Consequências
 
-- New channels yield immediate data (20 recent messages) without waiting for
-  live traffic.
-- Restarts do not reprocess history; the cursor + unique constraint make
-  persistence idempotent.
-- The 20-message batch is a fixed Phase 1 constant; deeper history would need
-  pagination (future work).
-- Inactive channels (`Active == false`) are skipped during backfill.
+- Canais novos rendem dados imediatos (20 mensagens recentes) sem a necessidade de esperar
+  pelo tráfego ao vivo.
+- Reinicializações não reprocessam o histórico; o cursor + a constraint única tornam
+  a persistência idempotente.
+- O lote (batch) de 20 mensagens é uma constante fixa da Fase 1; um histórico mais profundo precisaria
+  de paginação (trabalho futuro). *(Nota: implementado paginação posteriormente na refatoração)*
+- Canais inativos (`Active == false`) são pulados durante o backfill.
 
-## Alternatives considered
+## Alternativas consideradas
 
-- **No backfill** — new channels would sit empty until the next live message;
-  poor for testing the downstream pipeline. Rejected.
-- **Full history backfill** — expensive, rate-limit-prone, and unnecessary for
-  shape discovery. Rejected for Phase 1.
-- **Timestamp-based cursor** — message id is the natural, monotonic Telegram
-  cursor and avoids clock-skew ambiguity.
+- **Sem backfill** — canais novos ficariam vazios até a próxima mensagem ao vivo;
+  ruim para testar o pipeline downstream. Rejeitado.
+- **Backfill histórico completo** — caro, suscetível a rate-limits (limite de taxa) e desnecessário para
+  descobrir o formato (shape) dos dados. Rejeitado para a Fase 1.
+- **Cursor baseado em Timestamp** — o id da mensagem é o cursor natural e monotônico
+  do Telegram e evita ambiguidades de defasagem de relógio (clock-skew).

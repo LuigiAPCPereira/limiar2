@@ -10,24 +10,24 @@ import (
 	"github.com/limiar/collector/internal/telegram"
 )
 
-// schemaVersion is the payload schema version stamped on every captured
-// message in Phase 1.
+// schemaVersion é a versão do schema do payload marcada em toda mensagem
+// capturada na Fase 1.
 const schemaVersion = 1
 
-// WriteJob is a unit of work for the DBWriter: a message to persist and an
-// optional error channel for write-failure notification. Backfill is true for
-// jobs produced by the history backfill loop; the dbWriter skips cursor
-// advancement for those because the backfill orchestrator advances the cursor
-// once per channel with the true max id (avoiding the descending-order race).
+// WriteJob é uma unidade de trabalho para o DBWriter: uma mensagem a persistir e um
+// canal de erro opcional para notificação de falha de gravação. Backfill é verdadeiro (true)
+// para jobs produzidos pelo loop de backfill do histórico; o dbWriter pula o avanço
+// do cursor para esses jobs porque o orquestrador do backfill avança o cursor
+// uma vez por canal com o id máximo verdadeiro (evitando a corrida da ordem descendente).
 type WriteJob struct {
 	Message  *storage.RawMessage
 	ErrCh    chan<- error
 	Backfill bool
 }
 
-// MessageHandler is the Adapter and Observer: it converts a raw update into a
-// RawMessage and forwards it to the DBWriter via writeCh. It is stateless and
-// safe for concurrent invocation without locks.
+// MessageHandler é o Adaptador e Observador: ele converte um update bruto em uma
+// RawMessage e a encaminha para o DBWriter via writeCh. É sem estado (stateless) e
+// seguro para invocação concorrente sem locks.
 type MessageHandler struct {
 	classifier        Classifier
 	writeCh           chan<- WriteJob
@@ -35,9 +35,9 @@ type MessageHandler struct {
 	monitoredChannels map[int64]struct{}
 }
 
-// NewMessageHandler builds a handler that classifies via classifier and emits
-// jobs to writeCh. monitoredChannels is a set of channel IDs to accept; updates
-// from other channels are silently discarded. log may be nil (treated as NopLogger).
+// NewMessageHandler constrói um handler que classifica usando o classifier e emite
+// jobs para writeCh. monitoredChannels é um conjunto (set) de IDs de canais a aceitar; atualizações
+// de outros canais são silenciosamente descartadas. log pode ser nil (tratado como NopLogger).
 func NewMessageHandler(classifier Classifier, writeCh chan<- WriteJob, monitoredChannels map[int64]struct{}, log logger.Logger) *MessageHandler {
 	if log == nil {
 		log = logger.NopLogger{}
@@ -50,14 +50,14 @@ func NewMessageHandler(classifier Classifier, writeCh chan<- WriteJob, monitored
 	}
 }
 
-// HandleUpdate adapts the raw update into a RawMessage and enqueues it
-// for persistence. The original payload bytes are preserved verbatim.
-// Updates from non-monitored channels are silently discarded.
+// HandleUpdate adapta o update bruto (raw) em uma RawMessage e a enfileira
+// para persistência. Os bytes originais do payload são preservados literalmente.
+// Atualizações de canais não monitorados são descartadas silenciosamente.
 func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Update) error {
-	// Filter out updates from non-monitored channels. channel_id=0 covers DMs,
-	// system events, and any update that is not a channel message — all of
-	// which must be discarded in Phase 1 (collection is scoped to monitored
-	// channels only).
+	// Filtra atualizações de canais não monitorados. channel_id=0 cobre mensagens diretas (DMs),
+	// eventos do sistema e qualquer atualização que não seja uma mensagem de canal — todos
+	// os quais devem ser descartados na Fase 1 (a coleção é restrita apenas aos canais
+	// monitorados).
 	if _, ok := h.monitoredChannels[update.ChannelID]; !ok {
 		return nil
 	}

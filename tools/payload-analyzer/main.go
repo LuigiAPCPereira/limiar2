@@ -39,8 +39,8 @@ func main() {
 	}
 	defer db.Close()
 
-	// Check what tables exist
-	fmt.Printf("=== TABLES IN DATABASE ===\n")
+	// Verifica quais tabelas existem
+	fmt.Printf("=== TABELAS NO BANCO DE DADOS ===\n")
 	tableRows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
 	if err != nil {
 		log.Fatal(err)
@@ -58,7 +58,7 @@ func main() {
 	tableRows.Close()
 	fmt.Printf("\n")
 
-	// Get basic stats
+	// Obtém estatísticas básicas
 	var totalMessages int
 	err = db.QueryRow("SELECT COUNT(*) FROM raw_messages").Scan(&totalMessages)
 	if err != nil {
@@ -71,13 +71,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("=== DATABASE STATISTICS ===\n")
-	fmt.Printf("Total raw messages: %d\n", totalMessages)
-	fmt.Printf("Total channels: %d\n", totalChannels)
+	fmt.Printf("=== ESTATÍSTICAS DO BANCO DE DADOS ===\n")
+	fmt.Printf("Total de mensagens brutas (raw): %d\n", totalMessages)
+	fmt.Printf("Total de canais: %d\n", totalChannels)
 	fmt.Printf("\n")
 
-	// Get channel distribution
-	fmt.Printf("=== CHANNEL DISTRIBUTION ===\n")
+	// Obtém a distribuição por canal
+	fmt.Printf("=== DISTRIBUIÇÃO POR CANAL ===\n")
 	rows, err := db.Query(`
 		SELECT c.username, c.title, COUNT(rm.id) as msg_count
 		FROM channels c
@@ -97,12 +97,12 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("  @%s (%s): %d messages\n", username, title, count)
+		fmt.Printf("  @%s (%s): %d mensagens\n", username, title, count)
 	}
 	fmt.Printf("\n")
 
-	// Extract all payloads for analysis
-	fmt.Printf("=== PAYLOAD ANALYSIS ===\n")
+	// Extrai todos os payloads para análise
+	fmt.Printf("=== ANÁLISE DE PAYLOAD ===\n")
 	msgRows, err := db.Query("SELECT id, channel_id, message_id, payload, received_at, schema_version FROM raw_messages ORDER BY id")
 	if err != nil {
 		log.Fatal(err)
@@ -119,10 +119,10 @@ func main() {
 		messages = append(messages, msg)
 	}
 
-	// Analyze payload structure
+	// Analisa a estrutura do payload
 	analyzePayloads(messages)
 
-	// Export all payloads to JSON file for jq analysis
+	// Exporta todos os payloads para um arquivo JSON para análise com jq
 	exportPayloads(messages)
 }
 
@@ -148,16 +148,16 @@ func analyzePayloads(messages []RawMessage) {
 			continue
 		}
 
-		// Determine top-level type
+		// Determina o tipo de nível superior (top-level type)
 		typeName := reflect.TypeOf(payload).String()
 		typeCounts[typeName]++
 
-		// Analyze structure if it's a map
+		// Analisa a estrutura se for um mapa (map)
 		if m, ok := payload.(map[string]interface{}); ok {
 			for k, v := range m {
 				topLevelKeys[k]++
 
-				// Track field types
+				// Rastreia os tipos de campo (field types)
 				if fieldTypes[k] == nil {
 					fieldTypes[k] = make(map[string]bool)
 				}
@@ -167,7 +167,7 @@ func analyzePayloads(messages []RawMessage) {
 				}
 				fieldTypes[k][typeName] = true
 
-				// Analyze nested objects
+				// Analisa objetos aninhados (nested objects)
 				if nested, ok := v.(map[string]interface{}); ok {
 					if nestedStructures[k] == nil {
 						nestedStructures[k] = make(map[string]int)
@@ -180,18 +180,18 @@ func analyzePayloads(messages []RawMessage) {
 		}
 	}
 
-	fmt.Printf("Top-level types:\n")
+	fmt.Printf("Tipos de nível superior (Top-level types):\n")
 	for t, count := range typeCounts {
 		fmt.Printf("  %s: %d\n", t, count)
 	}
 	fmt.Printf("\n")
 
-	fmt.Printf("Invalid JSON payloads: %d\n", invalidJSON)
-	fmt.Printf("Empty/null payloads: %d\n", emptyPayloads)
-	fmt.Printf("Valid payloads: %d\n", len(messages)-invalidJSON-emptyPayloads)
+	fmt.Printf("Payloads JSON inválidos: %d\n", invalidJSON)
+	fmt.Printf("Payloads vazios/nulos: %d\n", emptyPayloads)
+	fmt.Printf("Payloads válidos: %d\n", len(messages)-invalidJSON-emptyPayloads)
 	fmt.Printf("\n")
 
-	fmt.Printf("Top-level keys (frequency):\n")
+	fmt.Printf("Chaves de nível superior (frequência):\n")
 	sortedKeys := make([]string, 0, len(topLevelKeys))
 	for k := range topLevelKeys {
 		sortedKeys = append(sortedKeys, k)
@@ -204,7 +204,7 @@ func analyzePayloads(messages []RawMessage) {
 	}
 	fmt.Printf("\n")
 
-	fmt.Printf("Field type variations:\n")
+	fmt.Printf("Variações de tipo de campo:\n")
 	for field, types := range fieldTypes {
 		if len(types) > 1 {
 			typeList := make([]string, 0, len(types))
@@ -217,7 +217,7 @@ func analyzePayloads(messages []RawMessage) {
 	}
 	fmt.Printf("\n")
 
-	fmt.Printf("Nested structures:\n")
+	fmt.Printf("Estruturas aninhadas:\n")
 	for parent, children := range nestedStructures {
 		fmt.Printf("  %s:\n", parent)
 		childKeys := make([]string, 0, len(children))
@@ -275,7 +275,7 @@ func exportPayloads(messages []RawMessage) {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("\n=== EXPORT ===\n")
-	fmt.Printf("All payloads exported to: payloads_export.json\n")
-	fmt.Printf("Use with jq: jq '.[] | .payload' payloads_export.json\n")
+	fmt.Printf("\n=== EXPORTAÇÃO ===\n")
+	fmt.Printf("Todos os payloads exportados para: payloads_export.json\n")
+	fmt.Printf("Use com jq: jq '.[] | .payload' payloads_export.json\n")
 }
