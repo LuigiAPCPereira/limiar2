@@ -66,9 +66,9 @@ func extractFromMessage(mc tg.MessageClass) (channelID, messageID int64, ok bool
 	return peer.ChannelID, int64(msg.ID), true
 }
 
-// extractMessages pulls individual messages out of a messages.getHistory
-// response, serializing each to JSON. It handles both the channel and slice
-// response variants gotd may return.
+// extractMessages extrai as mensagens individuais a partir de uma resposta
+// messages.getHistory, serializando cada uma para JSON. Ele lida tanto com as
+// variantes de resposta channel quanto slice que o gotd pode retornar.
 func extractMessages(res tg.MessagesMessagesClass) ([]HistoryMessage, error) {
 	var raw []tg.MessageClass
 	switch m := res.(type) {
@@ -82,11 +82,14 @@ func extractMessages(res tg.MessagesMessagesClass) ([]HistoryMessage, error) {
 		return nil, fmt.Errorf("unsupported messages response type %T", res)
 	}
 
+	// O slice 'out' é pré-alocado com o tamanho de 'raw'.
+	// Isso evita realocações ao longo das iterações, já que sabemos
+	// o número máximo de mensagens retornadas.
 	out := make([]HistoryMessage, 0, len(raw))
 	for _, mc := range raw {
 		msg, ok := mc.(*tg.Message)
 		if !ok {
-			// Skip service messages and other non-message variants.
+			// Ignora mensagens de serviço e outras variantes que não sejam mensagens.
 			continue
 		}
 		payload, err := json.Marshal(msg)
