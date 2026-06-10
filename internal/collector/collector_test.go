@@ -223,8 +223,8 @@ func TestBackfillRespectsTemporalCutoff(t *testing.T) {
 	repo := newFakeRepo(ch)
 	now := time.Now()
 	history := []telegram.HistoryMessage{
-		{MessageID: 10, Date: now.Add(-24 * time.Hour), Payload: []byte(`{}`)},    // 1 day old — keep
-		{MessageID: 20, Date: now.Add(-3 * 24 * time.Hour), Payload: []byte(`{}`)}, // 3 days old — keep
+		{MessageID: 10, Date: now.Add(-24 * time.Hour), Payload: []byte(`{}`)},      // 1 day old — keep
+		{MessageID: 20, Date: now.Add(-3 * 24 * time.Hour), Payload: []byte(`{}`)},  // 3 days old — keep
 		{MessageID: 30, Date: now.Add(-15 * 24 * time.Hour), Payload: []byte(`{}`)}, // 15 days old — skip
 		{MessageID: 40, Date: now.Add(-60 * 24 * time.Hour), Payload: []byte(`{}`)}, // 60 days old — skip
 	}

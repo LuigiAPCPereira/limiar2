@@ -45,8 +45,8 @@ type Collector struct {
 	// Observability: atomic counters updated by dbWriter on every successful
 	// save. Read with atomic.LoadInt64 for safe cross-goroutine inspection
 	// (e.g. by periodic stats logs).
-	statsNew        int64
-	statsDuplicate  int64
+	statsNew       int64
+	statsDuplicate int64
 }
 
 // SetOnMessage registers a callback invoked after each successful database
