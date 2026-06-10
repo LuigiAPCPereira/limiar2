@@ -165,12 +165,20 @@ func (c *Client) AddUpdateHandler(h UpdateHandler) {
 // onUpdate é o ponto de entrada (entrypoint) do gotd UpdateHandler: ele extrai metadados
 // de roteamento e encaminha a atualização (com metadados) ao dispatcher para fan-out.
 func (c *Client) onUpdate(ctx context.Context, u tg.UpdatesClass) error {
+	// Early return no hot path. Extrai o metadata ANTES de
+	// codificar o payload. Evita alocações pesadas do json.Marshal
+	// para updates que não contém mensagens (ex: status de usuário).
+	channelID, messageID, ok := extractUpdateMeta(u)
+	if !ok {
+		return nil
+	}
+
 	payload, err := encodeUpdate(u)
 	if err != nil {
 		c.log.Error("🔧 Falha ao codificar update", "erro", err)
 		return nil // nunca encerre o loop de recebimento devido a uma única atualização ruim
 	}
-	channelID, messageID, _ := extractUpdateMeta(u)
+
 	c.dispatcher.Dispatch(ctx, Update{
 		ChannelID: channelID,
 		MessageID: messageID,

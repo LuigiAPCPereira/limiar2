@@ -206,18 +206,18 @@ func TestExtractFromUpdate(t *testing.T) {
 			expectOk: true, expectCh: 40, expectMsg: 4,
 		},
 		{
-			name: "Unsupported update type",
-			update: &tg.UpdateChatParticipantAdd{},
+			name:     "Unsupported update type",
+			update:   &tg.UpdateChatParticipantAdd{},
 			expectOk: false,
 		},
 		{
-			name: "Nil update",
-			update: nil,
+			name:     "Nil update",
+			update:   nil,
 			expectOk: false,
 		},
 		{
-			name: "UpdateNewChannelMessage with nil message",
-			update: &tg.UpdateNewChannelMessage{Message: nil},
+			name:     "UpdateNewChannelMessage with nil message",
+			update:   &tg.UpdateNewChannelMessage{Message: nil},
 			expectOk: false,
 		},
 	}
