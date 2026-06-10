@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gotd/td/telegram"
@@ -386,7 +388,14 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
+// usernameRe valida usernames no Telegram. Permitido: a-z, A-Z, 0-9 e sublinhados.
+// Evita MTProto/Log Injection via caracteres de controle ou queries maliciosas.
+var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+
 func NormalizeUsername(u string) string {
+	// Trim espaços e caracteres de controle invisíveis
+	u = strings.TrimSpace(u)
+
 	// Accept t.me links: https://t.me/foo or t.me/foo
 	for _, prefix := range []string{"https://t.me/", "http://t.me/", "t.me/"} {
 		if len(u) > len(prefix) && u[:len(prefix)] == prefix {
@@ -394,6 +403,12 @@ func NormalizeUsername(u string) string {
 			break
 		}
 	}
+
+	// Strip query parameters if any (e.g., ?start=xxx)
+	if idx := strings.Index(u, "?"); idx != -1 {
+		u = u[:idx]
+	}
+
 	// Strip trailing slash left by some link formats
 	for len(u) > 0 && u[len(u)-1] == '/' {
 		u = u[:len(u)-1]
@@ -402,6 +417,19 @@ func NormalizeUsername(u string) string {
 	for len(u) > 0 && u[0] == '@' {
 		u = u[1:]
 	}
+
+	// Removemos qualquer caractere inválido (sanitização de segurança)
+	if !usernameRe.MatchString(u) {
+		// Se houver lixo, vamos tentar filtrar apenas os válidos
+		var b strings.Builder
+		for _, r := range u {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+				b.WriteRune(r)
+			}
+		}
+		u = b.String()
+	}
+
 	return u
 }
 
