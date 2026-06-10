@@ -6,7 +6,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -388,10 +387,6 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// usernameRe valida usernames no Telegram. Permitido: a-z, A-Z, 0-9 e sublinhados.
-// Evita MTProto/Log Injection via caracteres de controle ou queries maliciosas.
-var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
-
 func NormalizeUsername(u string) string {
 	// Trim espaços e caracteres de controle invisíveis
 	u = strings.TrimSpace(u)
@@ -419,12 +414,22 @@ func NormalizeUsername(u string) string {
 	}
 
 	// Removemos qualquer caractere inválido (sanitização de segurança)
-	if !usernameRe.MatchString(u) {
-		// Se houver lixo, vamos tentar filtrar apenas os válidos
+	hasInvalid := false
+	for i := 0; i < len(u); i++ {
+		c := u[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+			hasInvalid = true
+			break
+		}
+	}
+
+	if hasInvalid {
 		var b strings.Builder
-		for _, r := range u {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
-				b.WriteRune(r)
+		b.Grow(len(u))
+		for i := 0; i < len(u); i++ {
+			c := u[i]
+			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
+				b.WriteByte(c)
 			}
 		}
 		u = b.String()
