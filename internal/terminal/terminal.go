@@ -7,11 +7,11 @@ import (
 	"golang.org/x/term"
 )
 
-// ReadPasswordMasked reads a password from the given file descriptor while
-// echoing one "*" per character typed. The terminal is restored to its
-// original mode on return, even if the caller receives a signal or panics.
-// Backspace deletes the last character (and its echo). Enter submits. Ctrl+C
-// returns ErrInterrupted so the caller can surface a friendly message.
+// ReadPasswordMasked lê uma senha do file descriptor fornecido enquanto
+// ecoa um "*" para cada caractere digitado. O terminal é restaurado ao seu
+// modo original no retorno, mesmo que o chamador receba um sinal ou cause panic.
+// O Backspace exclui o último caractere (e seu eco). O Enter envia. Ctrl+C
+// retorna um erro indicando interrupção para que o chamador possa exibir uma mensagem amigável.
 func ReadPasswordMasked(fd int) (string, error) {
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
@@ -39,8 +39,8 @@ func ReadPasswordMasked(fd int) (string, error) {
 		}
 		switch b[0] {
 		case '\r', '\n': // Enter
-			// Restore terminal FIRST so the newline below is rendered in
-			// cooked mode and doesn't drift on a quirky TTY driver.
+			// Restaura o terminal PRIMEIRO para que a quebra de linha abaixo seja renderizada no
+			// modo "cooked" e não cause desvios em drivers TTY peculiares.
 			restore()
 			fmt.Println()
 			return string(buf), nil
@@ -55,12 +55,12 @@ func ReadPasswordMasked(fd int) (string, error) {
 		case 0x7f, 0x08: // Backspace / Delete
 			if len(buf) > 0 {
 				buf = buf[:len(buf)-1]
-				// Erase the last '*' from the terminal: move back, space, back.
+				// Apaga o último '*' do terminal: move para trás, espaço, volta.
 				fmt.Print("\b \b")
 			}
 		default:
-			// Skip other control characters (arrows, etc.) so they don't pollute
-			// the buffer; only printable characters become part of the password.
+			// Ignora outros caracteres de controle (setas, etc.) para que não poluam
+			// o buffer; apenas caracteres imprimíveis se tornam parte da senha.
 			if b[0] < 0x20 || b[0] > 0x7e {
 				continue
 			}

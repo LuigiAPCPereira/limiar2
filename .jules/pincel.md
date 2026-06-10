@@ -8,3 +8,6 @@
 ## 2024-06-10 - Indicador de status SSE com suporte a screen reader
 **Aprendizado:** Ao implementar indicadores visuais de status (como "Ao vivo (SSE)" vs "Modo Polling"), adicionar `role="status"` e `aria-live="polite"` garante que os usuários de leitores de tela sejam notificados sobre a mudança no estado da conexão em tempo real. O valor `polite` é ideal porque informa o usuário sem interromper agressivamente o que ele está lendo no momento (ao contrário de `assertive`).
 **Ação:** Sempre que houver uma mudança de status em tempo real que reflete no estado global ou de conexão de uma página, usar a combinação de `role="status"` com `aria-live="polite"` no container do texto.
+## 2023-10-27 - Indicador de Conexão SSE Acessível
+**Aprendizado:** Quando trabalhamos com conexões contínuas como SSE no background (sem refresh de página), leitores de tela e usuários em geral podem não saber que os dados estão sendo atualizados dinamicamente ou se a conexão caiu (fallback para polling).
+**Ação:** Sempre usar regiões `aria-live="polite"` e `role="status"` combinadas com feedback visual (ex: status badge no header) para indicar o estado da conexão ("Ao vivo (SSE)" vs "Modo Polling (30s)"), mantendo a acessibilidade e previsibilidade da interface.

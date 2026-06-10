@@ -1,90 +1,70 @@
 # ARCHITECTURE — limiar-collector (Phase 1)
 
-`limiar-collector` is a standalone Go binary (module `github.com/limiar/collector`)
-that captures raw Telegram messages into an embedded Tursogo database. It follows
-four design patterns — **Facade** (`telegram.TelegramClient`), **Observer**
-(`telegram.Dispatcher`), **Strategy** (`collector.Classifier`), and **Adapter**
-(`collector.MessageHandler`) — with manual dependency injection wired only in
-`cmd/limiar-collector/main.go`.
+O `limiar-collector` foi projetado com uma arquitetura em camadas focada em desacoplamento rigoroso. A base de código é dividida horizontalmente: `internal/cli` hospeda o ciclo de vida dos comandos (Cobra), `internal/collector` orquestra a captura com a concorrência fan-out/fan-in, `internal/telegram` atua como a Fachada (Facade) rígida ocultando o gotd/td e o protocolo MTProto, e `internal/storage` isola o banco de dados Tursogo embutido e todas as instruções SQL.
 
-## Pipeline diagram
+Os padrões de design clássicos unem as camadas: **Facade** (`telegram.TelegramClient`), **Observer** (`telegram.UpdateHandler`, `telegram.Dispatcher`), **Strategy** (`collector.Classifier`) e **Adapter** (`collector.MessageHandler`) — com a injeção manual de dependências conectada apenas em `cmd/limiar-collector/main.go`.
+
+## Diagrama do Pipeline
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                  cmd/limiar-collector/main.go                          │
-│        composition root — the ONLY place concretes are wired           │
-│        (provider implements cli.Provider)                              │
+│        raiz de composição (composition root) — ÚNICO local de injeção  │
+│        (provider implementa cli.Provider)                              │
 └───────────────────────────────────┬────────────────────────────────────┘
                                      │ NewRootCmd(provider)
                  ┌───────────────────┼───────────────────┐
                  ▼                   ▼                   ▼
           ┌───────────┐      ┌──────────────┐     ┌───────────┐
           │ cli/auth  │      │ cli/channels │     │  cli/run  │
-          │ (text log)│      │  (text log)  │     │ (json log)│
+          │ (log texto)│     │  (log texto) │     │(log json) │
           └─────┬─────┘      └──────┬───────┘     └─────┬─────┘
                 │                   │                   │
                 └───────────────────┼───────────────────┘
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                         collector layer                                │
-│  Collector (orchestrator)   MessageHandler (Adapter)                   │
+│                         camada collector                               │
+│  Collector (orquestrador)   MessageHandler (Adapter)                   │
 │  - dbWriter goroutine        - []byte → storage.RawMessage             │
 │  - backfill history          Classifier (Strategy → NoopClassifier)    │
 └───────────────────────────────────┬────────────────────────────────────┘
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                    telegram layer (Facade)                             │
+│                    camada telegram (Facade)                            │
 │  TelegramClient (interface)   Dispatcher (Observer)                    │
-│  Client (impl, owns gotd/td)  PeerStore (RWMutex)                      │
+│  Client (impl, encapsula gotd) PeerStore (RWMutex)                     │
 │  TursoSessionStorage          terminalAuthenticator (auth.UserAuth.)   │
 │                          │                                             │
 │                   ┌──────┴───────┐                                     │
-│                   │  gotd/td      │  ← ONLY contact point with MTProto  │
+│                   │  gotd/td     │  ← ÚNICO ponto de contato MTProto   │
 │                   └──────────────┘                                     │
 └───────────────────────────────────┬────────────────────────────────────┘
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                        storage layer                                   │
+│                        camada storage                                  │
 │  db.go (Open/Close/Conn)   migrations.go (embed.FS)                    │
-│  repository.go (ALL SQL, ? placeholders, prepared statements)          │
+│  repository.go (TODO SQL, placeholders ?, prepared statements)         │
 │                          │                                             │
 │                   ┌──────┴───────┐                                     │
-│                   │ Tursogo "turso"│  database/sql, no CGO              │
-│                   │  ./limiar.db   │                                   │
+│                   │ Tursogo "turso"│  database/sql, sem CGO            │
+│                   │  ./limiar.db │                                     │
 │                   └──────────────┘                                     │
 └──────────────────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────────────────┐
-│       cross-cutting:  config (viper/env)  logger (slog)  errors        │
+│  transversal: config (viper/env)  logger (slog)  errors (wrap)         │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-## Layer responsibilities
+## Responsabilidades das camadas
 
-- **`cmd/limiar-collector/main.go`** — composition root. The `provider` struct
-  implements `cli.Provider` and is the only place that constructs concrete
-  `storage`, `telegram`, `logger`, and `collector` instances. `run()` calls
-  `config.Load` then `config.Validate` before building the command tree.
-- **`internal/cli`** — Cobra command tree (`NewRootCmd`, `newAuthCmd`,
-  `newChannelsCmd`, `newRunCmd`). Depends only on the `Provider` interface; never
-  constructs storage/telegram concretes. `auth`/`channels` use a text logger,
-  `run` uses JSON.
-- **`internal/collector`** — orchestration and adaptation. `Collector` runs the
-  single `dbWriter` goroutine, performs first-run backfill, and drives
-  `client.Run`. `MessageHandler` adapts raw update bytes into
-  `storage.RawMessage`. `Classifier`/`NoopClassifier` is the pluggable Strategy.
-- **`internal/telegram`** — the Facade over gotd/td. `TelegramClient` exposes
-  `Auth`, `IsAuthenticated`, `AddUpdateHandler`, `ResolveChannel`,
-  `FetchHistory`, `Run`. `Client` is the sole type importing gotd/td.
-  `Dispatcher` fans updates out; `PeerStore` caches peers under an RWMutex;
-  `TursoSessionStorage` satisfies gotd's `session.Storage`;
-  `terminalAuthenticator` satisfies gotd's `auth.UserAuthenticator`;
-  `encodeUpdate`/`extractMessages` serialize updates to JSON.
-- **`internal/storage`** — all persistence. `DB` (open/close/conn), `migrate`
-  (embedded `migrations/*.sql`), and `Repository` (every SQL statement).
-- **`internal/config`**, **`internal/logger`**, **`internal/errors`** —
-  cross-cutting infrastructure.
+- **`cmd/limiar-collector/main.go`** — raiz de composição (composition root). A struct `provider` implementa `cli.Provider` e é o único lugar que constrói instâncias concretas de `storage`, `telegram`, `logger` e `collector`. `run()` chama `config.Load` seguido de `config.Validate` antes de construir a árvore de comandos.
+- **`internal/cli`** — Árvore de comandos do Cobra (`NewRootCmd`, `newAuthCmd`, `newChannelsCmd`, `newRunCmd`). Depende apenas da interface `Provider`; nunca constrói dependências concretas. `auth`/`channels` usam um logger de texto, `run` usa JSON.
+- **`internal/collector`** — orquestração e adaptação. `Collector` executa a única goroutine `dbWriter`, realiza o backfill inicial e conduz `client.Run`. `MessageHandler` adapta bytes brutos do update para `storage.RawMessage`. `Classifier`/`NoopClassifier` é o Strategy plugável.
+- **`internal/telegram`** — a Fachada sobre o gotd/td. `TelegramClient` expõe `Auth`, `IsAuthenticated`, `AddUpdateHandler`, `ResolveChannel`, `FetchHistory`, `Run`. `Client` é o único tipo que importa o gotd/td. `Dispatcher` faz fan-out das atualizações; `PeerStore` armazena peers em cache com RWMutex; `TursoSessionStorage` satisfaz `session.Storage` do gotd; `terminalAuthenticator` satisfaz `auth.UserAuthenticator` do gotd; `encodeUpdate`/`extractMessages` serializam as atualizações (updates) para JSON.
+- **`internal/storage`** — toda a persistência. `DB` (open/close/conn), `migrate` (`migrations/*.sql` embutidas) e `Repository` (todas as instruções SQL).
+- **`internal/config`**, **`internal/logger`**, **`internal/errors`** — infraestrutura transversal (cross-cutting).
 
-## Concurrency model (fan-out / fan-in)
+## Modelo de Concorrência (fan-out / fan-in)
 
 ```
                  Telegram MTProto
@@ -93,55 +73,44 @@ four design patterns — **Facade** (`telegram.TelegramClient`), **Observer**
               Client.onUpdate → encodeUpdate → []byte
                        │
                  Dispatcher.Dispatch
-                       │  fan-out: one buffered chan + goroutine per handler
+                       │  fan-out: um canal bufferizado + goroutine por handler
         ┌──────────────┼──────────────┐
         ▼              ▼              ▼
-   consume(h1)    consume(h2)    consume(hN)     (recover() per goroutine)
+   consume(h1)    consume(h2)    consume(hN)     (recover() por goroutine)
         │              │              │
         ▼              ▼              ▼
    MessageHandler.HandleUpdate → Classify → writeCh <- WriteJob
         │              │              │
         └──────────────┼──────────────┘
-                       │  fan-in: single chan WriteJob
+                       │  fan-in: único canal WriteJob
                        ▼
-              Collector.dbWriter  (the ONLY DB writer)
+              Collector.dbWriter  (ÚNICO escritor no BD)
                        │  SaveRawMessage + UpdateChannelLastMessage
                        ▼
-                  Tursogo DB (serialized writes)
+                  Banco Tursogo (escritas serializadas)
 ```
 
-Key properties:
+Principais propriedades:
 
-- **Fan-out:** `Dispatcher` gives each registered `UpdateHandler` its own
-  buffered channel (`DispatcherBufferSize`, default 256) drained by a dedicated
-  goroutine, so a slow handler cannot block its siblings.
-- **Panic isolation:** `Dispatcher.invoke` wraps each handler call with
-  `recover()` and logs the recovered condition — a single bad update never
-  crashes the process.
-- **Fan-in:** all handlers send `WriteJob` values into one `writeCh`
-  (`DBWriterBufferSize`, default 512). The single `dbWriter` goroutine is the
-  only writer to `*sql.DB`, eliminating write contention.
-- **Stateless handler:** `MessageHandler` holds no mutable state and acquires no
-  locks; it is safe for concurrent invocation.
-- **Peer cache:** `PeerStore` guards its `map[int64]*storage.Peer` with a
-  `sync.RWMutex`; concurrent reads do not block one another.
-- **Graceful shutdown:** `cli/run` builds a `signal.NotifyContext` for
-  `SIGTERM`/`SIGINT`. On cancellation, `Collector.shutdown` closes `writeCh` and
-  `wg.Wait()`s for the writer to drain; `run` enforces `ShutdownTimeout` with a
-  `time.After` race.
+- **Fan-out:** O `Dispatcher` fornece a cada `UpdateHandler` registrado seu próprio canal bufferizado (`DispatcherBufferSize`, padrão 256) drenado por uma goroutine dedicada, para que um handler lento não bloqueie os demais.
+- **Isolamento de panic:** `Dispatcher.invoke` envolve cada chamada de handler com `recover()` e registra a condição recuperada no log — um update inválido nunca derruba o processo.
+- **Fan-in:** todos os handlers enviam valores `WriteJob` para um único `writeCh` (`DBWriterBufferSize`, padrão 512). A goroutine única `dbWriter` é o único escritor no `*sql.DB`, eliminando concorrência de escrita.
+- **Handler stateless (sem estado):** `MessageHandler` não possui estado mutável e não adquire locks; é seguro para invocação concorrente.
+- **Cache de peers:** `PeerStore` protege seu `map[int64]*storage.Peer` com um `sync.RWMutex`; leituras concorrentes não bloqueiam umas às outras.
+- **Graceful shutdown:** `cli/run` constrói um `signal.NotifyContext` para `SIGTERM`/`SIGINT`. Ao cancelar, `Collector.shutdown` fecha `writeCh` e faz `wg.Wait()` para o escritor drenar; `run` impõe `ShutdownTimeout` com uma corrida usando `time.After`.
 
-## Data model
+## Modelo de dados
 
-Internal structs (`internal/storage/repository.go`):
+Structs internas (`internal/storage/repository.go`):
 
 ```go
 type RawMessage struct {
     ID            int64
     ChannelID     int64
     MessageID     int64
-    Payload       []byte   // raw gotd/td update serialized as JSON
+    Payload       []byte   // update bruto do gotd/td serializado como JSON
     ReceivedAt    time.Time
-    SchemaVersion int      // 1 in Phase 1
+    SchemaVersion int      // 1 na Fase 1
 }
 
 type Channel struct {
@@ -163,14 +132,14 @@ type Peer struct {
 }
 ```
 
-SQL schema (`internal/storage/migrations/001_initial.sql`):
+Schema SQL (`internal/storage/migrations/001_initial.sql`):
 
 ```sql
 CREATE TABLE IF NOT EXISTS sessions (
     id         INTEGER PRIMARY KEY DEFAULT 1,
     data       BLOB NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CHECK (id = 1)                          -- single-row constraint
+    CHECK (id = 1)                          -- constraint de linha única
 );
 
 CREATE TABLE IF NOT EXISTS peers (
@@ -198,26 +167,24 @@ CREATE TABLE IF NOT EXISTS raw_messages (
     payload        TEXT NOT NULL,           -- JSON
     received_at    TEXT NOT NULL DEFAULT (datetime('now')),
     schema_version INTEGER NOT NULL DEFAULT 1,
-    UNIQUE(channel_id, message_id)          -- safe-persistence dedup
+    UNIQUE(channel_id, message_id)          -- desduplicação persistente segura
 );
 
 CREATE INDEX IF NOT EXISTS idx_raw_messages_channel ON raw_messages(channel_id, message_id);
 CREATE INDEX IF NOT EXISTS idx_channels_username    ON channels(username);
 ```
 
-Datetime columns are stored as text in the layout `2006-01-02 15:04:05` (UTC),
-matching the schema's `datetime('now')` defaults; `Repository.parseDBTime`
-reads them back (with an RFC3339 fallback).
+Colunas datetime são armazenadas como texto no formato `2006-01-02 15:04:05` (UTC), correspondendo aos padrões `datetime('now')` do schema; `Repository.parseDBTime` faz a leitura de volta (com um fallback RFC3339).
 
-## Build / dependency order
+## Ordem de build / dependências
 
 ```
 errors → config → logger → storage
        → telegram/{session, peers, auth, dispatcher} → telegram/client
        → collector/{classifier, handler, collector}
-       → cli/{root, auth, channels, run}
+       → dashboard
+       → cli/{root, auth, channels, run, dashboard}
        → cmd/limiar-collector/main.go
 ```
 
-The graph is acyclic; gotd/td is confined to `internal/telegram`, and
-`database/sql` to `internal/storage`.
+O grafo é acíclico; gotd/td é confinado ao `internal/telegram` e `database/sql` ao `internal/storage`.

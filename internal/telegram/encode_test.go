@@ -25,14 +25,14 @@ func TestEncodeUpdate(t *testing.T) {
 			t.Fatalf("encodeUpdate failed: %v", err)
 		}
 
-		// Verify it's valid JSON and matches expectations.
+		// Verifica se é um JSON válido e atende às expectativas.
 		var raw map[string]any
 		if err := json.Unmarshal(payload, &raw); err != nil {
-			t.Fatalf("output is not valid JSON: %v", err)
+			t.Fatalf("a saída não é um JSON válido: %v", err)
 		}
 
 		if len(raw) == 0 {
-			t.Fatalf("expected non-empty JSON object")
+			t.Fatalf("esperado objeto JSON não-vazio")
 		}
 	})
 }
@@ -54,10 +54,10 @@ func TestExtractUpdateMeta(t *testing.T) {
 
 		ch, msg, ok := extractUpdateMeta(u)
 		if !ok {
-			t.Fatal("expected to find message meta, but got ok=false")
+			t.Fatal("esperava encontrar metadados da mensagem, mas obteve ok=false")
 		}
 		if ch != 123 || msg != 456 {
-			t.Fatalf("expected channelID 123 and messageID 456, got %d and %d", ch, msg)
+			t.Fatalf("esperado channelID 123 e messageID 456, obteve %d e %d", ch, msg)
 		}
 	})
 
@@ -75,40 +75,40 @@ func TestExtractUpdateMeta(t *testing.T) {
 
 		ch, msg, ok := extractUpdateMeta(u)
 		if !ok {
-			t.Fatal("expected to find message meta, but got ok=false")
+			t.Fatal("esperava encontrar metadados da mensagem, mas obteve ok=false")
 		}
 		if ch != 321 || msg != 789 {
-			t.Fatalf("expected channelID 321 and messageID 789, got %d and %d", ch, msg)
+			t.Fatalf("esperado channelID 321 e messageID 789, obteve %d e %d", ch, msg)
 		}
 	})
 
-	t.Run("updates without matching message", func(t *testing.T) {
+	t.Run("atualizações sem mensagem correspondente", func(t *testing.T) {
 		u := &tg.Updates{
 			Updates: []tg.UpdateClass{
-				&tg.UpdateChatParticipantAdd{}, // some other update
+				&tg.UpdateChatParticipantAdd{}, // alguma outra atualização
 			},
 		}
 		_, _, ok := extractUpdateMeta(u)
 		if ok {
-			t.Fatal("expected ok=false for update without message")
+			t.Fatal("esperava ok=false para atualização sem mensagem")
 		}
 	})
 
-	t.Run("updateshort without matching message", func(t *testing.T) {
+	t.Run("updateshort sem mensagem correspondente", func(t *testing.T) {
 		u := &tg.UpdateShort{
 			Update: &tg.UpdateChatParticipantAdd{},
 		}
 		_, _, ok := extractUpdateMeta(u)
 		if ok {
-			t.Fatal("expected ok=false for update without message")
+			t.Fatal("esperava ok=false para atualização sem mensagem")
 		}
 	})
 
-	t.Run("other updatesclass type", func(t *testing.T) {
-		u := &tg.UpdateShortMessage{} // doesn't hold standard update types as fields
+	t.Run("outro tipo de updatesclass", func(t *testing.T) {
+		u := &tg.UpdateShortMessage{} // não contém tipos de atualização padrão como campos
 		_, _, ok := extractUpdateMeta(u)
 		if ok {
-			t.Fatal("expected ok=false for unsupported UpdatesClass type")
+			t.Fatal("esperava ok=false para tipo UpdatesClass não suportado")
 		}
 	})
 }
@@ -123,21 +123,21 @@ func TestExtractFromMessage(t *testing.T) {
 		}
 		ch, msg, ok := extractFromMessage(mc)
 		if !ok || ch != 99 || msg != 42 {
-			t.Fatalf("failed to extract properly, got: ch=%d, msg=%d, ok=%t", ch, msg, ok)
+			t.Fatalf("falha ao extrair corretamente, obteve: ch=%d, msg=%d, ok=%t", ch, msg, ok)
 		}
 	})
 
-	t.Run("not a message type", func(t *testing.T) {
+	t.Run("não é um tipo de mensagem", func(t *testing.T) {
 		mc := &tg.MessageService{
 			ID: 42,
 		}
 		_, _, ok := extractFromMessage(mc)
 		if ok {
-			t.Fatal("expected ok=false for MessageService")
+			t.Fatal("esperava ok=false para MessageService")
 		}
 	})
 
-	t.Run("no peer channel", func(t *testing.T) {
+	t.Run("nenhum canal peer", func(t *testing.T) {
 		mc := &tg.Message{
 			ID: 42,
 			PeerID: &tg.PeerUser{
@@ -146,7 +146,7 @@ func TestExtractFromMessage(t *testing.T) {
 		}
 		_, _, ok := extractFromMessage(mc)
 		if ok {
-			t.Fatal("expected ok=false for peer that is not a channel")
+			t.Fatal("esperava ok=false para peer que não é um canal")
 		}
 	})
 
@@ -206,18 +206,18 @@ func TestExtractFromUpdate(t *testing.T) {
 			expectOk: true, expectCh: 40, expectMsg: 4,
 		},
 		{
-			name: "Unsupported update type",
-			update: &tg.UpdateChatParticipantAdd{},
+			name:     "Unsupported update type",
+			update:   &tg.UpdateChatParticipantAdd{},
 			expectOk: false,
 		},
 		{
-			name: "Nil update",
-			update: nil,
+			name:     "Nil update",
+			update:   nil,
 			expectOk: false,
 		},
 		{
-			name: "UpdateNewChannelMessage with nil message",
-			update: &tg.UpdateNewChannelMessage{Message: nil},
+			name:     "UpdateNewChannelMessage with nil message",
+			update:   &tg.UpdateNewChannelMessage{Message: nil},
 			expectOk: false,
 		},
 	}
@@ -247,16 +247,16 @@ func TestExtractMessages(t *testing.T) {
 
 		msgs, err := extractMessages(res)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("erro inesperado: %v", err)
 		}
 		if len(msgs) != 2 {
-			t.Fatalf("expected 2 messages, got %d", len(msgs))
+			t.Fatalf("esperado 2 mensagens, obteve %d", len(msgs))
 		}
 		if msgs[0].MessageID != 1 || msgs[1].MessageID != 3 {
-			t.Fatalf("unexpected message IDs extracted")
+			t.Fatalf("IDs de mensagens extraídas inesperados")
 		}
 		if len(msgs[0].Payload) == 0 || len(msgs[1].Payload) == 0 {
-			t.Fatalf("expected non-empty JSON payload for extracted messages")
+			t.Fatalf("esperado payload JSON não-vazio para as mensagens extraídas")
 		}
 	})
 
@@ -269,13 +269,13 @@ func TestExtractMessages(t *testing.T) {
 
 		msgs, err := extractMessages(res)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("erro inesperado: %v", err)
 		}
 		if len(msgs) != 1 {
-			t.Fatalf("expected 1 message, got %d", len(msgs))
+			t.Fatalf("esperado 1 mensagem, obteve %d", len(msgs))
 		}
 		if len(msgs[0].Payload) == 0 {
-			t.Fatalf("expected non-empty JSON payload for extracted messages")
+			t.Fatalf("esperado payload JSON não-vazio para as mensagens extraídas")
 		}
 	})
 
@@ -288,21 +288,21 @@ func TestExtractMessages(t *testing.T) {
 
 		msgs, err := extractMessages(res)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("erro inesperado: %v", err)
 		}
 		if len(msgs) != 1 {
-			t.Fatalf("expected 1 message, got %d", len(msgs))
+			t.Fatalf("esperado 1 mensagem, obteve %d", len(msgs))
 		}
 		if len(msgs[0].Payload) == 0 {
-			t.Fatalf("expected non-empty JSON payload for extracted messages")
+			t.Fatalf("esperado payload JSON não-vazio para as mensagens extraídas")
 		}
 	})
 
-	t.Run("Unsupported response type", func(t *testing.T) {
+	t.Run("Tipo de resposta não suportado", func(t *testing.T) {
 		res := &tg.MessagesMessagesNotModified{}
 		_, err := extractMessages(res)
 		if err == nil {
-			t.Fatal("expected error for unsupported type")
+			t.Fatal("esperava erro para tipo não suportado")
 		}
 	})
 }

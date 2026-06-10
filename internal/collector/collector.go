@@ -12,22 +12,22 @@ import (
 	"github.com/limiar/collector/internal/telegram"
 )
 
-// historyPageSize is the per-request batch size for messages.getHistory calls.
-// Kept small to avoid single-request spikes on the MTProto side; the backfill
-// loop paginates until it hits the configured ceiling or the stored cursor.
+// historyPageSize é o tamanho do lote por requisição para as chamadas de messages.getHistory.
+// Mantido pequeno para evitar picos de requisições únicas no lado do MTProto; o loop
+// de backfill pagina até atingir o limite (ceiling) configurado ou o cursor armazenado.
 const historyPageSize = 100
 
-// Repository is the subset of storage operations the collector needs. Accepting
-// an interface keeps the collector testable with a fake.
+// Repository é o subconjunto de operações de storage de que o collector precisa. Aceitar
+// uma interface mantém o collector testável usando fakes.
 type Repository interface {
 	ListChannels(ctx context.Context) ([]*storage.Channel, error)
 	SaveRawMessage(ctx context.Context, msg *storage.RawMessage) (inserted bool, err error)
 	UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error
 }
 
-// Collector orchestrates capture: it backfills history, registers the message
-// handler, runs the Telegram client, and serializes all writes through a
-// single DBWriter goroutine.
+// Collector orquestra a captura: ele faz o backfill do histórico, registra o handler
+// de mensagens, executa o client do Telegram e serializa todas as gravações através de uma
+// única goroutine DBWriter.
 type Collector struct {
 	client         telegram.TelegramClient
 	repo           Repository
@@ -42,24 +42,24 @@ type Collector struct {
 	writeCh chan WriteJob
 	wg      sync.WaitGroup
 
-	// Observability: atomic counters updated by dbWriter on every successful
-	// save. Read with atomic.LoadInt64 for safe cross-goroutine inspection
-	// (e.g. by periodic stats logs).
+	// Observabilidade: contadores atômicos atualizados pelo dbWriter em cada gravação
+	// bem-sucedida. Leia com atomic.LoadInt64 para uma inspeção segura entre goroutines
+	// (ex: logs periódicos de estatísticas).
 	statsNew        int64
 	statsDuplicate  int64
 }
 
-// SetOnMessage registers a callback invoked after each successful database
-// write. It is safe to call before Run. Pass nil to disable.
+// SetOnMessage registra um callback invocado após cada gravação bem-sucedida no
+// banco de dados. É seguro chamar antes de Run. Passe nil para desabilitar.
 func (c *Collector) SetOnMessage(fn func(*storage.RawMessage)) {
 	c.onMessage = fn
 }
 
-// NewCollector builds a collector. writeBuffer sizes the fan-in channel;
-// maxWriteRetry bounds DB write retries before a job is reported failed;
-// historyMax caps the number of messages backfilled per channel on each run;
-// historyMaxDays is the temporal cutoff — messages older than now minus this
-// many days are skipped and pagination stops when the page straddles it.
+// NewCollector constrói um collector. writeBuffer define o tamanho do canal de fan-in;
+// maxWriteRetry limita as repetições de gravações no DB antes que um job seja dado como falho;
+// historyMax limita o número de mensagens de backfill por canal a cada execução;
+// historyMaxDays é o limite temporal — mensagens mais velhas que "agora" menos essa
+// quantidade de dias são puladas e a paginação para quando a página abrange essa data.
 func NewCollector(
 	client telegram.TelegramClient,
 	repo Repository,
@@ -91,8 +91,8 @@ func NewCollector(
 	}
 }
 
-// Run starts the DBWriter, backfills first-run history, registers the handler,
-// and runs the client until ctx is cancelled, then drains cleanly.
+// Run inicia o DBWriter, faz o backfill do histórico da primeira execução, registra o handler,
+// e executa o client até que ctx seja cancelado, então realiza um dreno (drain) limpo.
 func (c *Collector) Run(ctx context.Context) error {
 	c.writeCh = make(chan WriteJob, c.writeBuffer)
 
@@ -110,12 +110,12 @@ func (c *Collector) Run(ctx context.Context) error {
 		return apperrors.Wrap("collector", "list_channels", err)
 	}
 
-	// Reset observability counters for this run.
+	// Reseta os contadores de observabilidade para esta execução.
 	atomic.StoreInt64(&c.statsNew, 0)
 	atomic.StoreInt64(&c.statsDuplicate, 0)
 
 	if err := c.backfill(ctx, channels); err != nil {
-		// Backfill failure is logged, not fatal: live capture should still run.
+		// A falha no backfill é registrada no log, mas não é fatal: a captura ao vivo ainda deve ser executada.
 		c.log.Error("📜 Histórico inicial falhou", "erro", err)
 	}
 
@@ -123,11 +123,11 @@ func (c *Collector) Run(ctx context.Context) error {
 		"novas", atomic.LoadInt64(&c.statsNew),
 		"duplicatas", atomic.LoadInt64(&c.statsDuplicate))
 
-	// Reset again so live-capture stats start clean (not polluted by backfill).
+	// Reseta novamente para que as estatísticas da captura ao vivo comecem limpas (não poluídas pelo backfill).
 	atomic.StoreInt64(&c.statsNew, 0)
 	atomic.StoreInt64(&c.statsDuplicate, 0)
 
-	// Build a set of monitored channel IDs for filtering live updates
+	// Constrói um conjunto (set) de IDs de canais monitorados para filtrar atualizações ao vivo
 	monitoredSet := make(map[int64]struct{}, len(channels))
 	for _, ch := range channels {
 		if ch.Active {
@@ -140,14 +140,14 @@ func (c *Collector) Run(ctx context.Context) error {
 
 	c.log.Info("📡 Captura ao vivo iniciada", "canais", len(channels))
 
-	// Periodic observability log during live capture (every 5 minutes).
+	// Log de observabilidade periódico durante a captura ao vivo (a cada 5 minutos).
 	statsCtx, statsCancel := context.WithCancel(ctx)
 	defer statsCancel()
 	go c.statsLoop(statsCtx)
 
 	runErr := c.client.Run(ctx)
 
-	// Client returned (ctx cancelled or fatal): drain and close.
+	// O Client retornou (ctx cancelado ou fatal): drene e feche.
 	c.shutdown()
 
 	if runErr != nil {
@@ -156,11 +156,11 @@ func (c *Collector) Run(ctx context.Context) error {
 	return nil
 }
 
-// backfill fetches history for every active channel, paginating until the
-// configured ceiling (c.historyMax) or the stored cursor (LastMessageID) is
-// reached. SaveRawMessage is idempotent (ON CONFLICT DO NOTHING on the
-// (channel_id, message_id) unique constraint), so re-fetching messages that
-// were already persisted is safe — they are silently dropped by the DB.
+// backfill busca o histórico para cada canal ativo, paginando até o limite
+// configurado (c.historyMax) ou até que o cursor armazenado (LastMessageID) seja
+// atingido. SaveRawMessage é idempotente (ON CONFLICT DO NOTHING na constraint
+// única (channel_id, message_id)), portanto buscar novamente mensagens que
+// já foram persistidas é seguro — elas são silenciosamente descartadas pelo DB.
 func (c *Collector) backfill(ctx context.Context, channels []*storage.Channel) error {
 	for _, ch := range channels {
 		if !ch.Active {
@@ -191,20 +191,19 @@ func (c *Collector) backfill(ctx context.Context, channels []*storage.Channel) e
 	return nil
 }
 
-// backfillChannel pages through one channel's history starting from the newest
-// messages and walking backward. Two stop conditions apply:
-//   - numeric ceiling (c.historyMax): safety net against hyper-active channels
-//   - temporal cutoff (now - c.historyMaxDays): the business rule that old
-//     promotions lose value and should not be collected
+// backfillChannel pagina através do histórico de um canal começando pelas mensagens
+// mais recentes e caminhando para trás. Duas condições de parada se aplicam:
+//   - limite numérico (c.historyMax): rede de segurança contra canais hiperativos
+//   - limite temporal (agora - c.historyMaxDays): regra de negócio que diz que promoções
+//     antigas perdem valor e não devem ser coletadas
 //
-// Telegram's messages.getHistory supports MinID (id > MinID, server-side) and
-// OffsetID (id < OffsetID). We use MinID=cursor on the first request to drop
-// everything at-or-below the stored cursor server-side, then OffsetID on
-// subsequent requests to page backward through the returned window. The loop
-// terminates on: empty page, either stop condition, or context cancellation.
-// SaveRawMessage is idempotent (ON CONFLICT DO NOTHING on the unique
-// (channel_id, message_id)), so re-fetching a message already persisted is a
-// silent no-op at the DB layer.
+// O messages.getHistory do Telegram suporta MinID (id > MinID, no servidor) e
+// OffsetID (id < OffsetID). Nós usamos MinID=cursor na primeira requisição para descartar
+// tudo igual-ou-abaixo do cursor armazenado no lado do servidor, depois usamos OffsetID nas
+// requisições subsequentes para paginar retroativamente através da janela retornada. O loop
+// termina em caso de: página vazia, qualquer das condições de parada, ou cancelamento de contexto.
+// SaveRawMessage é idempotente (ON CONFLICT DO NOTHING no (channel_id, message_id)
+// único), então buscar uma mensagem já persistida é um no-op silencioso na camada do DB.
 func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (fetched, maxID int64, err error) {
 	cursor := ch.LastMessageID
 	ceiling := int64(c.historyMax)
@@ -231,8 +230,8 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 		var msgs []telegram.HistoryMessage
 		var fetchErr error
 		if firstPage && cursor > 0 {
-			// Server-side MinID drops everything id <= cursor on the first
-			// request, so we only receive messages newer than the cursor.
+			// MinID no servidor descarta tudo com id <= cursor na primeira
+			// requisição, então recebemos apenas mensagens mais novas que o cursor.
 			msgs, fetchErr = c.client.FetchHistory(ctx, ch.ID, cursor, pageSize)
 		} else {
 			msgs, fetchErr = c.client.FetchHistoryWithOffset(ctx, ch.ID, offsetID, pageSize)
@@ -261,12 +260,12 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 		}
 
 		for _, m := range msgs {
-			// Skip messages at or below the stored cursor (already persisted
-			// in a previous run).
+			// Pula mensagens iguais ou abaixo do cursor armazenado (já persistidas
+			// em uma execução anterior).
 			if cursor > 0 && m.MessageID <= cursor {
 				continue
 			}
-			// Skip messages older than the temporal cutoff.
+			// Pula mensagens mais antigas que o limite temporal (cutoff).
 			if !m.Date.IsZero() && m.Date.Before(cutoff) {
 				continue
 			}
@@ -292,27 +291,27 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 			globalMaxID = pageMaxID
 		}
 
-		// If the oldest message in this page is at or below the stored cursor,
-		// every message newer than the cursor has been covered — stop.
+		// Se a mensagem mais antiga nesta página estiver no cursor armazenado ou abaixo dele,
+		// todas as mensagens mais recentes que o cursor foram cobertas — pare.
 		if cursor > 0 && pageMinID <= cursor {
 			break
 		}
-		// If the oldest message in this page is older than the cutoff, every
-		// message within the temporal window has been covered — stop (all
-		// subsequent pages would be even older).
+		// Se a mensagem mais antiga nesta página for mais antiga que o cutoff (limite temporal),
+		// todas as mensagens dentro da janela temporal foram cobertas — pare (todas
+		// as páginas subsequentes seriam ainda mais antigas).
 		if !pageMinDate.IsZero() && pageMinDate.Before(cutoff) {
 			break
 		}
 
-		// Walk backward: next page fetches messages older than pageMinID.
+		// Caminhe para trás: a próxima página buscará mensagens mais velhas que pageMinID.
 		offsetID = pageMinID
 	}
 
 	return totalFetched, globalMaxID, nil
 }
 
-// dbWriter is the single goroutine that writes to the database (fan-in). It
-// drains writeCh until closed, retrying each write up to maxWriteRetry times.
+// dbWriter é a única goroutine que escreve no banco de dados (fan-in). Ele
+// drena o writeCh até ser fechado, repetindo cada escrita até maxWriteRetry vezes.
 func (c *Collector) dbWriter(ctx context.Context) {
 	defer c.wg.Done()
 	for job := range c.writeCh {
@@ -320,11 +319,11 @@ func (c *Collector) dbWriter(ctx context.Context) {
 	}
 }
 
-// writeWithRetry persists one job, retrying on failure. A persistent failure
-// is logged (never silently dropped) and reported via job.ErrCh if present.
-// Cursor advancement is skipped for backfill jobs — the backfill orchestrator
-// owns it — and for live jobs whose ChannelID is zero (system events that
-// should have been filtered upstream; belt-and-suspenders).
+// writeWithRetry persiste um job, com retentativa (retry) em caso de falha. Uma falha persistente
+// é registrada no log (nunca descartada silenciosamente) e reportada via job.ErrCh, se presente.
+// O avanço do cursor é pulado para jobs de backfill — o orquestrador de backfill
+// é dono disso — e para jobs ao vivo cujo ChannelID é zero (eventos de sistema que
+// deveriam ter sido filtrados upstream).
 func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 	var lastErr error
 	for attempt := 0; attempt <= c.maxWriteRetry; attempt++ {
@@ -349,7 +348,7 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 		return
 	}
 
-	// Persistent failure: log the lost message explicitly, never drop silently.
+	// Falha persistente: registra explicitamente a mensagem perdida no log, nunca a descarta silenciosamente.
 	c.log.Error("❌ Mensagem perdida após retries",
 		"canal_id", job.Message.ChannelID,
 		"mensagem_id", job.Message.MessageID,
@@ -359,9 +358,9 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 	}
 }
 
-// statsLoop periodically logs observability counters (new vs. duplicate
-// messages persisted) so operators can watch collection health without
-// waiting for shutdown. It returns when ctx is cancelled.
+// statsLoop registra periodicamente contadores de observabilidade (mensagens novas vs. duplicadas
+// persistidas) para que os operadores possam observar a saúde da coleta sem
+// esperar pelo encerramento (shutdown). Retorna quando ctx é cancelado.
 func (c *Collector) statsLoop(ctx context.Context) {
 	const interval = 5 * time.Minute
 	ticker := time.NewTicker(interval)
@@ -382,7 +381,7 @@ func (c *Collector) statsLoop(ctx context.Context) {
 	}
 }
 
-// shutdown closes the write channel and waits for the DBWriter to drain.
+// shutdown fecha o canal de escrita e aguarda o dreno (drain) do DBWriter.
 func (c *Collector) shutdown() {
 	close(c.writeCh)
 	c.wg.Wait()

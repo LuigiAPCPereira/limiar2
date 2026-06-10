@@ -1,46 +1,46 @@
-# ADR 003 — Single DBWriter Goroutine via Fan-In
+# ADR 003 — Goroutine Única de DBWriter via Fan-In
 
 ## Status
 
-Accepted
+Aceito
 
-## Context
+## Contexto
 
-Channels are monitored concurrently and updates are fanned out to handlers in
-their own goroutines (Observer pattern, `Dispatcher`). If each handler wrote to
-the database independently, multiple goroutines would write to the same
-`*sql.DB` concurrently, risking write contention and lock errors on an embedded
-store, and making write ordering and error handling hard to reason about.
+Canais são monitorados concorrentemente e as atualizações (updates) passam por um fan-out para handlers em
+suas próprias goroutines (padrão Observer, `Dispatcher`). Se cada handler gravasse no
+banco de dados de forma independente, múltiplas goroutines iriam gravar no mesmo
+`*sql.DB` concorrentemente, correndo o risco de contenção de escrita e erros de bloqueio (lock) em um banco de
+dados embutido, além de tornar a ordenação de escritas e o tratamento de erros difíceis de raciocinar.
 
-## Decision
+## Decisão
 
-Serialize all database writes through a single DBWriter goroutine
-(`Collector.dbWriter`). Producers (the stateless `MessageHandler` and the
-first-run backfill) send `WriteJob` values into one buffered channel
-(`writeCh`, sized by `DBWriterBufferSize`, default 512). The DBWriter drains the
-channel and is the **only** component that writes to `*sql.DB`. On shutdown,
-`Collector.shutdown` closes `writeCh` and `wg.Wait()`s for the writer to finish
-draining.
+Serializar todas as escritas de banco de dados através de uma única goroutine DBWriter
+(`Collector.dbWriter`). Os produtores (o `MessageHandler` stateless e o
+backfill inicial) enviam valores `WriteJob` para um único canal com buffer
+(`writeCh`, dimensionado por `DBWriterBufferSize`, padrão 512). O DBWriter drena o
+canal e é o **único** componente que escreve no `*sql.DB`. Ao desligar,
+`Collector.shutdown` fecha `writeCh` e aguarda (`wg.Wait()`) que o escritor termine
+o dreno.
 
-`storage.DB.Conn()` documents this invariant: only the DBWriter may issue writes
-through the returned connection.
+`storage.DB.Conn()` documenta este invariante: apenas o DBWriter pode emitir escritas
+através da conexão retornada.
 
-## Consequences
+## Consequências
 
-- No concurrent writers; write contention is eliminated by construction.
-- Writes are naturally ordered and have one place for retry/error policy
-  (`writeWithRetry`, bounded by `maxWriteRetry`, logging lost messages).
-- The hot path is lock-free: handlers are stateless and merely enqueue.
-- Throughput is bounded by one writer; acceptable for Phase 1 volumes and
-  tunable via the buffer size. A persistently slow DB will eventually exert
-  backpressure through the buffered channel.
+- Sem escritores concorrentes; a contenção de escrita é eliminada por construção.
+- Escritas são naturalmente ordenadas e possuem um único local para política de repetição/erros
+  (`writeWithRetry`, limitada por `maxWriteRetry`, que registra no log as mensagens perdidas).
+- O caminho crítico (hot path) não usa locks: os handlers não possuem estado e apenas enfileiram.
+- O throughput (vazão) é limitado a um único escritor; aceitável para os volumes da Fase 1 e
+  ajustável via tamanho do buffer. Um banco de dados persistentemente lento acabará exercendo
+  pressão contrária (backpressure) através do canal bufferizado.
 
-## Alternatives considered
+## Alternativas consideradas
 
-- **Per-handler writes** — concurrent writers to one `*sql.DB`; rejected for
-  contention and ordering complexity.
-- **A write mutex around `Repository`** — serializes writes but spreads write
-  call sites across goroutines, complicating retry/shutdown; the channel fan-in
-  is cleaner and gives a single drain point.
-- **A pool of writers** — unnecessary for an embedded single-file DB and
-  reintroduces concurrency on the connection.
+- **Gravações por handler (Per-handler writes)** — escritores concorrentes em um `*sql.DB`; rejeitado devido à
+  contenção e complexidade de ordenação.
+- **Um mutex de gravação no `Repository`** — serializa as gravações mas espalha os pontos de chamada
+  de escrita por várias goroutines, complicando repetições/desligamento; o fan-in com canal
+  é mais limpo e oferece um único ponto de drenagem.
+- **Um pool de escritores** — desnecessário para um banco de dados embutido de arquivo único e
+  reintroduz a concorrência na conexão.

@@ -1,8 +1,8 @@
 package logger
 
-// NopLogger is a no-op Logger implementation that discards every record.
-// It is safe for concurrent use and useful as a default when a layer does not
-// need to emit logs (e.g. tests, or when the caller did not provide a logger).
+// NopLogger é uma implementação "no-op" (sem operação) de Logger que descarta todos os registros.
+// É seguro para uso concorrente e útil como um padrão quando uma camada não
+// precisa emitir logs (ex: testes, ou quando o chamador não forneceu um logger).
 type NopLogger struct{}
 
 func (NopLogger) Debug(_ string, _ ...any)      {}

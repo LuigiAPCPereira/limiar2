@@ -37,7 +37,7 @@ func newRepo(t *testing.T) *storage.Repository {
 	return repo
 }
 
-// TursoSessionStorage must satisfy gotd's session.Storage interface.
+// TursoSessionStorage deve satisfazer a interface session.Storage do gotd.
 var _ gotdsession.Storage = (*telegram.TursoSessionStorage)(nil)
 
 func TestSessionStoreLoadRoundTrip(t *testing.T) {
@@ -56,17 +56,17 @@ func TestSessionStoreLoadRoundTrip(t *testing.T) {
 	}
 }
 
-// Empty storage must surface gotd's own ErrNotFound so the auth flow knows to
-// start fresh rather than treating it as a hard error.
+// Armazenamento vazio deve propagar o próprio ErrNotFound do gotd para que o fluxo
+// de autenticação saiba que deve começar do zero, em vez de tratar como erro grave.
 func TestSessionLoadEmptyReturnsGotdNotFound(t *testing.T) {
 	ss := telegram.NewTursoSessionStorage(newRepo(t), nil)
 	_, err := ss.LoadSession(context.Background())
 	if !stderrors.Is(err, gotdsession.ErrNotFound) {
-		t.Fatalf("expected gotd session.ErrNotFound, got %v", err)
+		t.Fatalf("esperado gotd session.ErrNotFound, obteve %v", err)
 	}
 }
 
-// Feature: limiar-collector, Property 1: Session Storage Round-Trip (via gotd interface).
+// Funcionalidade: limiar-collector, Propriedade 1: Session Storage Round-Trip (via interface do gotd).
 func TestProperty1SessionRoundTripGotd(t *testing.T) {
 	ss := telegram.NewTursoSessionStorage(newRepo(t), nil)
 	ctx := context.Background()
@@ -88,12 +88,12 @@ func TestProperty1SessionRoundTripGotd(t *testing.T) {
 func TestPeerStoreGetSet(t *testing.T) {
 	ps := telegram.NewPeerStore(newRepo(t), nil)
 	if _, ok := ps.Get(1); ok {
-		t.Fatal("empty store should miss")
+		t.Fatal("armazenamento vazio deveria falhar ao buscar")
 	}
 	ps.Set(&storage.Peer{ID: 1, AccessHash: 42, Type: "channel"})
 	got, ok := ps.Get(1)
 	if !ok || got.AccessHash != 42 {
-		t.Fatalf("Get after Set failed: %+v ok=%v", got, ok)
+		t.Fatalf("Get após Set falhou: %+v ok=%v", got, ok)
 	}
 }
 
@@ -108,18 +108,18 @@ func TestPeerStoreFlushAndLoad(t *testing.T) {
 		t.Fatalf("FlushToDB: %v", err)
 	}
 
-	// Fresh store loads what was flushed.
+	// Novo armazenamento carrega o que foi persistido.
 	ps2 := telegram.NewPeerStore(repo, nil)
 	if err := ps2.LoadFromDB(ctx); err != nil {
 		t.Fatalf("LoadFromDB: %v", err)
 	}
 	got, ok := ps2.Get(10)
 	if !ok || got.AccessHash != 100 {
-		t.Fatalf("peer 10 not reloaded: %+v ok=%v", got, ok)
+		t.Fatalf("peer 10 não foi recarregado: %+v ok=%v", got, ok)
 	}
 }
 
-// Concurrent readers and writers must not race (run with -race).
+// Leitores e escritores concorrentes não devem causar corrida (execute com -race).
 func TestPeerStoreConcurrentAccess(t *testing.T) {
 	ps := telegram.NewPeerStore(newRepo(t), nil)
 	done := make(chan struct{})

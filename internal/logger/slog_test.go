@@ -48,8 +48,8 @@ func TestLevelFiltering(t *testing.T) {
 	}
 }
 
-// Feature: limiar-collector, Property 14 (logger half): Sensitive Data Masking.
-// For any api_hash / session / token value, no log record contains it verbatim.
+// Funcionalidade: limiar-collector, Propriedade 14 (metade do logger): Ocultação de Dados Sensíveis (Sensitive Data Masking).
+// Para qualquer valor de api_hash / session / token, nenhum registro de log o conterá literalmente.
 func TestProperty14LoggerRedactsSensitiveKeys(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		secret := rapid.StringMatching(`[A-Za-z0-9]{6,40}`).Draw(t, "secret")

@@ -1,39 +1,41 @@
-# Spec — gotd/td Usage
+# Spec — Uso do gotd/td
 
-`github.com/gotd/td` is the MTProto implementation `limiar-collector` builds on.
-It is used **directly**, with no third-party wrapper. Everything gotd-specific is
-confined to `internal/telegram`; the `TelegramClient` facade exposes only domain
-types so the rest of the codebase never imports gotd/td.
+`github.com/gotd/td` é a implementação MTProto sobre a qual o `limiar-collector`
+é construído. Ela é usada **diretamente**, sem nenhum wrapper de terceiros. Tudo
+que é específico do gotd fica confinado em `internal/telegram`; a fachada (facade)
+`TelegramClient` expõe apenas tipos do domínio, de modo que o restante do código
+nunca importe o gotd/td.
 
-## How gotd/td is used
+## Como o gotd/td é usado
 
-### Client construction (`telegram/client.go`)
+### Construção do Client (`telegram/client.go`)
 
-`Client` is the sole type that imports gotd/td. The gotd client is built in
-`NewClient` with our session storage and our dispatcher wired in as the update
-handler; no network I/O occurs until `Run` or an action method is called:
+`Client` é o único tipo que importa o gotd/td. O client gotd é construído em
+`NewClient` com nosso armazenamento de sessão e nosso dispatcher configurado como
+o tratador de atualizações (update handler); nenhuma operação de rede ocorre até que
+`Run` ou um método de ação seja chamado:
 
 ```go
 c.tg = telegram.NewClient(appID, appHash, telegram.Options{
     SessionStorage: session,                                  // *TursoSessionStorage
-    UpdateHandler:  telegram.UpdateHandlerFunc(c.onUpdate),   // forwards to Dispatcher
+    UpdateHandler:  telegram.UpdateHandlerFunc(c.onUpdate),   // encaminha para o Dispatcher
 })
 ```
 
-### Session storage (`session.Storage`)
+### Armazenamento de sessão (`session.Storage`)
 
-`TursoSessionStorage` satisfies gotd's `github.com/gotd/td/session` `Storage`
-interface (compile-time asserted via `var _ gotdsession.Storage =
+`TursoSessionStorage` satisfaz a interface `Storage` de `github.com/gotd/td/session`
+(asserção em tempo de compilação via `var _ gotdsession.Storage =
 (*TursoSessionStorage)(nil)`):
 
-- `LoadSession(ctx) ([]byte, error)` — returns persisted bytes, mapping our
-  `storage.ErrNoSession` to gotd's `session.ErrNotFound` so the auth flow treats
-  "no session" as "start fresh" rather than a hard failure.
-- `StoreSession(ctx, data) error` — persists session bytes via the repository.
+- `LoadSession(ctx) ([]byte, error)` — retorna bytes persistidos, mapeando nosso
+  `storage.ErrNoSession` para `session.ErrNotFound` do gotd, para que o fluxo de autenticação trate
+  "nenhuma sessão" como "iniciar do zero" em vez de uma falha crítica.
+- `StoreSession(ctx, data) error` — persiste os bytes da sessão via repository.
 
-### Auth flow (`auth.Flow`, `auth.UserAuthenticator`)
+### Fluxo de Autenticação (`auth.Flow`, `auth.UserAuthenticator`)
 
-`Client.Auth` runs gotd's flow only if not already authorized:
+`Client.Auth` executa o fluxo do gotd apenas se ainda não estiver autorizado:
 
 ```go
 authn := newTerminalAuthenticator(os.Stdin, os.Stdout, c.log)
@@ -41,63 +43,60 @@ flow := auth.NewFlow(authn, auth.SendCodeOptions{})
 err := c.tg.Auth().IfNecessary(ctx, flow)
 ```
 
-`terminalAuthenticator` satisfies `github.com/gotd/td/telegram/auth`
-`UserAuthenticator`: `Phone`, `Code`, `Password` (the 2FA step), plus
-`AcceptTermsOfService`/`SignUp` which reject sign-up — the userbot account must
-already exist. `IsAuthenticated` calls `c.tg.Auth().Status(ctx)` and reports
-`st.Authorized`.
+`terminalAuthenticator` satisfaz `UserAuthenticator` de `github.com/gotd/td/telegram/auth`:
+`Phone`, `Code`, `Password` (a etapa 2FA), mais `AcceptTermsOfService`/`SignUp`, que
+rejeitam novos cadastros — a conta userbot já deve existir. `IsAuthenticated` chama
+`c.tg.Auth().Status(ctx)` e relata `st.Authorized`.
 
-### Update handling (`UpdateHandler`)
+### Tratamento de atualizações (`UpdateHandler`)
 
-`Client.onUpdate(ctx, u tg.UpdatesClass)` is the gotd entrypoint. It serializes
-the update with `encodeUpdate` and hands the JSON bytes to `Dispatcher.Dispatch`.
-A serialization error is logged and swallowed (`return nil`) so a single bad
-update never crashes the receive loop. Serialization to `RawMessage` happens
-later, in the collector's adapter.
+`Client.onUpdate(ctx, u tg.UpdatesClass)` é o ponto de entrada (entrypoint) do gotd. Ele serializa
+a atualização com `encodeUpdate` e entrega os bytes JSON para `Dispatcher.Dispatch`.
+Um erro de serialização é registrado no log e engolido (`return nil`), para que uma única atualização ruim
+nunca derrube o loop de recebimento. A serialização para `RawMessage` ocorre
+posteriormente, no adapter do collector.
 
-### Resolving channels (`ContactsResolveUsername`)
+### Resolução de canais (`ContactsResolveUsername`)
 
-`Client.ResolveChannel` normalizes the username (strips `@`) and calls
+`Client.ResolveChannel` normaliza o username (remove `@`) e chama
 `c.tg.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{...})`,
-extracts the first `*tg.Channel` from the resolved chats, reads its access hash
-via `GetAccessHash()`, and caches a `storage.Peer{Type: "channel", ...}`.
+extrai o primeiro `*tg.Channel` dos chats resolvidos, lê seu hash de acesso
+via `GetAccessHash()`, e armazena em cache um `storage.Peer{Type: "channel", ...}`.
 
-### History backfill (`MessagesGetHistory`)
+### Backfill de histórico (`MessagesGetHistory`)
 
-`Client.FetchHistory` calls
+`Client.FetchHistory` chama
 `c.tg.API().MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{Peer:
 &tg.InputPeerChannel{ChannelID, AccessHash}, Limit: limit})`. `extractMessages`
-handles the `*tg.MessagesChannelMessages`, `*tg.MessagesMessages`, and
-`*tg.MessagesMessagesSlice` response variants, serializing each `*tg.Message`
-to JSON and skipping service messages. Each result is a `HistoryMessage{MessageID,
-Payload}`.
+lida com as variantes de resposta `*tg.MessagesChannelMessages`, `*tg.MessagesMessages`, e
+`*tg.MessagesMessagesSlice`, serializando cada `*tg.Message` para JSON e pulando
+mensagens de serviço. Cada resultado é uma `HistoryMessage{MessageID, Payload}`.
 
-### Serialization (`encode.go`)
+### Serialização (`encode.go`)
 
-gotd's `tg` types are plain Go structs with exported fields, so
-`encoding/json.Marshal` captures the full raw shape. That is exactly what Phase 1
-needs — see ADR 005.
+Os tipos `tg` do gotd são structs Go simples com campos exportados, então
+`encoding/json.Marshal` captura o formato bruto completo. Isso é exatamente o que a Fase 1
+precisa — veja o ADR 005.
 
-## Patterns adopted
+## Padrões adotados
 
-- **Facade:** all gotd complexity (session, peers, reconnection, auth) sits
-  behind `TelegramClient`.
-- **`runOnce` for one-shot actions:** `IsAuthenticated`, `Auth`,
-  `ResolveChannel`, and `FetchHistory` run inside `c.tg.Run(ctx, f)` because auth
-  status and API calls require the gotd client lifecycle to be active.
-- **Reconnect loop in `Run`:** on connection loss, `Run` applies exponential
-  backoff (`CalculateBackoff`) and resets the attempt counter on a successful
-  connect; a cancelled context yields a clean shutdown.
+- **Facade:** toda a complexidade do gotd (sessão, peers, reconexão, auth) fica
+  escondida atrás do `TelegramClient`.
+- **`runOnce` para ações de "tiro único" (one-shot):** `IsAuthenticated`, `Auth`,
+  `ResolveChannel` e `FetchHistory` rodam dentro de `c.tg.Run(ctx, f)` porque o status
+  de auth e as chamadas de API requerem que o ciclo de vida do client gotd esteja ativo.
+- **Loop de reconexão em `Run`:** na perda de conexão, `Run` aplica backoff
+  exponencial (`CalculateBackoff`) e reinicia o contador de tentativas em uma conexão
+  bem-sucedida; um contexto cancelado resulta em um desligamento limpo.
 
-## What NOT to use
+## O que NÃO usar
 
-- **No third-party MTProto wrapper** (e.g. GoTGProto). Its peer/session storage
-  is a concrete struct coupled to GORM/SQLite and cannot plug into Tursogo — see
-  ADR 002.
-- **Do not leak gotd/td types past `internal/telegram`.** The `TelegramClient`
-  interface returns only `storage.Peer`, `HistoryMessage`, and `[]byte`. The CLI
-  and collector layers must not import `github.com/gotd/td/...`.
-- **Do not handle updates synchronously in `onUpdate`.** Always dispatch through
-  the `Dispatcher` so fan-out and panic recovery apply.
-- **Do not support sign-up.** `terminalAuthenticator.SignUp` returns an error by
-  design.
+- **Sem wrapper MTProto de terceiros** (ex: GoTGProto). Seu peer/session storage
+  é uma struct concreta acoplada ao GORM/SQLite e não pode ser plugada no Tursogo — veja o ADR 002.
+- **Não vazar tipos do gotd/td fora de `internal/telegram`.** A interface `TelegramClient`
+  retorna apenas `storage.Peer`, `HistoryMessage`, e `[]byte`. As camadas CLI e
+  collector não devem importar `github.com/gotd/td/...`.
+- **Não trate atualizações de forma síncrona em `onUpdate`.** Sempre despache pelo
+  `Dispatcher` para aplicar fan-out e recuperação de panic.
+- **Não suporte criação de conta (sign-up).** `terminalAuthenticator.SignUp` retorna
+  um erro por design.
