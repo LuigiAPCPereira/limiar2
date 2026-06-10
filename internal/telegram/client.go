@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gotd/td/telegram"
@@ -410,6 +411,29 @@ func NormalizeUsername(u string) string {
 	for len(u) > 0 && u[0] == '@' {
 		u = u[1:]
 	}
+
+	// Removemos qualquer caractere inválido (sanitização de segurança)
+	hasInvalid := false
+	for i := 0; i < len(u); i++ {
+		c := u[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+			hasInvalid = true
+			break
+		}
+	}
+
+	if hasInvalid {
+		var b strings.Builder
+		b.Grow(len(u))
+		for i := 0; i < len(u); i++ {
+			c := u[i]
+			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
+				b.WriteByte(c)
+			}
+		}
+		u = b.String()
+	}
+
 	return u
 }
 
