@@ -50,14 +50,19 @@ func NewMessageHandler(classifier Classifier, writeCh chan<- WriteJob, monitored
 	}
 }
 
-// HandleUpdate adapta o update bruto (raw) em uma RawMessage e a enfileira
-// para persistência. Os bytes originais do payload são preservados literalmente.
-// Atualizações de canais não monitorados são descartadas silenciosamente.
+// HandleUpdate adapta o update bruto em um RawMessage e o enfileira
+// para persistência. Os bytes do payload original são preservados na íntegra.
+// Updates de canais não monitorados são descartados silenciosamente.
 func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Update) error {
-	// Filtra atualizações de canais não monitorados. channel_id=0 cobre mensagens diretas (DMs),
-	// eventos do sistema e qualquer atualização que não seja uma mensagem de canal — todos
-	// os quais devem ser descartados na Fase 1 (a coleção é restrita apenas aos canais
+	// Filtra updates de canais não monitorados. channel_id=0 abrange DMs,
+	// eventos do sistema e qualquer update que não seja uma mensagem de canal — todos
+	// os quais devem ser descartados na Fase 1 (a coleta é restrita apenas a canais
 	// monitorados).
+
+	// A validação do channel monitorado acontece ANTES da alocação do
+	// struct *storage.RawMessage ou de outros processamentos, funcionando
+	// como um retorno antecipado (early return) no caminho crítico
+	// para evitar alocações e ciclos de GC.
 	if _, ok := h.monitoredChannels[update.ChannelID]; !ok {
 		return nil
 	}
