@@ -1,53 +1,53 @@
-# ADR 008 — Collective Config Validation, Separate from Load
+# ADR 008 — Validação Coletiva de Configuração, Separada do Carregamento (Load)
 
 ## Status
 
-Accepted
+Aceito
 
-## Context
+## Contexto
 
-Configuration comes from `LIMIAR_`-prefixed environment variables. Operators
-benefit from clear, complete feedback: if several values are missing or invalid,
-reporting only the first error forces a frustrating fix-one-rerun loop. We also
-want a clean separation between "read and default the config" and "decide whether
-it is usable," so defaults can be applied without coupling to validation, and
-validation can run explicitly before any I/O.
+A configuração é lida de variáveis de ambiente prefixadas por `LIMIAR_`. Os operadores
+se beneficiam de um feedback claro e completo: se vários valores estiverem faltando ou inválidos,
+relatar apenas o primeiro erro força um ciclo frustrante de conserta-um-roda-de-novo. Nós também
+queremos uma separação limpa entre "ler e aplicar padrões na config" e "decidir se
+ela é utilizável", para que padrões (defaults) possam ser aplicados sem acoplamento com a validação,
+e a validação possa ser executada explicitamente antes de qualquer operação de E/S.
 
-## Decision
+## Decisão
 
-Split configuration into two functions in `internal/config`:
+Dividir a configuração em duas funções em `internal/config`:
 
-- **`Load(v *viper.Viper)`** — binds the `LIMIAR_` env keys, unmarshals into
-  `Config`, and calls `ApplyDefaults`. It does **not** validate.
-- **`Validate()`** — checks every field and returns **all** problems at once,
-  joined with `errors.Join`, rather than stopping at the first.
+- **`Load(v *viper.Viper)`** — faz o bind das chaves de ambiente `LIMIAR_`, extrai (unmarshals) para dentro de
+  `Config`, e chama `ApplyDefaults`. Ela **não** valida.
+- **`Validate()`** — verifica cada campo e retorna **todos** os problemas de uma vez,
+  juntados com `errors.Join`, em vez de parar no primeiro.
 
-`ApplyDefaults` fills optional fields (`DBPath` `./limiar.db`, `LogLevel`
+`ApplyDefaults` preenche campos opcionais (`DBPath` `./limiar.db`, `LogLevel`
 `info`, `LogFormat` `json`, `ShutdownTimeout` `15`, `MaxRetries` `10`,
 `IOTimeout` `30s`, `DispatcherBufferSize` `256`, `DBWriterBufferSize` `512`).
-Required fields (`AppID`, `APIHash`) are never defaulted. `Validate` enforces
-ranges (e.g. `ShutdownTimeout` 1–300, `DispatcherBufferSize` 64–4096,
-`DBWriterBufferSize` 128–8192) and enumerations (`LogLevel`, `LogFormat`).
+Campos obrigatórios (`AppID`, `APIHash`) nunca recebem valores padrões. `Validate` impõe
+intervalos (ex: `ShutdownTimeout` 1–300, `DispatcherBufferSize` 64–4096,
+`DBWriterBufferSize` 128–8192) e enumerações (`LogLevel`, `LogFormat`).
 
-`main.go`'s `run()` calls `config.Load` then `cfg.Validate()` before building the
-command tree — fail-fast, before any I/O. `Config.String()` masks `APIHash`.
+O `run()` de `main.go` chama `config.Load` e em seguida `cfg.Validate()` antes de construir a
+árvore de comandos — com abordagem fail-fast, antes de qualquer operação de E/S. `Config.String()` mascara `APIHash`.
 
-## Consequences
+## Consequências
 
-- An operator sees every misconfiguration in one run (Requirement 7.4/7.5).
-- Defaulting and validation are independent and individually testable
-  (property tests cover "defaults applied," "rejects invalid," "collects all
-  errors," and "masking").
-- Validation must be called explicitly; forgetting it would skip the checks — so
-  the composition root calls it before anything else.
-- Secrets never leak: `APIHash` is masked by `String()` and redacted by the
+- O operador visualiza todas as configurações erradas em uma única execução (Requisito 7.4/7.5).
+- Atribuição de padrões e validação são independentes e testáveis separadamente
+  (testes de propriedade cobrem "padrões aplicados", "rejeita inválidos", "coleta todos
+  os erros" e "ocultação - masking").
+- A validação deve ser chamada explicitamente; esquecê-la faria pular as checagens — portanto
+  a raiz de composição (composition root) a chama antes de qualquer outra coisa.
+- Segredos nunca vazam: o `APIHash` é mascarado pelo `String()` e redigido pelo
   logger.
 
-## Alternatives considered
+## Alternativas consideradas
 
-- **Validate inside Load** — couples defaulting and validation, and makes it
-  awkward to load-then-inspect; rejected for the explicit fail-fast call site.
-- **Fail on first invalid field** — poor operator experience; rejected in favor
-  of `errors.Join` aggregation.
-- **Struct-tag validation library** — an extra dependency outside the closed
-  stack; hand-written checks keep the dependency set minimal.
+- **Validar dentro do Load** — acopla a aplicação de padrões à validação e dificulta
+  uma lógica carregar-depois-inspecionar; rejeitada a favor do local de chamada fail-fast explícito.
+- **Falhar no primeiro campo inválido** — péssima experiência para o operador; rejeitada a favor
+  da agregação com `errors.Join`.
+- **Biblioteca de validação baseada em Struct-tag** — uma dependência extra fora da stack
+  fechada; verificações escritas manualmente mantêm o conjunto de dependências mínimo.

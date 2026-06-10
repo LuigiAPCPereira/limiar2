@@ -1,81 +1,82 @@
-# Spec — Tursogo Usage
+# Spec — Uso do Tursogo
 
-`turso.tech/database/tursogo` is the embedded database `limiar-collector` uses
-for every kind of persisted state: the MTProto session, the peer cache, the
-monitored-channel list, and raw message payloads — all in a single `.db` file.
-It is accessed exclusively through `database/sql`, and only from
-`internal/storage`.
+`turso.tech/database/tursogo` é o banco de dados embutido (embedded) que o
+`limiar-collector` usa para qualquer tipo de estado persistido: a sessão MTProto,
+o cache de peers, a lista de canais monitorados e os payloads brutos de
+mensagens — tudo em um único arquivo `.db`. Ele é acessado exclusivamente através
+do `database/sql`, e apenas a partir de `internal/storage`.
 
-## How Tursogo is used
+## Como o Tursogo é usado
 
-### Driver registration (blank import)
+### Registro do Driver (blank import)
 
-The driver registers itself under the name `turso` via a blank import in
+O driver se registra sob o nome `turso` via um "blank import" (import em branco) em
 `internal/storage/db.go`:
 
 ```go
 import (
     "database/sql"
-    _ "turso.tech/database/tursogo" // registers the "turso" driver
+    _ "turso.tech/database/tursogo" // registra o driver "turso"
 )
 
 const driverName = "turso"
 ```
 
-### Opening the database (`db.go`)
+### Abrindo o banco de dados (`db.go`)
 
-`storage.Open(ctx, dbPath)` opens the connection with the standard library,
-verifies it with `PingContext`, and applies migrations:
+`storage.Open(ctx, dbPath)` abre a conexão usando a biblioteca padrão,
+verifica-a com `PingContext`, e aplica as migrations:
 
 ```go
-conn, err := sql.Open(driverName, dbPath)   // dbPath default: ./limiar.db
+conn, err := sql.Open(driverName, dbPath)   // dbPath padrão: ./limiar.db
 if err := conn.PingContext(ctx); err != nil { ... }
 if err := migrate(ctx, conn); err != nil { ... }
 ```
 
-`DB.Conn()` exposes the underlying `*sql.DB`; only the DBWriter goroutine issues
-writes through it. `DB.Close()` closes the connection.
+`DB.Conn()` expõe o `*sql.DB` subjacente; apenas a goroutine DBWriter emite
+gravações através dele. `DB.Close()` fecha a conexão.
 
 ### Migrations (`migrations.go`)
 
-Schema lives in `internal/storage/migrations/*.sql`, embedded with
-`//go:embed migrations/*.sql` into an `embed.FS`. `migrate` reads the directory,
-sorts filenames lexically, and executes each file with `db.ExecContext`. The SQL
-is idempotent (`CREATE TABLE IF NOT EXISTS`), so re-running is safe — there is no
-separate version table in Phase 1.
+O schema reside em `internal/storage/migrations/*.sql`, embutido com
+`//go:embed migrations/*.sql` em um `embed.FS`. `migrate` lê o diretório,
+ordena os nomes dos arquivos de forma lexical e executa cada arquivo com `db.ExecContext`.
+O SQL é idempotente (`CREATE TABLE IF NOT EXISTS`), de modo que reexecutar é seguro —
+não há uma tabela de versão separada na Fase 1.
 
-### Queries (`repository.go`)
+### Consultas (`repository.go`)
 
-All SQL is centralized in `Repository`. It uses the standard `database/sql`
-surface only — `ExecContext`, `QueryContext`, `QueryRowContext`, `Prepare` — with
-`?` as the sole placeholder token. Recurring writes are prepared statements:
+Todo o SQL é centralizado no `Repository`. Ele usa apenas a superfície padrão do `database/sql`
+— `ExecContext`, `QueryContext`, `QueryRowContext`, `Prepare` — com
+`?` como o único token marcador de parâmetros (placeholder). Gravações recorrentes
+são instruções preparadas (prepared statements):
 
 ```go
 stmtSaveMessage // INSERT INTO raw_messages (...) VALUES (?,?,?,?,?) ON CONFLICT(channel_id, message_id) DO NOTHING
 stmtSavePeer    // INSERT INTO peers (...) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET ...
 ```
 
-`SaveSession` upserts the single session row (`ON CONFLICT(id) DO UPDATE`);
-`LoadSession` maps `sql.ErrNoRows` to `ErrNoSession`. Channel and peer CRUD use
-the same patterns. Datetimes are stored as UTC text in layout
-`2006-01-02 15:04:05` to match the schema's `datetime('now')` defaults.
+`SaveSession` faz upsert da única linha de sessão (`ON CONFLICT(id) DO UPDATE`);
+`LoadSession` mapeia `sql.ErrNoRows` para `ErrNoSession`. As operações de CRUD de
+canal e peer utilizam os mesmos padrões. Datetimes são armazenadas como texto UTC
+no layout `2006-01-02 15:04:05` para corresponder aos padrões `datetime('now')` do schema.
 
-### No CGO
+### Sem CGO
 
-Tursogo uses `purego` for FFI, so the binary builds and runs without a C
-toolchain and without `CGO_ENABLED=1`. No special environment variables are
-needed; the binary is portable.
+O Tursogo usa `purego` para FFI, para que o binário compile e execute sem uma toolchain
+C e sem `CGO_ENABLED=1`. Nenhuma variável de ambiente especial é necessária; o binário é
+portável.
 
-## What to avoid
+## O que evitar
 
-- **No SQLite driver, no GORM, no ORM.** The build must not import `sqlite`,
-  `mattn`, or `gorm`. Tursogo is the single datastore — see ADR 001.
-- **No concurrent writes to `*sql.DB`.** Only the single `Collector.dbWriter`
-  goroutine writes (fan-in). Reads from other goroutines are fine; writes are
-  serialized through the writer. See ADR 003.
-- **No placeholder style other than `?`.** Do not use `$1`/`:name` styles.
-- **No raw SQL outside `repository.go`.** Other packages call `Repository`
-  methods; they never touch `database/sql` directly.
-- **Stick to the standard `database/sql` surface.** Use `Query`, `Exec`,
-  `QueryRow`, and `Prepare`; avoid driver-specific extensions so the layer stays
-  portable and testable.
+- **Sem driver SQLite, sem GORM, sem ORM.** O build não deve importar `sqlite`,
+  `mattn` ou `gorm`. O Tursogo é o único datastore (armazenamento de dados) — veja o ADR 001.
+- **Sem escritas concorrentes no `*sql.DB`.** Apenas a goroutine única `Collector.dbWriter`
+  grava (fan-in). Leituras a partir de outras goroutines estão liberadas; as escritas
+  são serializadas por meio do writer. Veja o ADR 003.
+- **Nenhum estilo de placeholder (marcador) exceto `?`.** Não use estilos como `$1` ou `:name`.
+- **Sem SQL puro fora de `repository.go`.** Outros pacotes chamam métodos de `Repository`;
+  eles nunca tocam no `database/sql` diretamente.
+- **Mantenha-se na superfície padrão do `database/sql`.** Use `Query`, `Exec`,
+  `QueryRow`, e `Prepare`; evite extensões específicas do driver para que a camada
+  permaneça portável e testável.

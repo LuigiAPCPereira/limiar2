@@ -6,13 +6,13 @@ from collections import defaultdict, Counter
 
 def analyze_database():
     db_path = '/home/projetos/Projetos/Limiar2/limiar.db'
-    print(f"Using database: {db_path}")
+    print(f"Usando banco de dados: {db_path}")
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     # Get tables
-    print("=== TABLES IN DATABASE ===")
+    print("=== TABELAS NO BANCO DE DADOS ===")
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     tables = [row[0] for row in cursor.fetchall()]
     for table in tables:
@@ -26,13 +26,13 @@ def analyze_database():
     cursor.execute("SELECT COUNT(*) FROM channels")
     total_channels = cursor.fetchone()[0]
 
-    print("=== DATABASE STATISTICS ===")
-    print(f"Total raw messages: {total_messages}")
-    print(f"Total channels: {total_channels}")
+    print("=== ESTATÍSTICAS DO BANCO DE DADOS ===")
+    print(f"Total de mensagens brutas (raw): {total_messages}")
+    print(f"Total de canais: {total_channels}")
     print()
 
     # Channel distribution
-    print("=== CHANNEL DISTRIBUTION ===")
+    print("=== DISTRIBUIÇÃO POR CANAL ===")
     cursor.execute("""
         SELECT c.username, c.title, COUNT(rm.id) as msg_count
         FROM channels c
@@ -41,7 +41,7 @@ def analyze_database():
         ORDER BY msg_count DESC
     """)
     for row in cursor.fetchall():
-        print(f"  @{row['username']} ({row['title']}): {row['msg_count']} messages")
+        print(f"  @{row['username']} ({row['title']}): {row['msg_count']} mensagens")
     print()
 
     # Extract all messages
@@ -61,7 +61,7 @@ def analyze_database():
     conn.close()
 
 def analyze_payloads(messages):
-    print("=== PAYLOAD ANALYSIS ===")
+    print("=== ANÁLISE DE PAYLOAD ===")
 
     invalid_json = 0
     empty_payloads = 0
@@ -98,29 +98,29 @@ def analyze_payloads(messages):
                     for nested_key in value.keys():
                         nested_structures[key][nested_key] += 1
 
-    print("Top-level types:")
+    print("Tipos de nível superior (Top-level types):")
     for t, count in type_counts.most_common():
         print(f"  {t}: {count}")
     print()
 
-    print(f"Invalid JSON payloads: {invalid_json}")
-    print(f"Empty/null payloads: {empty_payloads}")
-    print(f"Valid payloads: {len(messages) - invalid_json - empty_payloads}")
+    print(f"Payloads JSON inválidos: {invalid_json}")
+    print(f"Payloads vazios/nulos: {empty_payloads}")
+    print(f"Payloads válidos: {len(messages) - invalid_json - empty_payloads}")
     print()
 
-    print("Top-level keys (frequency):")
+    print("Chaves de nível superior (frequência):")
     for key, count in top_level_keys.most_common():
         pct = (count / len(messages)) * 100
         print(f"  {key}: {count} ({pct:.1f}%)")
     print()
 
-    print("Field type variations:")
+    print("Variações de tipo de campo:")
     for field, types in sorted(field_types.items()):
         if len(types) > 1:
             print(f"  {field}: {', '.join(sorted(types))}")
     print()
 
-    print("Nested structures:")
+    print("Estruturas aninhadas:")
     for parent, children in sorted(nested_structures.items()):
         print(f"  {parent}:")
         for child, count in children.most_common():
@@ -153,9 +153,9 @@ def export_payloads(messages):
     with open('payloads_export.json', 'w', encoding='utf-8') as f:
         json.dump(records, f, indent=2, ensure_ascii=False)
 
-    print("=== EXPORT ===")
-    print(f"All payloads exported to: payloads_export.json")
-    print(f"Use with jq: jq '.[] | .payload' payloads_export.json")
+    print("=== EXPORTAÇÃO ===")
+    print(f"Todos os payloads exportados para: payloads_export.json")
+    print(f"Use com jq: jq '.[] | .payload' payloads_export.json")
 
 if __name__ == '__main__':
     analyze_database()

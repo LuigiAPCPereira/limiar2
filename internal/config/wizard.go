@@ -1,4 +1,4 @@
-// Package config provides interactive configuration wizard for first-time setup.
+// Package config fornece um assistente de configuração interativo para a configuração inicial.
 package config
 
 import (
@@ -13,24 +13,24 @@ import (
 	"github.com/limiar/collector/internal/terminal"
 )
 
-// Wizard provides an interactive configuration experience when credentials
-// are missing. It prompts for AppID and APIHash, validates them, and offers
-// to save them to a .env file for future use.
+// Wizard fornece uma experiência de configuração interativa quando as credenciais
+// estão ausentes. Ele solicita o AppID e o APIHash, os valida e oferece
+// salvá-los em um arquivo .env para uso futuro.
 type Wizard struct {
 	reader *bufio.Reader
 }
 
-// NewWizard creates a new interactive configuration wizard that reads from
-// stdin via a buffered reader (one line per prompt).
+// NewWizard cria um novo assistente de configuração interativo que lê da
+// entrada padrão (stdin) via um buffer (uma linha por prompt).
 func NewWizard() *Wizard {
 	return &Wizard{
 		reader: bufio.NewReader(os.Stdin),
 	}
 }
 
-// Run executes the interactive wizard and returns a Config with user-provided
-// credentials. It does not modify environment variables or files unless the
-// user explicitly confirms.
+// Run executa o assistente interativo e retorna um Config com as credenciais
+// fornecidas pelo usuário. Ele não modifica variáveis de ambiente ou arquivos
+// a menos que o usuário confirme explicitamente.
 func (w *Wizard) Run() (*Config, error) {
 	fmt.Println()
 	fmt.Println("╔══════════════════════════════════════════════╗")
@@ -43,24 +43,24 @@ func (w *Wizard) Run() (*Config, error) {
 	fmt.Println("  Obtenha suas credenciais em: https://my.telegram.org/apps")
 	fmt.Println()
 
-	// Prompt for App ID
+	// Prompt para App ID
 	appID, err := w.promptAppID()
 	if err != nil {
 		return nil, err
 	}
 
-	// Prompt for API Hash (hidden input)
+	// Prompt para API Hash (entrada oculta)
 	apiHash, err := w.promptAPIHash()
 	if err != nil {
 		return nil, err
 	}
 
-	// Offer to save credentials BEFORE returning so user sees confirmation
+	// Oferece para salvar as credenciais ANTES de retornar para que o usuário veja a confirmação
 	if err := w.offerSaveCredentials(appID, apiHash); err != nil {
 		return nil, err
 	}
 
-	// Create config with user input
+	// Cria a config com a entrada do usuário
 	cfg := &Config{
 		AppID:   appID,
 		APIHash: apiHash,
@@ -73,7 +73,7 @@ func (w *Wizard) Run() (*Config, error) {
 	return cfg, nil
 }
 
-// promptAppID asks the user for their Telegram App ID and validates it.
+// promptAppID pede ao usuário o seu App ID do Telegram e o valida.
 func (w *Wizard) promptAppID() (int, error) {
 	for {
 		fmt.Print("  📱 App ID   › ")
@@ -104,9 +104,9 @@ func (w *Wizard) promptAppID() (int, error) {
 	}
 }
 
-// promptAPIHash asks the user for their Telegram API Hash securely.
-// Echoes a "*" for every character typed and restores the terminal to its
-// original state on exit, even on Ctrl+C / panic.
+// promptAPIHash pede ao usuário o seu API Hash do Telegram de forma segura.
+// Ecoa um "*" para cada caractere digitado e restaura o terminal ao seu
+// estado original na saída, mesmo em Ctrl+C / panic.
 func (w *Wizard) promptAPIHash() (string, error) {
 	fd := int(os.Stdin.Fd())
 
@@ -138,14 +138,14 @@ func (w *Wizard) promptAPIHash() (string, error) {
 	}
 }
 
-// offerSaveCredentials asks if the user wants to save credentials to .env file.
+// offerSaveCredentials pergunta se o usuário deseja salvar as credenciais no arquivo .env.
 func (w *Wizard) offerSaveCredentials(appID int, apiHash string) error {
 	for {
 		fmt.Print("  💾 Salvar em .env para uso futuro? (s/N): ")
 
 		input, err := w.readLine()
 		if err != nil {
-			// If scan fails, just skip saving (not a critical error)
+			// Se a leitura falhar, apenas ignore o salvamento (não é um erro crítico)
 			return nil
 		}
 
@@ -162,11 +162,11 @@ func (w *Wizard) offerSaveCredentials(appID int, apiHash string) error {
 	}
 }
 
-// saveEnvFile writes the credentials to a .env file with secure permissions.
+// saveEnvFile escreve as credenciais em um arquivo .env com permissões seguras.
 func (w *Wizard) saveEnvFile(appID int, apiHash string) error {
 	envPath := ".env"
 	content := fmt.Sprintf(
-		"# Telegram API Credentials (gerado pelo wizard)\n"+
+		"# Credenciais da API do Telegram (gerado pelo assistente)\n"+
 			"# NÃO commite este arquivo - adicione .env ao .gitignore\n"+
 			"LIMIAR_APP_ID=%d\n"+
 			"LIMIAR_API_HASH=%s\n",
@@ -182,8 +182,8 @@ func (w *Wizard) saveEnvFile(appID int, apiHash string) error {
 	return nil
 }
 
-// readLine reads a single line from stdin, stripping the trailing newline.
-// Returns an error if stdin is closed (EOF) or unreadable.
+// readLine lê uma única linha do stdin, removendo a quebra de linha final.
+// Retorna um erro se o stdin estiver fechado (EOF) ou ilegível.
 func (w *Wizard) readLine() (string, error) {
 	line, err := w.reader.ReadString('\n')
 	if err != nil {

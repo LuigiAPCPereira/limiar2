@@ -7,9 +7,17 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
-  header { background: #1e293b; padding: 1.5rem 2rem; border-bottom: 1px solid #334155; }
+  header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 1.5rem 2rem; border-bottom: 1px solid #334155; }
   header h1 { font-size: 1.5rem; font-weight: 600; }
+  .conn-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; padding: 0.25rem 0.75rem; border-radius: 999px; background: #334155; color: #94a3b8; }
+  .conn-status.live { background: #064e3b; color: #34d399; }
+  .conn-status.polling { background: #713f12; color: #facc15; }
+  .conn-status::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   header h1 span { color: #38bdf8; }
+  .conn-status { font-size: 0.875rem; color: #94a3b8; display: flex; align-items: center; gap: 0.5rem; }
+  .conn-status::before { content: ''; display: block; width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; }
+  .conn-status.online::before { background: #22c55e; }
+  .conn-status.polling::before { background: #eab308; }
   .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
   .stat-card { background: #1e293b; border-radius: 0.5rem; padding: 1.25rem; border: 1px solid #334155; }
@@ -40,6 +48,7 @@
 <body>
 <header>
   <h1>◆ <span>Limiar</span> Dashboard</h1>
+  <div id="conn-status" class="conn-status" role="status" aria-live="polite">Conectando...</div>
 </header>
 <div class="container">
   <div class="stats" id="stats"></div>
@@ -51,9 +60,6 @@
     </div>
   </div>
 </div>
-<div class="msg-detail" id="msg-detail" style="display:none">
-  <button class="close" aria-label="Fechar painel de detalhes" onclick="closeDetail()">&times;</button>
-  <h3>Detalhes da mensagem</h3>
 <div class="msg-detail" id="msg-detail" style="display:none" role="dialog" aria-labelledby="msg-detail-title">
   <button class="close" onclick="closeDetail()" aria-label="Fechar painel de detalhes">&times;</button>
   <h3 id="msg-detail-title">Detalhes da mensagem</h3>
@@ -91,7 +97,6 @@ async function loadStats() {
     '<div class="stat-card"><div class="label">Total de mensagens</div><div class="value">' + total + '</div></div>';
 
   document.getElementById('channels').innerHTML = data.map(c =>
-    '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" onclick="selectChannel(' + c.ChannelID + ')" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
     '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" ' +
     'onclick="selectChannel(' + c.ChannelID + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
     '<div class="username">@' + escapeHtml(c.Username) + '</div>' +
@@ -117,7 +122,6 @@ async function loadMessages() {
       const p = decodePayload(m.Payload);
       preview = extractText(p) || JSON.stringify(p).substring(0, 150);
     } catch(e) { preview = '(erro ao decodificar: ' + e.message + ')'; }
-    return '<div class="msg-item" onclick="showDetail(' + m.ID + ')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showDetail(' + m.ID + ');}">' +
     return '<div class="msg-item" role="button" tabindex="0" ' +
       'onclick="showDetail(' + m.ID + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showDetail(' + m.ID + ');}">' +
       '<div class="meta">ID: ' + m.MessageID + ' | Canal: ' + m.ChannelID + ' | ' + new Date(m.ReceivedAt).toLocaleString('pt-BR') + '</div>' +
@@ -154,9 +158,21 @@ function escapeHtml(s) {
 loadStats();
 loadMessages();
 
+function setStatus(state, text) {
+  const el = document.getElementById('conn-status');
+  el.className = 'conn-status ' + state;
+  el.textContent = text;
+}
+
 let pollingInterval = null;
 function startPolling() {
+  const status = document.getElementById('conn-status');
+  if (status) {
+    status.className = 'conn-status polling';
+    status.textContent = 'Modo Polling';
+  }
   if (pollingInterval) return;
+  setStatus('polling', 'Modo Polling (30s)');
   pollingInterval = setInterval(function() {
     loadStats();
     loadMessages();
@@ -165,6 +181,7 @@ function startPolling() {
 
 if (window.EventSource) {
   const es = new EventSource('/api/events');
+  es.onopen = () => setStatus('live', 'Ao vivo (SSE)');
   es.addEventListener('message', function() {
     loadMessages();
     loadStats();

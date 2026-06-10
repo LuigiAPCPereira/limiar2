@@ -1,44 +1,44 @@
-# ADR 002 — Use gotd/td Directly, No MTProto Wrapper
+# ADR 002 — Usar gotd/td Diretamente, Sem Wrapper MTProto
 
 ## Status
 
-Accepted
+Aceito
 
-## Context
+## Contexto
 
-We need an MTProto client to operate as a Telegram userbot. A common choice is a
-high-level wrapper such as GoTGProto, which bundles session and peer storage.
-However, GoTGProto's `PeerStorage` (and session storage) is a concrete struct
-coupled to GORM/SQLite — it is not a pluggable interface. Since `limiar-collector`
-uses Tursogo as its single datastore (ADR 001), a wrapper that mandates
-GORM/SQLite would force a second, incompatible persistence path.
+Precisamos de um cliente MTProto para operar como um userbot do Telegram. Uma escolha comum é
+um wrapper de alto nível como o GoTGProto, que empacota o armazenamento de sessão e peers.
+No entanto, o `PeerStorage` (e o armazenamento de sessão) do GoTGProto é uma struct concreta
+acoplada ao GORM/SQLite — não é uma interface plugável. Como o `limiar-collector`
+usa Tursogo como seu único datastore (ADR 001), um wrapper que exija
+GORM/SQLite forçaria um segundo caminho de persistência incompatível.
 
-`github.com/gotd/td` exposes the right seams: `session.Storage` for session
-persistence and a flexible auth flow, letting us back both with Tursogo.
+`github.com/gotd/td` expõe as "costuras" (seams) corretas: `session.Storage` para persistência
+de sessão e um fluxo de autenticação flexível, nos permitindo apoiar ambos com o Tursogo.
 
-## Decision
+## Decisão
 
-Build directly on `gotd/td`. Implement our own session storage
-(`TursoSessionStorage` satisfying `session.Storage`), peer cache (`PeerStore`),
-authenticator (`terminalAuthenticator` satisfying `auth.UserAuthenticator`), and
-dispatcher. All gotd/td usage is confined to `internal/telegram`, behind the
-`TelegramClient` facade.
+Construir diretamente sobre `gotd/td`. Implementar nosso próprio armazenamento de sessão
+(`TursoSessionStorage` que satisfaz `session.Storage`), cache de peers (`PeerStore`),
+autenticador (`terminalAuthenticator` que satisfaz `auth.UserAuthenticator`), e
+dispatcher. Todo o uso do gotd/td fica confinado ao pacote `internal/telegram`, atrás da
+fachada (facade) `TelegramClient`.
 
-## Consequences
+## Consequências
 
-- Session, peers, channels, and messages all persist to the same Tursogo file —
-  no GORM/SQLite dependency sneaks in.
-- We own the session/peer/auth code, which is more code but full control over
-  storage, reconnection, and serialization.
-- gotd/td types are isolated to one package; the rest of the codebase stays
-  decoupled (see ADR on facade boundary and `docs/specs/GOTD-TD.md`).
-- We pin the gotd/td version and adapt only `session.go`/`client.go` if its
-  interfaces change.
+- A sessão, peers, canais e mensagens são todos persistidos no mesmo arquivo Tursogo —
+  sem que uma dependência de GORM/SQLite se infiltre.
+- Somos donos do código de sessão/peer/auth, o que significa mais código, mas controle
+  total sobre o armazenamento, reconexão e serialização.
+- Tipos do gotd/td ficam isolados em um único pacote; o restante do código permanece
+  desacoplado (veja o ADR sobre o limite da facade e `docs/specs/GOTD-TD.md`).
+- Nós fixamos a versão do gotd/td e adaptamos apenas `session.go`/`client.go` caso
+  suas interfaces mudem.
 
-## Alternatives considered
+## Alternativas consideradas
 
-- **GoTGProto** — its concrete GORM/SQLite-bound storage cannot plug into
-  Tursogo; rejected.
-- **Other high-level wrappers** — same risk of opinionated storage and hidden
-  dependencies; rejected in favor of explicit control.
-- **A different language/library** — out of scope; the pipeline is Go.
+- **GoTGProto** — seu armazenamento concreto acoplado a GORM/SQLite não pode ser plugado
+  no Tursogo; rejeitado.
+- **Outros wrappers de alto nível** — mesmo risco de armazenamento opinativo e dependências
+  ocultas; rejeitados em favor de um controle explícito.
+- **Uma linguagem/biblioteca diferente** — fora de escopo; o pipeline é em Go.

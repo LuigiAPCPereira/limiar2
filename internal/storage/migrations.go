@@ -12,8 +12,8 @@ import (
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
-// migrate applies every embedded migration in lexical filename order. The SQL
-// is idempotent (CREATE TABLE IF NOT EXISTS), so re-running is safe.
+// migrate aplica toda migration embutida na ordem lexical do nome do arquivo. O SQL
+// é idempotente (CREATE TABLE IF NOT EXISTS), de modo que reexecutar é seguro.
 func migrate(ctx context.Context, db *sql.DB) error {
 	entries, err := fs.ReadDir(migrationsFS, "migrations")
 	if err != nil {

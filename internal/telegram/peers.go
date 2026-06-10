@@ -9,9 +9,9 @@ import (
 	"github.com/limiar/collector/internal/storage"
 )
 
-// PeerStore is an in-memory cache of Telegram peers guarded by an RWMutex,
-// backed by the Tursogo repository for persistence across restarts. Concurrent
-// reads do not block one another.
+// PeerStore é um cache em memória de peers do Telegram protegido por um RWMutex,
+// apoiado pelo repositório Tursogo para persistência entre reinicializações.
+// Leituras concorrentes não bloqueiam umas às outras.
 type PeerStore struct {
 	mu    sync.RWMutex
 	peers map[int64]*storage.Peer
@@ -19,8 +19,8 @@ type PeerStore struct {
 	log   logger.Logger
 }
 
-// NewPeerStore builds an empty peer store backed by repo. log may be nil
-// (treated as NopLogger).
+// NewPeerStore constrói um armazenamento de peers vazio apoiado pelo repo. log pode ser nil
+// (tratado como NopLogger).
 func NewPeerStore(repo *storage.Repository, log logger.Logger) *PeerStore {
 	if log == nil {
 		log = logger.NopLogger{}
@@ -32,7 +32,7 @@ func NewPeerStore(repo *storage.Repository, log logger.Logger) *PeerStore {
 	}
 }
 
-// Get returns the cached peer for id and whether it was present.
+// Get retorna o peer em cache para o id especificado e se ele estava presente.
 func (ps *PeerStore) Get(id int64) (*storage.Peer, bool) {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
@@ -40,14 +40,14 @@ func (ps *PeerStore) Get(id int64) (*storage.Peer, bool) {
 	return p, ok
 }
 
-// Set inserts or replaces a peer in the in-memory cache.
+// Set insere ou substitui um peer no cache em memória.
 func (ps *PeerStore) Set(p *storage.Peer) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.peers[p.ID] = p
 }
 
-// LoadFromDB replaces the in-memory cache with peers persisted in storage.
+// LoadFromDB substitui o cache em memória pelos peers persistidos no armazenamento.
 func (ps *PeerStore) LoadFromDB(ctx context.Context) error {
 	peers, err := ps.repo.LoadPeers(ctx)
 	if err != nil {
@@ -63,8 +63,8 @@ func (ps *PeerStore) LoadFromDB(ctx context.Context) error {
 	return nil
 }
 
-// FlushToDB persists every cached peer. It snapshots under a read lock so a
-// long write does not block concurrent readers.
+// FlushToDB persiste todos os peers em cache. Ele tira um snapshot sob um read lock (bloqueio de leitura)
+// para que uma gravação demorada não bloqueie leitores concorrentes.
 func (ps *PeerStore) FlushToDB(ctx context.Context) error {
 	ps.mu.RLock()
 	snapshot := make([]*storage.Peer, 0, len(ps.peers))

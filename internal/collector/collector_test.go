@@ -14,8 +14,8 @@ import (
 	"github.com/limiar/collector/internal/telegram"
 )
 
-// newRepo opens a real Tursogo-backed repository in a temp dir for handler
-// tests that need a live channels table.
+// newRepo abre um repositório real apoiado pelo Tursogo em um diretório temporário
+// para os testes de handler que precisam de uma tabela de canais (channels) ativa.
 func newRepo(t *testing.T) *storage.Repository {
 	t.Helper()
 	ctx := context.Background()
@@ -39,7 +39,7 @@ func newRepo(t *testing.T) *storage.Repository {
 	return repo
 }
 
-// --- fakes for collector orchestration tests ---
+// --- fakes para testes de orquestração do collector ---
 
 type fakeRepo struct {
 	mu       sync.Mutex
@@ -76,8 +76,8 @@ func (f *fakeRepo) savedCount() int {
 	return len(f.saved)
 }
 
-// fakeClient implements telegram.TelegramClient. Run blocks until ctx is
-// cancelled, simulating the live capture loop.
+// fakeClient implementa telegram.TelegramClient. Run bloqueia até que ctx seja
+// cancelado, simulando o loop de captura ao vivo.
 type fakeClient struct {
 	history    []telegram.HistoryMessage
 	runStarted chan struct{}
@@ -109,9 +109,9 @@ func (c *fakeClient) FetchHistory(_ context.Context, _ int64, minID int64, limit
 	return out, nil
 }
 
-// FetchHistoryWithOffset returns up to limit messages with id < offsetID
-// (newest-first when offsetID == 0), sorted descending to mirror Telegram's
-// messages.getHistory ordering.
+// FetchHistoryWithOffset retorna até `limit` mensagens com id < offsetID
+// (as mais novas primeiro quando offsetID == 0), ordenadas descendentemente para espelhar
+// a ordenação do messages.getHistory do Telegram.
 func (c *fakeClient) FetchHistoryWithOffset(_ context.Context, _ int64, offsetID int64, limit int) ([]telegram.HistoryMessage, error) {
 	var out []telegram.HistoryMessage
 	for _, m := range c.history {
@@ -119,7 +119,7 @@ func (c *fakeClient) FetchHistoryWithOffset(_ context.Context, _ int64, offsetID
 			out = append(out, m)
 		}
 	}
-	// Sort descending (newest first) like the real API.
+	// Ordenação descendente (as mais novas primeiro) como na API real.
 	sort.Slice(out, func(i, j int) bool { return out[i].MessageID > out[j].MessageID })
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
@@ -135,8 +135,8 @@ func (c *fakeClient) Run(ctx context.Context) error {
 	return nil
 }
 
-// Feature: limiar-collector, Property 16: Shutdown Within Timeout.
-// When the root context is cancelled, Collector.Run returns promptly.
+// Funcionalidade: limiar-collector, Propriedade 16: Shutdown Within Timeout (Desligamento Dentro do Tempo Limite).
+// Quando o contexto raiz é cancelado, Collector.Run retorna prontamente.
 func TestProperty16ShutdownWithinTimeout(t *testing.T) {
 	repo := newFakeRepo()
 	started := make(chan struct{})
@@ -147,7 +147,7 @@ func TestProperty16ShutdownWithinTimeout(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- col.Run(ctx) }()
 
-	<-started // ensure live capture is running
+	<-started // garante que a captura ao vivo está sendo executada
 	cancel()
 
 	select {
@@ -160,7 +160,7 @@ func TestProperty16ShutdownWithinTimeout(t *testing.T) {
 	}
 }
 
-// First run (last_message_id == 0) backfills history before live capture.
+// A primeira execução (last_message_id == 0) faz o backfill do histórico antes da captura ao vivo.
 func TestFirstRunBackfillsHistory(t *testing.T) {
 	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 0}
 	repo := newFakeRepo(ch)
@@ -187,7 +187,7 @@ func TestFirstRunBackfillsHistory(t *testing.T) {
 	}
 }
 
-// Resume mode (last_message_id > 0) backfills only messages newer than the cursor.
+// Modo de retomada (last_message_id > 0) faz o backfill apenas das mensagens mais novas que o cursor.
 func TestResumeBackfillFetchesOnlyNewMessages(t *testing.T) {
 	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 99}
 	repo := newFakeRepo(ch)
@@ -215,22 +215,22 @@ func TestResumeBackfillFetchesOnlyNewMessages(t *testing.T) {
 	}
 }
 
-// Regression: backfill must respect the temporal cutoff (LIMIAR_HISTORY_MAX_DAYS).
-// Messages older than now-historyMaxDays are skipped, and pagination stops when
-// the page straddles the cutoff. The cursor advances to the newest seen id.
+// Regressão: o backfill deve respeitar o limite temporal (LIMIAR_HISTORY_MAX_DAYS).
+// Mensagens mais antigas que "agora-historyMaxDays" são ignoradas, e a paginação para quando
+// a página atinge esse limite. O cursor avança para o id mais novo encontrado.
 func TestBackfillRespectsTemporalCutoff(t *testing.T) {
 	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 0}
 	repo := newFakeRepo(ch)
 	now := time.Now()
 	history := []telegram.HistoryMessage{
-		{MessageID: 10, Date: now.Add(-24 * time.Hour), Payload: []byte(`{}`)},    // 1 day old — keep
-		{MessageID: 20, Date: now.Add(-3 * 24 * time.Hour), Payload: []byte(`{}`)}, // 3 days old — keep
+		{MessageID: 10, Date: now.Add(-24 * time.Hour), Payload: []byte(`{}`)},      // 1 day old — keep
+		{MessageID: 20, Date: now.Add(-3 * 24 * time.Hour), Payload: []byte(`{}`)},  // 3 days old — keep
 		{MessageID: 30, Date: now.Add(-15 * 24 * time.Hour), Payload: []byte(`{}`)}, // 15 days old — skip
 		{MessageID: 40, Date: now.Add(-60 * 24 * time.Hour), Payload: []byte(`{}`)}, // 60 days old — skip
 	}
 	started := make(chan struct{})
 	client := &fakeClient{history: history, runStarted: started}
-	// historyMaxDays=7 → only messages <= 7 days old are persisted.
+	// historyMaxDays=7 → apenas mensagens <= 7 dias são persistidas.
 	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3, 5000, 7)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -243,9 +243,9 @@ func TestBackfillRespectsTemporalCutoff(t *testing.T) {
 	if repo.savedCount() != 2 {
 		t.Fatalf("expected 2 messages within the 7-day window, got %d", repo.savedCount())
 	}
-	// Cursor tracks the scan frontier (newest seen, id=40), not the newest
-	// persisted. This is intentional: messages 30 and 40 were filtered by the
-	// temporal cutoff but there is no point re-walking them on the next run.
+	// O cursor acompanha a fronteira da varredura (mais novo encontrado, id=40), não o mais novo
+	// persistido. Isso é intencional: mensagens 30 e 40 foram filtradas pelo
+	// limite temporal, mas não faz sentido repassar por elas na próxima execução.
 	if repo.cursors[1] != 40 {
 		t.Fatalf("expected cursor advanced to 40 (newest seen), got %d", repo.cursors[1])
 	}

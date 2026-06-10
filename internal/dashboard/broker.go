@@ -4,27 +4,27 @@ import "sync"
 
 const clientBuffer = 64
 
-// Event is a single SSE event pushed to connected dashboard clients.
+// Event é um único evento SSE (Server-Sent Events) enviado aos clientes do dashboard conectados.
 type Event struct {
 	Type string
 	Data []byte
 }
 
-// Broker is a pub/sub hub for SSE events. It manages client subscriptions
-// and fan-out. Publish is non-blocking: if a client's buffer is full the
-// event is dropped for that client to avoid blocking the publisher.
+// Broker é um hub pub/sub para eventos SSE. Ele gerencia as assinaturas (subscriptions)
+// dos clientes e o fan-out. O Publish é não-bloqueante: se o buffer de um cliente estiver cheio,
+// o evento é descartado para aquele cliente para evitar o bloqueio de quem publicou.
 type Broker struct {
 	mu      sync.RWMutex
 	clients map[chan Event]struct{}
 }
 
-// NewBroker creates a ready-to-use Broker.
+// NewBroker cria um Broker pronto para uso.
 func NewBroker() *Broker {
 	return &Broker{clients: make(map[chan Event]struct{})}
 }
 
-// Subscribe registers a new client and returns its event channel.
-// The caller must call Unsubscribe when done.
+// Subscribe registra um novo cliente e retorna seu canal de eventos.
+// O chamador deve invocar Unsubscribe quando terminar.
 func (b *Broker) Subscribe() chan Event {
 	ch := make(chan Event, clientBuffer)
 	b.mu.Lock()
@@ -33,7 +33,7 @@ func (b *Broker) Subscribe() chan Event {
 	return ch
 }
 
-// Unsubscribe removes a client channel and closes it.
+// Unsubscribe remove o canal de um cliente e o fecha.
 func (b *Broker) Unsubscribe(ch chan Event) {
 	b.mu.Lock()
 	delete(b.clients, ch)
@@ -41,8 +41,8 @@ func (b *Broker) Unsubscribe(ch chan Event) {
 	close(ch)
 }
 
-// Publish sends an event to all connected clients. If a client's buffer is
-// full the event is dropped for that client (non-blocking).
+// Publish envia um evento para todos os clientes conectados. Se o buffer de um cliente
+// estiver cheio, o evento é descartado para ele (não-bloqueante).
 func (b *Broker) Publish(event Event) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -50,7 +50,7 @@ func (b *Broker) Publish(event Event) {
 		select {
 		case ch <- event:
 		default:
-			// Client buffer full — drop event for this client.
+			// Buffer do cliente cheio — descarta o evento para este cliente.
 		}
 	}
 }

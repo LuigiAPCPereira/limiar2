@@ -1,96 +1,96 @@
-# CONTEXT — Limiar System Overview
+# CONTEXT — Visão Geral do Sistema Limiar
 
-## What Limiar is
+## O que o Limiar é
 
-Limiar is a system that monitors Brazilian Telegram promo channels via an
-MTProto userbot, then normalizes, deduplicates, classifies, and serves a
-standardized JSON feed to a real-time promotions website. Telegram promo
-channels are rich but chaotic: duplicate messages across channels, inconsistent
-formats, no categorization. Limiar turns that noise into clean, structured data.
+Limiar é um sistema que monitora canais promocionais brasileiros do Telegram através de um
+userbot MTProto, e então normaliza, desduplica, classifica e serve um feed JSON padronizado
+para um site de promoções em tempo real. Os canais promocionais do Telegram são ricos, mas caóticos:
+mensagens duplicadas em vários canais, formatos inconsistentes, sem categorização.
+O Limiar transforma esse ruído em dados limpos e estruturados.
 
-The full system is a pipeline of independent Go binaries:
+O sistema completo é um pipeline de binários Go independentes:
 
 ```
 Telegram MTProto
        ↓
-limiar-collector → connects via userbot, reads history + live events, persists RAW
+limiar-collector → conecta via userbot, lê histórico + eventos ao vivo, persiste RAW (bruto)
        ↓
-limiar-processor → normalizes, deduplicates, classifies, filters   (future)
+limiar-processor → normalizes, deduplicates, classifies, filters   (futuro)
        ↓
-limiar-api       → serves REST (paginated history) + SSE (live push) (future)
+limiar-api       → serves REST (paginated history) + SSE (live push) (futuro)
        ↓
-Limiar Frontend  → live promotions site                             (future)
+Limiar Frontend  → live promotions site                             (futuro)
 ```
 
-This repository implements **`limiar-collector` only (Phase 1)**.
+Este repositório implementa **apenas o `limiar-collector` (Fase 1)**.
 
-## What this repository (Phase 1) does
+## O que este repositório (Fase 1) faz
 
-`limiar-collector` connects to Telegram, authenticates as a userbot once,
-manages a list of monitored channels, and captures **raw** message payloads as
-JSON into an embedded Tursogo database. Phase 1 exists to discover the real
-shape of Telegram's data before any processing is designed.
+O `limiar-collector` conecta-se ao Telegram, autentica-se como um userbot uma vez,
+gerencia uma lista de canais monitorados e captura payloads **brutos (raw)** de mensagens como
+JSON em um banco de dados embutido Tursogo. A Fase 1 existe para descobrir o
+formato real dos dados do Telegram antes que qualquer processamento seja desenhado.
 
-Three CLI subcommands:
+Três subcomandos de CLI:
 
-- `auth` — interactive, idempotent authentication; persists a session (text logs).
-- `channels` — `list` / `add <username>` / `remove <username>`; requires a
-  session (text logs).
-- `run` — non-interactive collector service; captures and persists raw
-  messages, graceful shutdown on `SIGTERM`/`SIGINT` (JSON logs).
+- `auth` — autenticação interativa e idempotente; persiste uma sessão (logs de texto).
+- `channels` — `list` / `add <username>` / `remove <username>`; requer uma
+  sessão (logs de texto).
+- `run` — serviço coletor não interativo; captura e persiste mensagens
+  brutas, desligamento gracioso (graceful shutdown) em `SIGTERM`/`SIGINT` (logs JSON).
 
-## What Limiar is NOT
+## O que o Limiar NÃO é
 
-- Not a Telegram bot — it never replies to messages or interacts with users.
-- Not an HTTP scraper — it speaks native MTProto.
-- Not an alerting system — it is a data pipeline.
-- Not an admin UI — configuration is via CLI and environment variables.
+- Não é um bot do Telegram — ele nunca responde a mensagens ou interage com usuários.
+- Não é um scraper HTTP — ele fala o MTProto nativo.
+- Não é um sistema de alerta — ele é um pipeline de dados.
+- Não é uma interface de administração (admin UI) — a configuração é via CLI e variáveis de ambiente.
 
-And specifically, **Phase 1 is NOT**:
+E, especificamente, **a Fase 1 NÃO é**:
 
-- a processor (no normalization, enrichment, semantic classification, LLM calls);
-- a deduplicator beyond safe persistence (the `UNIQUE(channel_id, message_id)`
-  constraint plus `ON CONFLICT DO NOTHING`);
-- an HTTP service (no REST, SSE, WebSocket, health checks, or metrics).
+- um processador (sem normalização, enriquecimento, classificação semântica, chamadas LLM);
+- um desduplicador além da persistência segura (a restrição `UNIQUE(channel_id, message_id)`
+  mais `ON CONFLICT DO NOTHING`);
+- um serviço HTTP (sem REST, SSE, WebSocket, health checks ou métricas). *(Nota: na revisão final foi adicionado um dashboard HTTP apenas para visualização local, mas não é um serviço público).*
 
-## Data flow (Phase 1)
+## Fluxo de dados (Fase 1)
 
 ```
 Telegram (MTProto)
-   │  updates / history
+   │  atualizações (updates) / histórico
    ▼
-telegram.Client (gotd/td facade)
+telegram.Client (facade gotd/td)
    │  encodeUpdate → JSON []byte
    ▼
-telegram.Dispatcher (Observer, fan-out, goroutine per handler)
+telegram.Dispatcher (Observer, fan-out, uma goroutine por handler)
    │  HandleUpdate(ctx, update []byte)
    ▼
 collector.MessageHandler (Adapter: []byte → storage.RawMessage)
    │  Classifier.Classify (NoopClassifier pass-through)
    │  writeCh <- WriteJob
    ▼
-collector.Collector.dbWriter (single goroutine, fan-in)
+collector.Collector.dbWriter (única goroutine, fan-in)
    │  Repository.SaveRawMessage + UpdateChannelLastMessage
    ▼
-Tursogo database (./limiar.db): raw_messages, channels, peers, sessions
+banco de dados Tursogo (./limiar.db): raw_messages, channels, peers, sessions
 ```
 
-Session state and peer access hashes are persisted in the same database, so the
-collector reconnects without re-authenticating and resolves channels it has
-seen before.
+O estado da sessão e os hashes de acesso de peers são persistidos no mesmo banco de dados, para que o
+coletor (collector) se reconecte sem re-autenticar e resolva canais que já viu
+anteriormente.
 
-## Phase roadmap
+## Roadmap das fases
 
-| Phase | Binary | What it adds |
+| Fase | Binário | O que adiciona |
 |-------|--------|--------------|
-| **1 (this repo)** | `limiar-collector` | userbot auth, channel management, raw capture |
-| 2 | `limiar-processor` | normalization, dedup, rule-based classification |
-| 3 | `limiar-processor` | semantic classification via batched LLM API |
-| 4 | `limiar-api` | REST + SSE, frontend integration |
-| 5 | `limiar-collector` | automatic channel discovery |
-| 6 | `limiar` | orchestrator that spawns all binaries (`limiar run`) |
+| **1 (este repo)** | `limiar-collector` | autenticação do userbot, gerenciamento de canais, captura bruta (raw) |
+| 2 | `limiar-processor` | normalização, dedup, classificação baseada em regras |
+| 3 | `limiar-processor` | classificação semântica via API de LLM em lote |
+| 4 | `limiar-api` | REST + SSE, integração com o frontend |
+| 5 | `limiar-collector` | descoberta automática de canais |
+| 6 | `limiar` | orquestrador que inicia todos os binários (`limiar run`) |
 
-The design plants seams for later phases without implementing them: the
-`Classifier` Strategy interface (currently `NoopClassifier`), the `Dispatcher`
-Observer (currently one handler), and a stable raw-payload schema
-(`schema_version = 1`).
+O design planta "costuras" (seams) para fases posteriores sem implementá-las: a
+interface Strategy `Classifier` (atualmente `NoopClassifier`), o Observer
+`Dispatcher` (atualmente com um handler) e um esquema (schema) estável de
+payload bruto (`schema_version = 1`).

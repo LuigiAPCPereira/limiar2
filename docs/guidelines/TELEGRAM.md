@@ -1,37 +1,37 @@
-# Guideline — Extending the Telegram Layer
+# Diretrizes — Estendendo a Camada Telegram
 
-The telegram layer (`internal/telegram`) is the **Facade** over gotd/td. It is
-the only package allowed to import `github.com/gotd/td/...`. Everything it
-exposes to the rest of the codebase is a domain type (`storage.Peer`,
-`HistoryMessage`) or plain `[]byte`. Follow these rules when extending it.
+A camada telegram (`internal/telegram`) é a **Fachada (Facade)** sobre o gotd/td. É
+o único pacote com permissão para importar `github.com/gotd/td/...`. Tudo o que
+ela expõe para o restante da base de código é um tipo de domínio (`storage.Peer`,
+`HistoryMessage`) ou `[]byte` simples. Siga estas regras ao estendê-la.
 
-## Rules
+## Regras
 
-1. **Keep gotd/td behind the facade.** New MTProto capabilities are added as
-   methods on the `TelegramClient` interface and implemented on `Client`. The
-   interface must not expose any `tg.*`, `auth.*`, or `session.*` type.
-2. **`Client` is the only gotd-importing type.** Helpers (`encodeUpdate`,
-   `extractMessages`, `firstChannel`) may use `tg` types internally but must
-   return domain types or `[]byte`.
-3. **Never import gotd/td in `cli` or `collector`.** Those layers depend only on
-   `TelegramClient` and `storage` models.
-4. **One-shot API calls run inside `runOnce`** (`c.tg.Run(ctx, f)`); the live
-   loop runs in `Run`. Both honor context cancellation.
-5. **Updates leave the package as JSON.** `onUpdate` serializes via
-   `encodeUpdate` and hands bytes to the `Dispatcher`; it must never block or
-   crash the receive loop (encode errors are logged and swallowed).
-6. **Reconnection uses `CalculateBackoff`** (1s base, 2x, 10% jitter, 5m
-   ceiling, bounded by `MaxRetries`) — see ADR 007.
-7. **Session storage maps "absent" to gotd's `session.ErrNotFound`** so the auth
-   flow starts fresh; corruption surfaces as `ErrSessionCorrupted`.
-8. **PeerStore mutations go through its RWMutex methods** (`Get`/`Set`/
-   `LoadFromDB`/`FlushToDB`); never touch the map directly.
+1. **Mantenha o gotd/td escondido pela fachada.** Novas capacidades do MTProto são adicionadas como
+   métodos na interface `TelegramClient` e implementadas no `Client`. A
+   interface não deve expor nenhum tipo `tg.*`, `auth.*` ou `session.*`.
+2. **O `Client` é o único tipo que importa o gotd.** Helpers (`encodeUpdate`,
+   `extractMessages`, `firstChannel`) podem usar tipos `tg` internamente, mas devem
+   retornar tipos de domínio ou `[]byte`.
+3. **Nunca importe gotd/td em `cli` ou `collector`.** Essas camadas dependem apenas dos modelos
+   `TelegramClient` e `storage`.
+4. **Chamadas de API "one-shot" rodam dentro de `runOnce`** (`c.tg.Run(ctx, f)`); o loop
+   ao vivo roda no `Run`. Ambos respeitam o cancelamento de contexto.
+5. **Atualizações saem do pacote como JSON.** `onUpdate` serializa via
+   `encodeUpdate` e entrega os bytes ao `Dispatcher`; ele nunca deve bloquear ou
+   causar crash no loop de recebimento (erros de encode são registrados no log e engolidos).
+6. **Reconexão usa `CalculateBackoff`** (base de 1s, 2x, 10% de jitter, teto de 5m,
+   limitado por `MaxRetries`) — veja o ADR 007.
+7. **O armazenamento de sessão mapeia "ausente" para `session.ErrNotFound` do gotd** para que o fluxo
+   de autenticação (auth) comece do zero; a corrupção de dados é sinalizada como `ErrSessionCorrupted`.
+8. **Mutações no PeerStore passam por seus métodos RWMutex** (`Get`/`Set`/
+   `LoadFromDB`/`FlushToDB`); nunca toque no map diretamente.
 
-## Correct
+## Correto
 
 ```go
-// New facade method: domain types only, context-first, wrapped errors,
-// network call inside runOnce.
+// Novo método da facade: apenas tipos de domínio, context-first, erros encapsulados (wrapped),
+// chamada de rede dentro de runOnce.
 func (c *Client) GetChannelFull(ctx context.Context, channelID, accessHash int64) ([]byte, error) {
     var payload []byte
     err := c.runOnce(ctx, func(ctx context.Context) error {
@@ -41,39 +41,39 @@ func (c *Client) GetChannelFull(ctx context.Context, channelID, accessHash int64
         if err != nil {
             return apperrors.Wrap("telegram", "get_full_channel", err)
         }
-        payload, err = json.Marshal(res)        // gotd type stays internal
+        payload, err = json.Marshal(res)        // o tipo do gotd se mantém interno
         return err
     })
     return payload, err
 }
 ```
 
-## Incorrect
+## Incorreto
 
 ```go
-// WRONG: leaking a gotd type through the interface.
+// ERRADO: vazar um tipo do gotd através da interface.
 type TelegramClient interface {
-    Resolve(ctx context.Context, username string) (*tg.Channel, error) // exposes tg.*
+    Resolve(ctx context.Context, username string) (*tg.Channel, error) // expõe tg.*
 }
 ```
 
 ```go
-// WRONG: importing gotd in the collector layer.
+// ERRADO: importar o gotd na camada collector.
 package collector
-import "github.com/gotd/td/tg"   // forbidden outside internal/telegram
+import "github.com/gotd/td/tg"   // proibido fora de internal/telegram
 ```
 
 ```go
-// WRONG: handling an update synchronously in onUpdate, bypassing the dispatcher.
+// ERRADO: tratar uma atualização sincronicamente no onUpdate, ignorando o dispatcher.
 func (c *Client) onUpdate(ctx context.Context, u tg.UpdatesClass) error {
-    return c.repo.SaveRawMessage(ctx, adapt(u))  // no fan-out, no recover()
+    return c.repo.SaveRawMessage(ctx, adapt(u))  // sem fan-out, sem recover()
 }
 ```
 
-## Never do
+## O que nunca fazer
 
-- Add a third-party MTProto wrapper such as GoTGProto (ADR 002).
-- Return or accept gotd/td types across the `TelegramClient` boundary.
-- Write to the database from this layer — persistence is the storage/collector
-  job; telegram only reads/writes session and peer rows via `Repository`.
-- Call `panic()`; the only `recover()` in the system is the Dispatcher's.
+- Adicionar um wrapper MTProto de terceiros, como o GoTGProto (ADR 002).
+- Retornar ou aceitar tipos gotd/td cruzando a fronteira do `TelegramClient`.
+- Gravar no banco de dados a partir dessa camada — a persistência é tarefa do storage/collector;
+  o pacote telegram apenas lê/escreve as linhas de session e peer via `Repository`.
+- Chamar `panic()`; o único `recover()` do sistema está no Dispatcher.
