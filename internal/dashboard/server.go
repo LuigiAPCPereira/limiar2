@@ -17,10 +17,11 @@ import (
 // Quando o broker não é nil, o endpoint SSE /api/events é habilitado para
 // atualizações em tempo real.
 type Server struct {
-	repo   *storage.Repository
-	log    logger.Logger
-	port   int
-	broker *Broker
+	repo      *storage.Repository
+	log       logger.Logger
+	port      int
+	broker    *Broker
+	startedAt time.Time
 }
 
 // NewServer constrói um servidor de dashboard na porta fornecida. broker pode ser nil
@@ -29,13 +30,14 @@ func NewServer(repo *storage.Repository, log logger.Logger, port int, broker *Br
 	if log == nil {
 		log = logger.NopLogger{}
 	}
-	return &Server{repo: repo, log: log, port: port, broker: broker}
+	return &Server{repo: repo, log: log, port: port, broker: broker, startedAt: time.Now()}
 }
 
 // ListenAndServe inicia o servidor HTTP e bloqueia até que ctx seja cancelado.
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/api/channels", s.handleChannels)
 	mux.HandleFunc("/api/messages", s.handleMessages)
 	mux.HandleFunc("/api/message/", s.handleMessage)
@@ -74,6 +76,22 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, indexHTML)
+}
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	count, err := s.repo.CountRawMessages(r.Context())
+	status := "ok"
+	dbStatus := true
+	if err != nil {
+		status = "degraded"
+		dbStatus = false
+	}
+	writeJSON(w, map[string]any{
+		"status":         status,
+		"db":             dbStatus,
+		"raw_messages":   count,
+		"uptime_seconds": time.Since(s.startedAt).Seconds(),
+	})
 }
 
 func (s *Server) handleChannels(w http.ResponseWriter, r *http.Request) {

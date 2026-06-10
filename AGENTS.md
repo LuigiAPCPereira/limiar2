@@ -276,6 +276,54 @@ O build não deve conter nenhum importe de `sqlite`, `mattn` ou `gorm`.
 
 ---
 
+## limiar-processor (Fase 2)
+
+O processor é o segundo binário do pipeline. Ele lê `raw_messages`
+(read-only) do `limiar.db` compartilhado, normaliza payloads em uma estrutura
+canônica, classifica por tipo de mensagem, e escreve em `processed_messages`.
+
+### Estrutura de packages
+
+```
+cmd/limiar-processor/main.go      — composition root
+internal/processor/
+├── config.go       — env vars LIMIAR_PROCESSOR_*, sem credenciais Telegram
+├── normalizer.go   — payload JSON → NormalizedMessage (Shapes A e B)
+├── classify.go     — cascata de MessageType (deal_complete, commentary, etc.)
+├── repository.go   — FetchUnprocessed, SaveProcessed, CountUnprocessed
+└── processor.go    — loop de poll: fetch → normalize → classify → persist
+```
+
+### Regras do processor
+
+1. **raw_messages são read-only.** O processor nunca escreve em `raw_messages`.
+2. **Mesmo banco, tabelas separadas.** Processor adiciona `processed_messages` via
+   migration `003_processor_tables.sql`. Tabelas do collector são intocáveis.
+3. **Sem dependência do Telegram.** `internal/processor` nunca importa
+   `internal/telegram`. O processor apenas lê do DB.
+4. **Preços são INTEGER (centavos).** R$ 83,50 → 8350. Conversão acontece apenas nas
+   boundaries (extração regex → ×100 → int64). Nunca usar float64 para preços.
+5. **Processamento idempotente.** `SaveProcessed` usa `ON CONFLICT DO NOTHING` em
+   `(channel_id, message_id)`. Reprocessar a mesma raw_message é seguro.
+6. **Batch poll, não streaming.** O processor faz poll de `raw_messages` a cada
+   `LIMIAR_PROCESSOR_POLL_INTERVAL` (default 5s) com batch size
+   `LIMIAR_PROCESSOR_BATCH_SIZE` (default 50). Streaming pode ser adicionado na Fase 6.
+7. **Mesma closed stack.** Nenhuma dependência nova além do que AGENTS.md permite.
+   O processor reutiliza `internal/storage` (DB open/migrate), `internal/logger`,
+   e `internal/errors` do módulo collector.
+
+### Configuração do processor
+
+| Variável | Default | Valores válidos |
+|----------|---------|-----------------|
+| `LIMIAR_DB_PATH` | `./limiar.db` | qualquer path válido |
+| `LIMIAR_PROCESSOR_POLL_INTERVAL` | `5s` | duração Go [1s, 5m] |
+| `LIMIAR_PROCESSOR_BATCH_SIZE` | `50` | 1–1000 |
+| `LIMIAR_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `LIMIAR_LOG_FORMAT` | `json` | `json`, `text`, `pretty` |
+
+---
+
 ## Notas de estilo
 
 - Mensagens de log usam prefixos de emoji para escaneabilidade: 📡 📩 📜 🔄 ❌ ✅ 🛑 ⏰ 🌐 ⚠️

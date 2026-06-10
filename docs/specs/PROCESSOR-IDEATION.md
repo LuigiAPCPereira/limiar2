@@ -531,8 +531,8 @@ type Product struct {
     URLHash         string    // SHA-256 da canonical_url (índice)
     Merchant        string    // "mercadolivre", "amazon", "aliexpress", "shopee"
     Name            string    // Extraído do texto (best-effort)
-    CurrentPrice    float64   // Preço mais recente
-    LowestPrice     float64   // Menor preço histórico
+    CurrentPrice    int64     // Preço mais recente (centavos)
+    LowestPrice     int64     // Menor preço histórico (centavos)
     AffiliateURL    string    // URL com affiliate ID do Limiar
     ImageURL        string    // URL do CDN do Telegram
     FirstSeenAt     time.Time
@@ -576,7 +576,7 @@ um bom preço.
 type PricePoint struct {
     ID          int64
     ProductID   int64     // FK para products.id
-    Price       float64   // Preço detectado
+    Price       int64     // Preço detectado (centavos)
     Currency    string    // "BRL"
     ChannelID   int64     // Canal de onde veio
     MessageID   int64     // Mensagem de onde extraiu
@@ -590,7 +590,7 @@ type PricePoint struct {
 CREATE TABLE price_history (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id  INTEGER NOT NULL REFERENCES products(id),
-    price       REAL NOT NULL,
+    price       INTEGER NOT NULL,
     currency    TEXT NOT NULL DEFAULT 'BRL',
     channel_id  INTEGER NOT NULL,
     message_id  INTEGER NOT NULL,
@@ -611,6 +611,13 @@ CREATE INDEX idx_price_history_product ON price_history(product_id, detected_at)
 ---
 
 ## 9. Modelo de Dados (Tabelas Novas)
+
+> **DECISÃO (2026-06-09):** Preços são armazenados como `INTEGER` (centavos de BRL).
+> Exemplo: R$ 83,50 → 8350. Conversão float→int apenas nas boundaries (input do
+> texto, output pro frontend). Motivo: float64 acumula erro de arredondamento em
+> comparações e agregações (MIN, AVG). Padrão fintech. Os campos afetados são
+> `products.current_price`, `products.lowest_price`, `price_history.price`, e
+> `processed_messages.price_amount` — todos `INTEGER` no schema abaixo.
 
 O processor adiciona 4 tabelas ao `limiar.db`. As tabelas do collector
 (`raw_messages`, `channels`, `peers`, `sessions`) permanecem intocáveis.
@@ -641,7 +648,7 @@ CREATE TABLE processed_messages (
         -- Preenchidos quando Media.Webpage presente (0.3% das mensagens)
     has_price        INTEGER NOT NULL DEFAULT 0,
     has_coupon       INTEGER NOT NULL DEFAULT 0,
-    price_amount     REAL,
+    price_amount     INTEGER,
     price_currency   TEXT DEFAULT 'BRL',
     coupons          TEXT,
         -- JSON array de Coupon structs: [{"code":"X","discount_type":"code_only","discount_value":0,"requires_action":false}]
@@ -663,8 +670,8 @@ CREATE TABLE products (
     url_hash        TEXT NOT NULL UNIQUE,  -- SHA-256
     merchant        TEXT NOT NULL,
     name            TEXT NOT NULL DEFAULT '',
-    current_price   REAL,
-    lowest_price    REAL,
+    current_price   INTEGER,
+    lowest_price    INTEGER,
     affiliate_url   TEXT,
     image_url       TEXT,
     offer_count     INTEGER NOT NULL DEFAULT 1,
@@ -679,7 +686,7 @@ CREATE INDEX idx_products_url_hash ON products(url_hash);
 CREATE TABLE price_history (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id  INTEGER NOT NULL REFERENCES products(id),
-    price       REAL NOT NULL,
+    price       INTEGER NOT NULL,
     currency    TEXT NOT NULL DEFAULT 'BRL',
     channel_id  INTEGER NOT NULL,
     message_id  INTEGER NOT NULL,

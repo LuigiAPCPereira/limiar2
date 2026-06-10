@@ -4,197 +4,326 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Limiar Dashboard</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
-  header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 1.5rem 2rem; border-bottom: 1px solid #334155; }
-  header h1 { font-size: 1.5rem; font-weight: 600; }
-  .conn-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; padding: 0.25rem 0.75rem; border-radius: 999px; background: #334155; color: #94a3b8; }
-  .conn-status.live { background: #064e3b; color: #34d399; }
-  .conn-status.polling { background: #713f12; color: #facc15; }
-  .conn-status::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-  header h1 span { color: #38bdf8; }
-  .conn-status { font-size: 0.875rem; color: #94a3b8; display: flex; align-items: center; gap: 0.5rem; }
-  .conn-status::before { content: ''; display: block; width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; }
-  .conn-status.online::before { background: #22c55e; }
-  .conn-status.polling::before { background: #eab308; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-  .stat-card { background: #1e293b; border-radius: 0.5rem; padding: 1.25rem; border: 1px solid #334155; }
-  .stat-card .label { font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; }
-  .stat-card .value { font-size: 1.75rem; font-weight: 700; margin-top: 0.25rem; }
-  .channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-  .channel-card { background: #1e293b; border-radius: 0.5rem; padding: 1rem; border: 1px solid #334155; cursor: pointer; transition: border-color 0.2s; }
-  .channel-card:hover, .channel-card.active, .channel-card:focus-visible { border-color: #38bdf8; outline: 1px solid #38bdf8; outline-offset: -1px; }
-  .channel-card .username { font-weight: 600; color: #38bdf8; }
-  .channel-card .count { font-size: 0.875rem; color: #94a3b8; margin-top: 0.25rem; }
-  .messages { background: #1e293b; border-radius: 0.5rem; border: 1px solid #334155; }
-  .messages h2 { padding: 1rem; border-bottom: 1px solid #334155; font-size: 1rem; }
-  .msg-list { max-height: 600px; overflow-y: auto; }
-  .msg-item { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; cursor: pointer; transition: background 0.15s; }
-  .msg-item:hover, .msg-item:focus-visible { background: #334155; outline: 1px solid #38bdf8; outline-offset: -1px; }
-  .msg-item:hover { background: #334155; }
-  .channel-card:focus-visible, .msg-item:focus-visible, .close:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
-  .msg-item .meta { font-size: 0.75rem; color: #94a3b8; }
-  .msg-item .preview { font-size: 0.875rem; margin-top: 0.25rem; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .msg-detail { position: fixed; top: 0; right: 0; width: 500px; height: 100vh; background: #1e293b; border-left: 1px solid #334155; padding: 1.5rem; overflow-y: auto; z-index: 10; }
-  .msg-detail .close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; }
-  .msg-detail .close:hover, .msg-detail .close:focus-visible { color: #e2e8f0; outline: 1px solid #38bdf8; border-radius: 0.25rem; }
-  .msg-detail h3 { margin-bottom: 1rem; }
-  .msg-detail pre { background: #0f172a; padding: 1rem; border-radius: 0.25rem; font-size: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
-  .empty { text-align: center; padding: 3rem; color: #64748b; }
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--surface); padding: 1rem 2rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.25rem; font-weight: 600; }
+  header h1 span { color: var(--accent); }
+  .conn-badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 9999px; }
+  .conn-live { background: #064e3b; color: var(--green); }
+  .conn-poll { background: #78350f; color: var(--yellow); }
+  .conn-off  { background: #7f1d1d; color: var(--red); }
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--surface); border-radius: 0.5rem; padding: 1rem 1.25rem; border: 1px solid var(--border); }
+  .stat-card .label { font-size: 0.7rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 1.5rem; font-weight: 700; margin-top: 0.15rem; }
+  .toolbar { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+  .search-input { background: var(--surface); border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem 0.75rem; color: var(--text); font-size: 0.875rem; flex: 1; min-width: 200px; }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+  .search-input::placeholder { color: var(--muted); }
+  .channels { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .ch-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 9999px; padding: 0.35rem 0.75rem; font-size: 0.8rem; cursor: pointer; transition: all 0.15s; color: var(--muted); }
+  .ch-chip:hover { border-color: var(--accent); color: var(--text); }
+  .ch-chip.active { background: #0c4a6e; border-color: var(--accent); color: var(--accent); }
+  .ch-chip .count { font-size: 0.7rem; opacity: 0.7; margin-left: 0.25rem; }
+  .messages { background: var(--surface); border-radius: 0.5rem; border: 1px solid var(--border); }
+  .messages h2 { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+  .msg-list { max-height: 65vh; overflow-y: auto; }
+  .msg-item { padding: 0.6rem 1rem; border-bottom: 1px solid var(--bg); cursor: pointer; transition: background 0.1s; }
+  .msg-item:hover { background: var(--border); }
+  .msg-item .meta { font-size: 0.7rem; color: var(--muted); display: flex; gap: 0.75rem; }
+  .msg-item .preview { font-size: 0.825rem; margin-top: 0.2rem; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg-item mark { background: #854d0e; color: var(--yellow); border-radius: 2px; padding: 0 2px; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10; }
+  .detail { position: fixed; top: 0; right: 0; width: min(550px, 90vw); height: 100vh; background: var(--surface); border-left: 1px solid var(--border); padding: 1.25rem; overflow-y: auto; z-index: 11; }
+  .detail .close { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; line-height: 1; }
+  .detail .close:hover { color: var(--text); }
+  .detail h3 { margin-bottom: 0.75rem; font-size: 1rem; }
+  .detail pre { background: var(--bg); padding: 0.75rem; border-radius: 0.375rem; font-size: 0.7rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; line-height: 1.5; max-height: 70vh; }
+  .detail .field { margin-bottom: 0.5rem; font-size: 0.8rem; }
+  .detail .field dt { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; }
+  .detail .field dd { color: var(--text); }
+  .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 0.875rem; }
+  .refresh-btn { background: none; border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.35rem 0.6rem; color: var(--muted); font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
-<body>
+<body x-data="dashboard()">
+
 <header>
-  <h1>◆ <span>Limiar</span> Dashboard</h1>
-  <div id="conn-status" class="conn-status" role="status" aria-live="polite">Conectando...</div>
+  <h1>&#9670; <span>Limiar</span> Dashboard</h1>
+  <span class="conn-badge" :class="connClass" x-text="connLabel"></span>
 </header>
+
 <div class="container">
-  <div class="stats" id="stats"></div>
-  <div class="channels" id="channels"></div>
+  <div class="stats">
+    <div class="stat-card">
+      <div class="label">Canais monitorados</div>
+      <div class="value" x-text="channelStats.length"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total de mensagens</div>
+      <div class="value" x-text="totalMessages"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Health</div>
+      <div class="value" :style="'color:' + (health.status === 'ok' ? 'var(--green)' : 'var(--red)')" x-text="health.status"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Uptime</div>
+      <div class="value" style="font-size:1rem" x-text="uptimeText"></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search-input" type="search" placeholder="Buscar no texto da mensagem..." x-model="search" @input.debounce.300ms="filterMessages()">
+    <button class="refresh-btn" @click="refresh()">&#8635; Atualizar</button>
+  </div>
+
+  <div class="channels">
+    <button class="ch-chip" :class="{ active: selectedChannel === 0 }" @click="selectChannel(0)">
+      Todos
+    </button>
+    <template x-for="c in channelStats" :key="c.ChannelID">
+      <button class="ch-chip" :class="{ active: selectedChannel === c.ChannelID }" @click="selectChannel(c.ChannelID)">
+        <span x-text="'@' + c.Username"></span><span class="count" x-text="c.MessageCount"></span>
+      </button>
+    </template>
+  </div>
+
   <div class="messages">
-    <h2 id="msg-title">Mensagens recentes</h2>
-    <div class="msg-list" id="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens">
-      <div class="empty">Carregando...</div>
+    <h2>
+      <span x-text="messagesTitle"></span>
+      <span style="font-weight:400;color:var(--muted);font-size:0.75rem" x-text="filteredMessages.length + ' exibidas'"></span>
+    </h2>
+    <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens">
+      <template x-if="filteredMessages.length === 0">
+        <div class="empty" x-text="loading ? 'Carregando...' : 'Nenhuma mensagem encontrada'"></div>
+      </template>
+      <template x-for="m in filteredMessages" :key="m.ID">
+        <div class="msg-item" @click="showDetail(m.ID)" role="button" tabindex="0" @keydown.enter.prevent="showDetail(m.ID)" @keydown.space.prevent="showDetail(m.ID)">
+          <div class="meta">
+            <span x-text="'ID ' + m.MessageID"></span>
+            <span x-text="channelName(m.ChannelID)"></span>
+            <span x-text="formatDate(m.ReceivedAt)"></span>
+          </div>
+          <div class="preview" x-html="highlightedPreview(m)"></div>
+        </div>
+      </template>
     </div>
   </div>
 </div>
-<div class="msg-detail" id="msg-detail" style="display:none" role="dialog" aria-labelledby="msg-detail-title">
-  <button class="close" onclick="closeDetail()" aria-label="Fechar painel de detalhes">&times;</button>
-  <h3 id="msg-detail-title">Detalhes da mensagem</h3>
-  <pre id="msg-json"></pre>
-</div>
+
+<template x-if="detailOpen">
+  <div>
+    <div class="overlay" @click="closeDetail()" @keydown.escape="closeDetail()"></div>
+    <div class="detail" role="dialog" aria-labelledby="detail-title">
+      <button class="close" @click="closeDetail()" aria-label="Fechar">&times;</button>
+      <h3 id="detail-title">Detalhes da mensagem</h3>
+      <template x-if="detailData">
+        <div>
+          <dl>
+            <div class="field"><dt>Message ID</dt><dd x-text="detailMeta.MessageID"></dd></div>
+            <div class="field"><dt>Canal</dt><dd x-text="channelName(detailMeta.ChannelID)"></dd></div>
+            <div class="field"><dt>Recebida em</dt><dd x-text="formatDate(detailMeta.ReceivedAt)"></dd></div>
+            <div class="field"><dt>Schema</dt><dd x-text="'v' + detailMeta.SchemaVersion"></dd></div>
+          </dl>
+          <h3 style="margin-top:1rem">Payload</h3>
+          <pre x-text="detailJson"></pre>
+        </div>
+      </template>
+    </div>
+  </div>
+</template>
+
 <script>
-let selectedChannel = 0;
+function dashboard() {
+  return {
+    channelStats: [],
+    messages: [],
+    filteredMessages: [],
+    selectedChannel: 0,
+    search: '',
+    loading: true,
+    detailOpen: false,
+    detailData: null,
+    detailMeta: {},
+    detailJson: '',
+    health: { status: 'unknown' },
+    startedAt: Date.now(),
+    uptimeText: '--',
+    connClass: 'conn-off',
+    connLabel: 'conectando...',
+    _es: null,
+    _pollTimer: null,
+    _uptimeTimer: null,
 
-function decodePayload(b64) {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return JSON.parse(new TextDecoder().decode(bytes));
-}
+    get totalMessages() {
+      return this.channelStats.reduce((s, c) => s + c.MessageCount, 0);
+    },
 
-function extractText(p) {
-  // History backfill: {Message: "text", ...}
-  if (p.Message && typeof p.Message === 'string') return p.Message;
-  // Live capture: {Updates: [{Message: {Message: "text"}}]}
-  if (p.Updates && p.Updates[0] && p.Updates[0].Message) {
-    const m = p.Updates[0].Message;
-    if (typeof m === 'string') return m;
-    if (m.Message && typeof m.Message === 'string') return m.Message;
-    if (m.Text) return typeof m.Text === 'string' ? m.Text : JSON.stringify(m.Text);
-  }
-  return null;
-}
+    get messagesTitle() {
+      if (this.selectedChannel) {
+        const ch = this.channelStats.find(c => c.ChannelID === this.selectedChannel);
+        return ch ? `Mensagens de @${ch.Username}` : 'Mensagens do canal';
+      }
+      return 'Mensagens recentes';
+    },
 
-async function loadStats() {
-  const res = await fetch('/api/channels');
-  const data = await res.json();
-  const total = data.reduce((s, c) => s + c.MessageCount, 0);
-  document.getElementById('stats').innerHTML =
-    '<div class="stat-card"><div class="label">Canais</div><div class="value">' + data.length + '</div></div>' +
-    '<div class="stat-card"><div class="label">Total de mensagens</div><div class="value">' + total + '</div></div>';
+    init() {
+      this.refresh();
+      this.connectSSE();
+      this._uptimeTimer = setInterval(() => this.updateUptime(), 1000);
+    },
 
-  document.getElementById('channels').innerHTML = data.map(c =>
-    '<div class="channel-card' + (c.ChannelID === selectedChannel ? ' active' : '') + '" role="button" tabindex="0" aria-pressed="' + (c.ChannelID === selectedChannel) + '" ' +
-    'onclick="selectChannel(' + c.ChannelID + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();selectChannel(' + c.ChannelID + ');}">' +
-    '<div class="username">@' + escapeHtml(c.Username) + '</div>' +
-    '<div class="count">' + c.MessageCount + ' mensagens</div></div>'
-  ).join('');
-}
+    async refresh() {
+      await Promise.all([this.loadHealth(), this.loadStats(), this.loadMessages()]);
+      this.loading = false;
+    },
 
-async function loadMessages() {
-  const url = '/api/messages?limit=50' + (selectedChannel ? '&channel_id=' + selectedChannel : '');
-  const res = await fetch(url);
-  const data = await res.json();
-  const title = selectedChannel ? 'Mensagens do canal' : 'Mensagens recentes';
-  document.getElementById('msg-title').textContent = title + ' (' + data.length + ')';
+    async loadHealth() {
+      try {
+        const res = await fetch('/healthz');
+        this.health = await res.json();
+      } catch { this.health = { status: 'error' }; }
+    },
 
-  if (data.length === 0) {
-    document.getElementById('msg-list').innerHTML = '<div class="empty">Nenhuma mensagem encontrada</div>';
-    return;
-  }
+    async loadStats() {
+      try {
+        const res = await fetch('/api/channels');
+        this.channelStats = await res.json();
+      } catch {}
+    },
 
-  document.getElementById('msg-list').innerHTML = data.map(m => {
-    let preview = '';
-    try {
-      const p = decodePayload(m.Payload);
-      preview = extractText(p) || JSON.stringify(p).substring(0, 150);
-    } catch(e) { preview = '(erro ao decodificar: ' + e.message + ')'; }
-    return '<div class="msg-item" role="button" tabindex="0" ' +
-      'onclick="showDetail(' + m.ID + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showDetail(' + m.ID + ');}">' +
-      '<div class="meta">ID: ' + m.MessageID + ' | Canal: ' + m.ChannelID + ' | ' + new Date(m.ReceivedAt).toLocaleString('pt-BR') + '</div>' +
-      '<div class="preview">' + escapeHtml(preview) + '</div></div>';
-  }).join('');
-}
+    async loadMessages() {
+      try {
+        const url = '/api/messages?limit=100' + (this.selectedChannel ? '&channel_id=' + this.selectedChannel : '');
+        const res = await fetch(url);
+        this.messages = await res.json();
+        this.filterMessages();
+      } catch {}
+    },
 
-async function showDetail(id) {
-  const res = await fetch('/api/message/' + id);
-  const data = await res.json();
-  let payload;
-  try { payload = decodePayload(data.Payload); }
-  catch { payload = data.Payload; }
-  document.getElementById('msg-json').textContent = JSON.stringify(payload, null, 2);
-  document.getElementById('msg-detail').style.display = 'block';
-}
+    filterMessages() {
+      const q = this.search.trim().toLowerCase();
+      if (!q) {
+        this.filteredMessages = this.messages;
+        return;
+      }
+      this.filteredMessages = this.messages.filter(m => {
+        const text = this.extractPreview(m);
+        return text.toLowerCase().includes(q);
+      });
+    },
 
-function closeDetail() {
-  document.getElementById('msg-detail').style.display = 'none';
-}
+    selectChannel(id) {
+      this.selectedChannel = this.selectedChannel === id ? 0 : id;
+      this.loadMessages();
+    },
 
-function selectChannel(id) {
-  selectedChannel = selectedChannel === id ? 0 : id;
-  loadStats();
-  loadMessages();
-}
+    async showDetail(id) {
+      try {
+        const res = await fetch('/api/message/' + id);
+        const data = await res.json();
+        this.detailMeta = data;
+        let payload;
+        try { payload = this.decodePayload(data.Payload); }
+        catch { payload = data.Payload; }
+        this.detailData = payload;
+        this.detailJson = JSON.stringify(payload, null, 2);
+        this.detailOpen = true;
+      } catch {}
+    },
 
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
+    closeDetail() { this.detailOpen = false; },
 
-loadStats();
-loadMessages();
+    decodePayload(b64) {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    },
 
-function setStatus(state, text) {
-  const el = document.getElementById('conn-status');
-  el.className = 'conn-status ' + state;
-  el.textContent = text;
-}
+    extractText(p) {
+      if (p.Message && typeof p.Message === 'string') return p.Message;
+      if (p.Updates && p.Updates[0] && p.Updates[0].Message) {
+        const m = p.Updates[0].Message;
+        if (typeof m === 'string') return m;
+        if (m.Message && typeof m.Message === 'string') return m.Message;
+        if (m.Text) return typeof m.Text === 'string' ? m.Text : JSON.stringify(m.Text);
+      }
+      return null;
+    },
 
-let pollingInterval = null;
-function startPolling() {
-  const status = document.getElementById('conn-status');
-  if (status) {
-    status.className = 'conn-status polling';
-    status.textContent = 'Modo Polling';
-  }
-  if (pollingInterval) return;
-  setStatus('polling', 'Modo Polling (30s)');
-  pollingInterval = setInterval(function() {
-    loadStats();
-    loadMessages();
-  }, 30000);
-}
+    extractPreview(m) {
+      try {
+        const p = this.decodePayload(m.Payload);
+        return this.extractText(p) || JSON.stringify(p).substring(0, 200);
+      } catch (e) { return '(erro: ' + e.message + ')'; }
+    },
 
-if (window.EventSource) {
-  const es = new EventSource('/api/events');
-  es.onopen = () => setStatus('live', 'Ao vivo (SSE)');
-  es.addEventListener('message', function() {
-    loadMessages();
-    loadStats();
-  });
-  es.addEventListener('stats', function() {
-    loadStats();
-  });
-  es.onerror = function() {
-    // Fallback to polling if SSE fails
-    startPolling();
+    highlightedPreview(m) {
+      let text = this.extractPreview(m);
+      if (text.length > 180) text = text.substring(0, 180) + '...';
+      const escaped = this.escapeHtml(text);
+      const q = this.search.trim();
+      if (!q) return escaped;
+      const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+      return escaped.replace(re, '<mark>$1</mark>');
+    },
+
+    channelName(id) {
+      const ch = this.channelStats.find(c => c.ChannelID === id);
+      return ch ? '@' + ch.Username : '#' + id;
+    },
+
+    formatDate(s) {
+      try { return new Date(s).toLocaleString('pt-BR'); }
+      catch { return s; }
+    },
+
+    escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    },
+
+    updateUptime() {
+      const sec = this.health.uptime_seconds || 0;
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      this.uptimeText = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+    },
+
+    connectSSE() {
+      if (!window.EventSource) { this.startPolling(); return; }
+      this._es = new EventSource('/api/events');
+      this.connClass = 'conn-live';
+      this.connLabel = 'ao vivo';
+      this._es.addEventListener('message', () => { this.loadMessages(); this.loadStats(); });
+      this._es.addEventListener('stats', () => this.loadStats());
+      this._es.onerror = () => {
+        this._es.close();
+        this.connClass = 'conn-poll';
+        this.connLabel = 'polling 30s';
+        this.startPolling();
+      };
+    },
+
+    startPolling() {
+      if (this._pollTimer) return;
+      this._pollTimer = setInterval(() => this.refresh(), 30000);
+    },
   };
-} else {
-  startPolling();
 }
 </script>
 </body>

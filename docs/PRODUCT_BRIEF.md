@@ -49,7 +49,7 @@ Cada componente é um binário Go independente com lifecycle próprio. Um orques
 | Banco de dados | `turso.tech/database/tursogo` — embedded, arquivo `.db`, sem CGO, driver `"turso"` para `database/sql` |
 | CLI | Cobra + Viper |
 | Logging | Interface `Logger` modular, implementação padrão com `slog` da stdlib |
-| HTTP | `chi` |
+| HTTP | stdlib `net/http` (dashboard e futuro limiar-api) |
 | Push realtime | SSE (Server-Sent Events) |
 | Classificação básica | Regras e regex (Strategy pattern, interface `Classifier`) |
 | Classificação semântica | API LLM externa em batches (Adapter sobre a interface `Classifier`) |
