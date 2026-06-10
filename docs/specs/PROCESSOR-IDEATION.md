@@ -1,8 +1,9 @@
 # Ideação — limiar-processor (Fase 2)
 
-**Data:** 2026-06-08  
-**Status:** Rascunho de ideias — aguardando mais dados do collector antes de implementar  
-**Pré-requisitos:** Análise de payloads expandida (meta: 10.000+ mensagens, 10+ canais, 30 dias)
+**Data:** 2026-06-09 (atualizado após análise de 6674 mensagens)
+**Status:** Ideação refinada com base em dados reais — pronto para Sprint 1
+**Base de dados:** 6674 mensagens, 16 canais, 70 dias (2026-03-30 → 2026-06-08)
+**Pré-requisitos cumpridos:** ✅ Análise de payloads completa (Opção A + B + C executadas)
 
 ---
 
@@ -100,22 +101,43 @@ Updates) em uma estrutura canônica única.
 
 ```go
 type NormalizedMessage struct {
-    RawMessageID   int64     // FK para raw_messages.id
-    MessageID      int64     // ID original do Telegram
-    ChannelID      int64     // PeerID.ChannelID
-    ChannelUsername string   // lookup em channels table
-    PostedAt       time.Time // Date convertido
-    ReceivedAt     time.Time // raw_messages.received_at
-    Text           string    // Message limpo
-    TextLength     int
-    MediaType      string    // "photo" | "poll" | "video" | "document" | "none"
-    PhotoID        int64     // Media.Photo.ID (se aplicável)
-    PhotoSizes     []PhotoSize
-    Entities       []Entity  // Entities parseadas (offset, length, type, url)
-    Views          int
-    Forwards       int
-    GroupedID      int64     // Para detecção de álbuns
+    RawMessageID    int64     // FK para raw_messages.id
+    MessageID       int64     // ID original do Telegram
+    ChannelID       int64     // PeerID.ChannelID
+    ChannelUsername string    // lookup em channels table
+    PostedAt        time.Time // Date convertido
+    ReceivedAt      time.Time // raw_messages.received_at
+    Text            string    // Message limpo
+    TextLength      int
+    MediaType       string    // "photo" | "poll" | "video" | "document" | "webpage" | "none"
+    PhotoID         int64     // Media.Photo.ID (se aplicável)
+    PhotoSizes      []PhotoSize
+    Entities        []Entity  // Entities parseadas (offset, length, type, url)
+    Views           int
+    Forwards        int
+    GroupedID       int64     // Para detecção de álbuns (sempre 0 nos dados atuais)
+    ReplyToMsgID    int64     // ReplyTo.ReplyToMsgID (0 se null)
+    WebpageURL      string    // Media.Webpage.URL (se MediaType == "webpage")
+    WebpageTitle    string    // Media.Webpage.Title
+    WebpageDesc     string    // Media.Webpage.Description
 }
+
+// MessageType — classificador exclusivo (cada mensagem pertence a 1 tipo).
+// Ver §6.5 para definição e cascata.
+type MessageType string
+
+const (
+    TypeDealComplete    MessageType = "deal_complete"
+    TypeDealNoCoupon    MessageType = "deal_no_coupon"
+    TypeDealNoPrice     MessageType = "deal_no_price"
+    TypeCategoryHeader  MessageType = "category_header"
+    TypeCouponExpired   MessageType = "coupon_expired"
+    TypeCommentary      MessageType = "commentary"
+    TypeVideo           MessageType = "video"
+    TypeDocument        MessageType = "document"
+    TypePoll            MessageType = "poll"
+    TypeAdminMeta       MessageType = "admin_meta"
+)
 ```
 
 ---
@@ -136,14 +158,25 @@ URL original (shortened/affiliate)
   → URL canônica limpa
 ```
 
-### Merchants prioritários (baseado nos dados coletados)
+### Merchants prioritizados (baseado em análise de 6674 mensagens, 2026-06-09)
 
-| Merchant | Domínios shortened | Domínio canônico |
-|----------|-------------------|------------------|
-| AliExpress | `s.click.aliexpress.com` | `aliexpress.com` / `pt.aliexpress.com` |
-| Mercado Livre | `meli.la` | `mercadolivre.com.br` |
-| Amazon | `amzn.to`, `amzn.divulgador.link` | `amazon.com.br` |
-| Shopee | `s.shopee.com.br` | `shopee.com.br` |
+Prioridade calibrada por **volume real de URLs** e **facilidade de resolução**:
+
+| Prio | Merchant | Domínios shortened | Domínio canônico | Volume | Redirects | Dificuldade |
+|------|----------|-------------------|------------------|--------|-----------|-------------|
+| **P1** | Shopee | `s.shopee.com.br` | `shopee.com.br` | 2805 (47%) | 1 | Fácil — params claros (`mmp_pid`, `utm_*`) |
+| **P1** | Amazon | `amzn.to`, `amzn.divulgador.link`, `amzlink.to` | `amazon.com.br` | 2347 (39%) | 1-2 | Fácil — **ASIN extraível do path** (`/dp/{ASIN}`) |
+| **P2** | Kabum (AWIN) | `tidd.ly` | `kabum.com.br` | 51 (1%) | 2 | Médio — AWIN affiliate network |
+| **P3** | Mercado Livre | `meli.la`, `mercadolivre.com/sec/*` | `mercadolivre.com.br` | 2190 (36%) | 1 | **Difícil** — `meli.la` cai em perfil de afiliado, não produto |
+| **P3** | AliExpress | `s.click.aliexpress.com` | `aliexpress.com` | 51 (1%) | 1 | **Difícil** — cai em landing genérica de moedas, não produto |
+| **P4** | Magalu | `magazineluiza.onelink.me`, `divulgador.magalu.com` | `magazineluiza.com.br` | ~200 (3%) | 1-2 | **Muito difícil** — **HTTP 403** anti-bot, precisa Playwright |
+| — | Cross-platform | `bit.ly`, `chat.whatsapp.com` | varia | ~90 | 2 | Fácil (não-merchant, apenas cross-promo) |
+
+**Notas:**
+- Volumes somam >100% porque uma mensagem pode ter múltiplas URLs (ex.: cupom + produto)
+- `meli.la` requer investigação adicional: talvez seja necessário extrair o product_id do path ou usar outro signal
+- Magalu P4: adiar para Sprint 5+; usar Playwright headless com User-Agent real
+- `amzn.divulgador.link` e `amzlink.to` resolvem para a mesma estrutura Amazon (`/dp/{ASIN}?tag=...`), tags de afiliado diferentes
 
 ### Parâmetros a remover (limpeza de tracking)
 
@@ -172,8 +205,12 @@ affiliate_id, sub_id
 - **Timeout:** Max 5s por resolução. Se falhar, manter URL original e marcar
   como `unresolved`.
 - **User-Agent:** Usar User-Agent de browser real para evitar bloqueios.
-- **Cache:** URLs resolvidas são imutáveis — cachear indefinidamente em tabela
-  `url_resolutions(original_url, canonical_url, merchant, resolved_at)`.
+- **Cache:** URLs **canônicas** (produto final) são estáveis — cachear
+  indefinidamente em tabela `url_resolutions(original_url, canonical_url,
+  merchant, resolved_at)`. No entanto, **URLs shortened diferentes** podem
+  apontar pro mesmo produto (ex.: um canal usa `amzn.to/X` e outro usa
+  `amzlink.to/Y` para o mesmo ASIN). Por isso a dedup é feita no hash da
+  **canonical_url**, não da original.
 
 ---
 
@@ -267,7 +304,7 @@ Isso evita que o pipeline inteiro fique bloqueado esperando o Playwright.
 ### Objetivo
 
 Obter URLs de imagem de alta qualidade sem hospedar arquivos, usando o CDN
-público do Telegram (`cdn1.telesco.pe`).
+público do Telegram (`cdn{1..4}.telesco.pe`).
 
 ### Como funciona
 
@@ -278,6 +315,38 @@ original via CDN:
 ```
 https://cdn1.telesco.pe/file/{file_token}.jpg
 ```
+
+### Investigação técnica (2026-06-09)
+
+**Testado empiricamente** em 4 canais reais (`gatunopromos`, `lobaopromo`,
+`xetdaspromocoes`, `LaPromotion`):
+
+- ✅ **GET `t.me/{channel}/{message_id}` + extração da `<meta property="og:image">` funciona** — 4/4 canais testados retornaram URLs válidas do CDN
+- ✅ **Resolução completa** (~1280x1280 para produtos, não thumbnail)
+- ✅ **CORS liberado** — `Access-Control-Allow-Origin: *`, frontend pode usar direto
+- ✅ **Sem autenticação** — canais públicos permitem acesso direto
+- ⚠️ **Cache NÃO é permanente:**
+  - `Cache-Control: max-age=10800` (**3 horas**)
+  - `ETag` presente — revalidação condicional funciona (304 Not Modified)
+  - `Expires` confirma 3h
+
+**Implicação de design:**
+
+- **Processor:** resolve URL no momento da normalização (1 GET por mensagem).
+- **Cache do processor:** armazena `(url, etag, resolved_at)`; a cada 3h faz
+  HEAD request com `If-None-Match: {ETag}` para revalidar (custo: 1 request
+  barato, sem transferência de body).
+- **Frontend:** consome URL + ETag; se receber 304, continua usando imagem.
+- **Fallback:** se `t.me` falhar (canal virou privado, HTTP 404), usar `Photo.ID
+  + AccessHash + FileReference` **via MTProto** (requer auth do collector,
+  fallback caro).
+
+### Sobre `Photo.ID + AccessHash + FileReference`
+
+Esses 3 campos existem no payload do `tg.Message` e são **insuficientes** para
+construir URL do CDN sem autenticação. Eles servem apenas para baixar via MTProto
+direto (auth necessária). A única forma sem auth é via `t.me` preview
+(o caminho do RSSHub é o correto).
 
 ### Referência: Como o RSSHub faz
 
@@ -292,11 +361,20 @@ do CDN. A imagem é servida em resolução completa (não thumbnail).
 // 1. GET https://t.me/{channel_username}/{message_id}
 // 2. Parsear HTML, extrair <meta property="og:image" content="...">
 // 3. URL extraída = imagem em alta resolução no CDN do Telegram
+// 4. HEAD request na URL para capturar ETag
+// 5. Persistir (url, etag, resolved_at) para revalidação futura
 
-func ResolveImageURL(ctx context.Context, channelUsername string, messageID int64) (string, error) {
+func ResolveImageURL(ctx context.Context, channelUsername string, messageID int64) (ImageRef, error) {
     url := fmt.Sprintf("https://t.me/%s/%d", channelUsername, messageID)
     // GET + parse og:image meta tag
-    // Retorna URL do cdn1.telesco.pe
+    // HEAD + capture ETag
+    // Retorna ImageRef{URL, ETag, ResolvedAt}
+}
+
+type ImageRef struct {
+    URL        string
+    ETag       string
+    ResolvedAt time.Time
 }
 ```
 
@@ -305,16 +383,115 @@ func ResolveImageURL(ctx context.Context, channelUsername string, messageID int6
 - **Sem hosting de imagens** — CDN do Telegram serve o arquivo
 - **Sem autenticação** — canais públicos permitem acesso direto
 - **Alta qualidade** — imagem original, não thumbnail
-- **Sem File Reference expirando** — URL do CDN é estável para canais públicos
+- **ETag-based revalidation** — cheap 304 revalidations, no re-download
 
 ### Limitações
 
 - **Canal privado:** Se um canal mudar para privado, URLs quebram. Mitigação:
   canais de promoção são quase sempre públicos.
-- **Rate limiting do t.me:** Não abusar de requests ao t.me. Cachear URLs de
-  imagem uma vez resolvidas (imutáveis por mensagem).
+- **Cache de 3h:** URLs precisam de revalidação periódica via ETag. Não é
+  "set-and-forget".
+- **Rate limiting do t.me:** Não abusar de requests ao t.me. Batch requests
+  com backoff, cachear URLs resolvidas (imutáveis por mensagem).
 - **Disponibilidade:** Dependência do CDN do Telegram. Se cair, imagens ficam
   indisponíveis (aceitável para MVP).
+
+### Dados de suporte (análise de 6674 mensagens)
+
+- **5613 mensagens (93.5%) têm Media.Photo** — quase todas as promoções têm imagem
+- **362 mensagens (6%) têm Media=null** — mensagens puramente textuais, sem imagem
+- **Aspect ratios dominantes:**
+  - 1:1 quadrado (85% das fotos) — placeholder quadrado no frontend
+  - 16:9 (1.77, ~8%) — landscape
+  - 1.9:1 (~7%) — wide banner
+- **Dimensões disponíveis no payload:**
+  - 320x320 (thumbnail "m")
+  - 800x800 (média "x")
+  - 1024x1024, 1200x1200, 1280x1280 (alta "y")
+
+---
+
+## 6.5. Taxonomia de Mensagens (validada em 6674 mensagens)
+
+### Objetivo
+
+Classificar cada mensagem em um dos tipos abaixo para que estágios posteriores
+saibam como tratar (processar, ignorar, agregar). A taxonomia é **exclusiva**
+(cada mensagem pertence a 1 cluster) — implementada como cascata de checks.
+
+### Clusters identificados
+
+| Cluster | Qtd | % | Definição (cascata) | Tratamento |
+|---------|-----|---|---------------------|------------|
+| **deal_complete** | 3491 | 58.2% | tem URL + preço + cupom | Pipeline completo (normalização → dedup → price) |
+| **deal_no_coupon** | 1250 | 20.8% | tem URL + preço, sem cupom | Pipeline completo, `coupons: null` |
+| **deal_no_price** | 1047 | 17.4% | tem URL, sem preço (landing page) | Pipeline parcial (sem price tracking) |
+| **category_header** | 173 | 2.9% | texto < 50 chars, sem URL, sem preço, sem "esgotado" | Ignorar para feed; usar como contexto de thread |
+| **coupon_expired** | 112 | 1.9% | menciona "esgotado/acabou/encerrado", sem URL | Sinalizar promoção original (via ReplyTo) como `expired: true` |
+| **commentary** | 97 | 1.6% | texto livre, sem URL/preço/esgotado | Ignorar (ex.: "barato", "precinho demais") |
+| **video** | 7 | 0.1% | Media.Video presente | Pipeline com `media_type: video` |
+| **document** | 7 | 0.1% | Media.Document presente | Pipeline com `media_type: document` |
+| **poll** | 1 | ~0% | Media.Poll presente | Ignorar (não-promoção) |
+| **admin_meta** | ~18 | ~0.3% | regras_grupo, cupons_hoje, grupos_whatsapp, canal_telegram | Ignorar (meta-promoção do canal) |
+
+### Cascata de classificação
+
+```go
+func Classify(m NormalizedMessage) MessageType {
+    hasURL := HasURL(m.Text)
+    hasPrice := HasPrice(m.Text)
+    hasCoupon := HasCoupon(m.Text)
+    isExpired := IsExpiredMention(m.Text)
+    isCategoryHeader := len(m.Text) < 50 && !hasURL && !hasPrice && !isExpired
+    isAdmin := IsAdminMeta(m.Text)
+
+    switch {
+    case isAdmin:
+        return TypeAdminMeta
+    case isExpired && !hasURL:
+        return TypeCouponExpired
+    case hasURL && hasPrice && hasCoupon:
+        return TypeDealComplete
+    case hasURL && hasPrice:
+        return TypeDealNoCoupon
+    case hasURL:
+        return TypeDealNoPrice
+    case isCategoryHeader:
+        return TypeCategoryHeader
+    case m.MediaType == "video":
+        return TypeVideo
+    case m.MediaType == "document":
+        return TypeDocument
+    case m.MediaType == "poll":
+        return TypePoll
+    default:
+        return TypeCommentary
+    }
+}
+```
+
+### Dados de suporte (análise 2026-06-09)
+
+- **ReplyTo chains:** 72 msgs com ReplyTo, todas com `ReplyToMsgID` válido
+  (nunca `ReplyToPeerID` isolado). ReplyTo aponta pra mensagem anterior no
+  mesmo canal. **Use ReplyTo para propagar `expired: true` de
+  `coupon_expired` → deal original.**
+- **GroupedID (álbuns):** ZERO ocorrências em 6003 payloads diretos. Processor
+  **não precisa** lidar com álbuns (pelo menos nesse dataset).
+- **Idioma:** 95% PT-BR puro, ~1% com títulos em EN (produto importado),
+  ~0% ES. Não precisa de detector de idioma na Fase 2.
+
+### Signals de urgência (badges pro frontend)
+
+Detectar via regex, popular campo `urgency_signals: []string`:
+
+| Signal | Regex | Volume | Badge sugerido |
+|--------|-------|--------|----------------|
+| "corre" / "corram" | `\bcorre\|\bcorram` | 194 | 🏃 Corra |
+| "última unidade" / "acabando" | `última[s]? unidade\|acabando\|esgotando` | 17 | ⚠️ Últimas |
+| "frete grátis" | `frete grátis\|frete gratis` | 297 | 🚚 Frete grátis |
+| "envio nacional" / "envio do brasil" | `envio nacional\|envio do brasil` | 87 | 🇧🇷 Nacional |
+| "tempo limitado" | `tempo limitado\|por tempo limitado` | 0 | (não detectado) |
 
 ---
 
@@ -446,17 +623,34 @@ CREATE TABLE processed_messages (
     product_id       INTEGER REFERENCES products(id),
     channel_id       INTEGER NOT NULL,
     message_id       INTEGER NOT NULL,
+    message_type     TEXT NOT NULL DEFAULT 'deal_complete',
+        -- Ver §6.5: deal_complete | deal_no_coupon | deal_no_price |
+        -- category_header | coupon_expired | commentary | video |
+        -- document | poll | admin_meta
     text_clean       TEXT NOT NULL,
     text_length      INTEGER NOT NULL DEFAULT 0,
     media_type       TEXT NOT NULL DEFAULT 'none',
     image_url        TEXT,
     views            INTEGER NOT NULL DEFAULT 0,
     forwards         INTEGER NOT NULL DEFAULT 0,
+    reply_to_msg_id  INTEGER NOT NULL DEFAULT 0,
+        -- Para propagação de expired=true em coupon_expired
+    webpage_url      TEXT,
+    webpage_title    TEXT,
+    webpage_desc     TEXT,
+        -- Preenchidos quando Media.Webpage presente (0.3% das mensagens)
     has_price        INTEGER NOT NULL DEFAULT 0,
     has_coupon       INTEGER NOT NULL DEFAULT 0,
     price_amount     REAL,
     price_currency   TEXT DEFAULT 'BRL',
-    coupons          TEXT,  -- JSON array: ["CUPOM1", "CUPOM2"]
+    coupons          TEXT,
+        -- JSON array de Coupon structs: [{"code":"X","discount_type":"code_only","discount_value":0,"requires_action":false}]
+    virtual_currency TEXT,
+        -- JSON VirtualCurrency: {"platform":"aliexpress","amount":90,"cap_brl":0,"type":"discount"}
+    urgency_signals  TEXT,
+        -- JSON array de strings: ["frete_gratis", "corre", "ultima_unidade"]
+    expires_at       TEXT,
+        -- Preenchido se texto menciona data/hora específica
     is_promotional   INTEGER NOT NULL DEFAULT 1,
     processed_at     TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(channel_id, message_id)
@@ -505,6 +699,19 @@ CREATE TABLE url_resolutions (
 );
 
 CREATE INDEX idx_url_resolutions_canonical ON url_resolutions(canonical_url);
+
+-- Cache de resolução de imagens (com ETag para revalidação a cada 3h)
+CREATE TABLE image_resolutions (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_username TEXT NOT NULL,
+    message_id       INTEGER NOT NULL,
+    image_url        TEXT NOT NULL,
+    etag             TEXT,
+    resolved_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(channel_username, message_id)
+);
+
+CREATE INDEX idx_image_resolutions_resolved ON image_resolutions(resolved_at);
 ```
 
 ### Relação entre tabelas
@@ -556,14 +763,92 @@ não justifica para MVP.
 **Recomendação:** Rod (Go native) para manter a stack Go-only. Adicionar
 `github.com/go-rod/rod` à closed stack do processor.
 
-### 10.3 Extração de preço/cupom
+### 10.3 Extração de preço e cupom (calibrado em 6674 mensagens, 2026-06-09)
 
-**Decisão adiada.** Aguardar mais dados do collector (10.000+ mensagens) para
-entender melhor os padrões. Opções:
+**Decisão finalizada.** Regex puro na Fase 2; templates por canal e LLM ficam para Fase 3.
 
-- Regex puro (simples, mas frágil)
-- Templates por canal (cada canal tem um formato previsível)
-- LLM local/API (mais robusto, mas mais lento e caro) — Fase 3
+#### Preços
+
+**Distribuição real (6450 menções de `R$` extraídas):**
+- p50 = R$ 83, p95 = R$ 1499, p99 = R$ 3607, max = R$ 40000
+- 55% abaixo de R$ 100 (produtos baratos predominam)
+- 3% acima de R$ 2000 (eletrônicos caros, nichos)
+
+**Regex calibrado:**
+```
+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)
+```
+Captura `R$ 1.234,56`, `R$1234`, `R$ 83`, `R$99,90`. Conversão: remover `.`, substituir `,` por `.`, `strconv.ParseFloat`.
+
+#### Cupons
+
+**Padrões identificados (4246 menções, ~71% das mensagens):**
+
+| Padrão | Exemplo | Regex |
+|--------|---------|-------|
+| Único | `🎟  Cupom: 6DO6` | `(?i)cupom[:\s]+([A-Z0-9_]{3,25})` |
+| Múltiplos (OU) | `Cupom: AEBR2 ou IFPL90V1 ou MARCABR02` | split por ` ou ` após match |
+| Concatenado (+) | `Cupom: AEBR2 + FIFINE0601 + 954 Moedas` | split por ` \+ ` |
+| Percentual | `Cupom de 15% OFF` | `(?i)cupom\s+de\s+(\d+)%` |
+| Valor fixo | `cupom de R$ 30 OFF` | `(?i)cupom\s+de\s+R\$\s*(\d+)` |
+| Sem código | `Resgate o cupom no anúncio` | flag `coupon_requires_action: true` |
+| Especificador | `Use o Cupom: PROMONETS ou XETPROMOCOES` | case-insensitive, extrair todos |
+
+**Schema de saída:**
+```go
+type Coupon struct {
+    Code           string  // "AEBR2", "6DO6", ""
+    DiscountType   string  // "percent" | "fixed_brl" | "code_only"
+    DiscountValue  float64 // 15.0 para %, 30.0 para R$30, 0.0 para code_only
+    RequiresAction bool    // true se "resgate no anúncio"
+}
+```
+
+#### Moedas virtuais (Shopee e AliExpress)
+
+**Descoberta-chave:** tanto Shopee quanto AliExpress usam "moedas" como desconto
+adicional no app. **Não é o mesmo que cupom** — é camada separada.
+
+- **AliExpress:** 92 menções — formato: `Cupom: XXX + N Moedas no app`
+- **Shopee:** 36 menções — formato: `50% de cashback em Moedas Shopee` ou
+  `70% de cashback em Moedas Shopee nas compras acima de R$0 (limite de 1.000 moedas:R$10)`
+
+**Regex calibrado:**
+```
+(?i)(\d+)\s*moedas?(\s*no\s*app)?
+```
+
+**Schema de saída:**
+```go
+type VirtualCurrency struct {
+    Platform string  // "aliexpress" | "shopee"
+    Amount   int64   // 90, 588, 954
+    CapBRL   float64 // 10.0 se "limite de 1.000 moedas:R$10" (Shopee); 0.0 senão
+    Type     string  // "discount" | "cashback" (Shopee é cashback, AliExpress é desconto direto)
+}
+```
+
+**Nota:** detectar plataforma pelo domínio da URL na mensagem
+(`s.click.aliexpress.com` → AliExpress; `s.shopee.com.br` → Shopee).
+
+#### Descontos (OFF / %)
+
+- 1686 mensagens com "OFF" (predominante)
+- 1354 mensagens com "%" (ex.: "30% OFF")
+- 4747 mensagens com "R$" (preço direto)
+
+**Regex combinado:**
+```
+(?i)(\d+)\s*%\s*(?:de\s+)?(?:desconto\s+)?off
+```
+Captura "30% OFF", "15% de desconto", "50% off".
+
+#### Estratégia de implementação
+
+1. Aplicar todos os regex em cascata no texto limpo
+2. Dedup por código (mesmo cupom pode ser mencionado múltiplas vezes)
+3. Se `coupon_requires_action: true` e sem código detectado, marcar flag
+4. Logar mensagens onde regex falha (para refinar em Fase 3)
 
 ---
 
@@ -648,16 +933,104 @@ Sprint 4: Afiliados
 
 ---
 
+## 14.5. Métricas para o Frontend (Fase 4 — limiar-api)
+
+### Dados calibrados em 6674 mensagens (2026-06-09)
+
+Estas métricas informam decisões de UX/display no frontend. Não afetam o
+processor diretamente, mas o processor já deve produzir os campos necessários.
+
+#### Truncagem de texto
+
+| Percentil | Chars | Decisão de UI |
+|-----------|-------|---------------|
+| p50 | 175 | Mostrar completo em card |
+| p95 | 350 | Mostrar completo, sem "Leia mais" |
+| p99 | 507 | Card padrão (com "Leia mais" opcional) |
+| max | 1076 | Modal / página de detalhe |
+
+**Recomendação:** truncar em 300 chars com "..." em card de feed; mostrar
+completo em view de detalhe.
+
+#### Emojis como filtros rápidos
+
+| Emoji | Frequência | Filtro sugerido |
+|-------|------------|-----------------|
+| 🔥 | 2864 (47%) | "Hot deals" |
+| 🎟 | 1119 (18%) | "Com cupom" |
+| ✅ | 511 (8%) | "Verificado" |
+| ⭐ | 327 (5%) | "Destaque" |
+| 🚀 | 28 | "Novo / lançamento" |
+
+**Recomendação:** chip filter no topo do feed com esses 4 emojis principais.
+
+#### Picos de atividade (horário do dia)
+
+| Hora | Mensagens | % do total |
+|------|-----------|------------|
+| 21h | 5099 | 85% |
+| 20h | 581 | 9.7% |
+| 12-14h | 142-143 | 2.4% |
+| 1-7h | ~1 | <0.1% |
+
+**Recomendação:** badge "🔥 pico agora" no frontend quando hora atual = 20-22h;
+scheduler de notificação push às 20:30.
+
+#### Aspect ratio das imagens
+
+- 1:1 quadrado (85%) → placeholder `aspect-ratio: 1/1` por default
+- 16:9 landscape (8%) → adaptação CSS via `object-fit: contain`
+- 1.9:1 wide banner (7%) → raro, aceita overflow
+
+**Recomendação:** CSS grid com slot 1:1; lazy-load com blur placeholder.
+
+#### Distribuição de preços (para histograma no frontend)
+
+- R$ 0-100: 55% (cor verde, "barato")
+- R$ 100-500: 33% (cor amarela, "médio")
+- R$ 500-2000: 9% (cor laranja, "premium")
+- R$ 2000+: 3% (cor vermelha, "luxo")
+
+**Recomendação:** filtro por faixa de preço no sidebar do feed.
+
+---
+
 ## 15. Perguntas para Resolver Antes de Implementar
 
-1. **Dados suficientes?** Coletar 10.000+ mensagens antes de finalizar regex
-   de extração de preço/cupom
-2. **Contas de afiliado criadas?** Necessário para testar re-afiliação
-3. **Rod funciona sem CGO?** Validar que `go-rod/rod` compila pure Go
-4. **Rate limits dos merchants?** Testar quantas URLs podem ser resolvidas por
-   minuto sem bloqueio
-5. **CDN do Telegram é estável?** Monitorar se URLs do `cdn1.telesco.pe`
-   expiram ou mudam
+### ✅ Respondidas durante análise de 6674 mensagens (2026-06-09)
+
+1. ~~**Dados suficientes?**~~ — Sim, 6674 msgs em 70 dias, 16 canais, distribuição real.
+   Regex de preço/cupom calibrado em §10.3.
+2. ~~**CDN do Telegram é estável?**~~ — Sim, mas com cache de 3h + ETag (não imutável). Ver §6.
+3. ~~**Entities como fonte de URLs?**~~ — Não. Só 30 entities com URL vs 5788 no texto.
+   Regex no texto é fonte primária; Entities é backup.
+4. ~~**GroupedID / álbuns?**~~ — Zero ocorrências. Não precisa lidar.
+5. ~~**Mensagens com Media=null são erro?**~~ — Não. São mensagens textuais puras (6%,
+   com URLs e cupons).
+
+### ❓ Pendentes
+
+1. **`meli.la` não leva ao produto** — a URL cai em página do afiliado, não do
+   produto. Como extrair o product_id? Opções:
+   - Scraping da página do afiliado para achar o produto linkado
+   - Extrair do contexto da mensagem (se há nome do produto)
+   - Marcar como `unresolved` até ter solução melhor
+2. **AliExpress `s.click.aliexpress.com` cai em landing genérica** — mesmo
+   problema do `meli.la`. Pode ser necessário login + scraping para achar o
+   produto real, ou usar URL interna do Telegram (`Webpage.URL`) quando
+   disponível como fonte canônica.
+3. **Magalu bloqueia com HTTP 403** — Playwright com User-Agent real resolve?
+   Ou precisa de proxy residential IP? Testar antes de implementar.
+4. **Contas de afiliado criadas?** Necessário para testar re-afiliação (Sprint 4)
+5. **Rod funciona sem CGO?** Validar que `go-rod/rod` compila pure Go
+6. **Rate limits dos merchants?** Testar quantas URLs podem ser resolvidas por
+   minuto sem bloqueio (Shopee P1, Amazon P1 primeiro)
+7. **Shopee cashback de moedas: como modelar?** Em §10.3 propus
+   `VirtualCurrency` separado do `Coupon`. Faz sentido ou consolidar?
+8. **`coupon_expired` deve atualizar o Product original?** Propus propagar
+   `expired: true` via ReplyTo. Mas ReplyTo pode ser ausente — nesses casos,
+   usar fuzzy-match por cupom code? (ex.: se cupom `6DO6` foi mencionado em
+   mensagem anterior, marcar aquela como expired).
 
 ---
 
