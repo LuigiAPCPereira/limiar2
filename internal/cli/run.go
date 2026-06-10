@@ -15,15 +15,15 @@ import (
 	"github.com/limiar/collector/internal/storage"
 )
 
-// newRunCmd builds the `run` subcommand: the non-interactive collector service.
-// It uses a JSON-format logger, requires an authenticated session, and shuts
-// down gracefully on SIGTERM/SIGINT within the configured timeout.
+// newRunCmd constrói o subcomando `run`: o serviço coletor não interativo.
+// Ele utiliza um logger no formato JSON, requer uma sessão autenticada e é
+// encerrado de forma graciosa (graceful shutdown) com SIGTERM/SIGINT dentro do tempo limite configurado.
 func newRunCmd(p Provider) *cobra.Command {
 	var withDashboard bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "Run the collector service (non-interactive, production-ready)",
+		Short: "Executar o serviço coletor (não interativo, pronto para produção)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := p.Config()

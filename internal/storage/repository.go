@@ -9,15 +9,15 @@ import (
 	apperrors "github.com/limiar/collector/internal/errors"
 )
 
-// ErrNoSession indicates no session row is present in the database.
-var ErrNoSession = stderrors.New("no session stored")
+// ErrNoSession indica que não há linha (row) de sessão presente no banco de dados.
+var ErrNoSession = stderrors.New("nenhuma sessão armazenada")
 
-// dbTimeLayout is the textual datetime format used by the schema's
-// datetime('now') defaults.
+// dbTimeLayout é o formato de data/hora textual usado pelos padrões (defaults)
+// datetime('now') do schema.
 const dbTimeLayout = "2006-01-02 15:04:05"
 
-// RawMessage is a captured Telegram message payload awaiting downstream
-// processing. Payload holds the raw gotd/td update serialized as JSON.
+// RawMessage é um payload de mensagem capturada do Telegram aguardando processamento
+// posterior (downstream). Payload contém o update bruto do gotd/td serializado como JSON.
 type RawMessage struct {
 	ID            int64
 	ChannelID     int64
@@ -27,7 +27,7 @@ type RawMessage struct {
 	SchemaVersion int
 }
 
-// Channel is a monitored Telegram channel and its collection cursor.
+// Channel é um canal monitorado do Telegram e seu cursor de coleta.
 type Channel struct {
 	ID              int64
 	Username        string
@@ -38,7 +38,7 @@ type Channel struct {
 	LastCollectedAt time.Time
 }
 
-// Peer is a cached Telegram peer (channel, user, or chat) with its access hash.
+// Peer é um peer do Telegram armazenado em cache (canal, usuário ou chat) com seu hash de acesso.
 type Peer struct {
 	ID         int64
 	AccessHash int64
@@ -47,8 +47,8 @@ type Peer struct {
 	UpdatedAt  time.Time
 }
 
-// Repository centralizes every SQL statement against the Tursogo database.
-// Recurring writes use prepared statements. All placeholders are ?.
+// Repository centraliza toda instrução SQL contra o banco de dados Tursogo.
+// Escritas recorrentes usam prepared statements (instruções preparadas). Todos os marcadores (placeholders) são ?.
 type Repository struct {
 	db *sql.DB
 
@@ -56,7 +56,7 @@ type Repository struct {
 	stmtSavePeer    *sql.Stmt
 }
 
-// NewRepository prepares recurring statements and returns a ready Repository.
+// NewRepository prepara as instruções recorrentes e retorna um Repository pronto para uso.
 func NewRepository(db *sql.DB) (*Repository, error) {
 	saveMsg, err := db.Prepare(`
 		INSERT INTO raw_messages (channel_id, message_id, payload, received_at, schema_version)
@@ -80,14 +80,14 @@ func NewRepository(db *sql.DB) (*Repository, error) {
 	return &Repository{db: db, stmtSaveMessage: saveMsg, stmtSavePeer: savePeer}, nil
 }
 
-// Close releases all prepared statements.
+// Close libera todas as instruções preparadas (prepared statements).
 func (r *Repository) Close() error {
 	return stderrors.Join(r.stmtSaveMessage.Close(), r.stmtSavePeer.Close())
 }
 
 // --- Session ---
 
-// SaveSession upserts the single session row (id is constrained to 1).
+// SaveSession insere ou atualiza (upsert) a única linha (row) de sessão (o id é restrito a 1).
 func (r *Repository) SaveSession(ctx context.Context, data []byte) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO sessions (id, data, updated_at) VALUES (1, ?, ?)
@@ -99,7 +99,7 @@ func (r *Repository) SaveSession(ctx context.Context, data []byte) error {
 	return nil
 }
 
-// LoadSession returns the stored session bytes, or ErrNoSession if absent.
+// LoadSession retorna os bytes da sessão armazenada, ou ErrNoSession se estiver ausente.
 func (r *Repository) LoadSession(ctx context.Context) ([]byte, error) {
 	var data []byte
 	err := r.db.QueryRowContext(ctx, `SELECT data FROM sessions WHERE id = 1`).Scan(&data)
@@ -112,7 +112,7 @@ func (r *Repository) LoadSession(ctx context.Context) ([]byte, error) {
 	return data, nil
 }
 
-// CountSessions returns the number of session rows (0 or 1).
+// CountSessions retorna o número de linhas (rows) de sessão (0 ou 1).
 func (r *Repository) CountSessions(ctx context.Context) (int64, error) {
 	var n int64
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&n); err != nil {
@@ -123,7 +123,7 @@ func (r *Repository) CountSessions(ctx context.Context) (int64, error) {
 
 // --- Peers ---
 
-// SavePeer inserts or updates a peer by id.
+// SavePeer insere ou atualiza um peer por id.
 func (r *Repository) SavePeer(ctx context.Context, p *Peer) error {
 	_, err := r.stmtSavePeer.ExecContext(ctx,
 		p.ID, p.AccessHash, p.Type, nullString(p.Username),
@@ -134,7 +134,7 @@ func (r *Repository) SavePeer(ctx context.Context, p *Peer) error {
 	return nil
 }
 
-// LoadPeers returns all cached peers.
+// LoadPeers retorna todos os peers em cache.
 func (r *Repository) LoadPeers(ctx context.Context) ([]*Peer, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, access_hash, type, username, updated_at FROM peers`)
@@ -165,7 +165,7 @@ func (r *Repository) LoadPeers(ctx context.Context) ([]*Peer, error) {
 
 // --- Channels ---
 
-// AddChannel inserts a monitored channel.
+// AddChannel insere um canal monitorado.
 func (r *Repository) AddChannel(ctx context.Context, ch *Channel) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO channels (id, username, title, active)
@@ -178,8 +178,8 @@ func (r *Repository) AddChannel(ctx context.Context, ch *Channel) error {
 	return nil
 }
 
-// RemoveChannel deletes a channel by username, returning ErrChannelNotFound if
-// no such channel exists.
+// RemoveChannel exclui um canal pelo username, retornando ErrChannelNotFound se
+// tal canal não existir.
 func (r *Repository) RemoveChannel(ctx context.Context, username string) error {
 	res, err := r.db.ExecContext(ctx, `DELETE FROM channels WHERE username = ?`, username)
 	if err != nil {
@@ -195,7 +195,7 @@ func (r *Repository) RemoveChannel(ctx context.Context, username string) error {
 	return nil
 }
 
-// ListChannels returns all monitored channels ordered by id.
+// ListChannels retorna todos os canais monitorados ordenados pelo id.
 func (r *Repository) ListChannels(ctx context.Context) ([]*Channel, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, username, title, active, added_at, last_message_id, last_collected_at
@@ -219,7 +219,7 @@ func (r *Repository) ListChannels(ctx context.Context) ([]*Channel, error) {
 	return channels, nil
 }
 
-// GetChannel returns a single channel by id, or ErrChannelNotFound.
+// GetChannel retorna um único canal pelo id, ou ErrChannelNotFound.
 func (r *Repository) GetChannel(ctx context.Context, id int64) (*Channel, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, username, title, active, added_at, last_message_id, last_collected_at
@@ -234,7 +234,7 @@ func (r *Repository) GetChannel(ctx context.Context, id int64) (*Channel, error)
 	return ch, nil
 }
 
-// UpdateChannelLastMessage advances a channel's collection cursor.
+// UpdateChannelLastMessage avança o cursor de coleta de um canal.
 func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE channels SET last_message_id = ?, last_collected_at = ? WHERE id = ?`,
@@ -247,11 +247,11 @@ func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, me
 
 // --- Raw Messages ---
 
-// SaveRawMessage persists a captured message. Duplicate (channel_id,
-// message_id) pairs are silently ignored via ON CONFLICT DO NOTHING. The
-// returned inserted flag is true when a new row was written and false when
-// the message was already present (a duplicate). This lets callers produce
-// accurate new-vs-duplicate observability counts.
+// SaveRawMessage persiste uma mensagem capturada. Pares (channel_id, message_id)
+// duplicados são ignorados silenciosamente via ON CONFLICT DO NOTHING. A
+// flag inserted (inserida) retornada é verdadeira quando uma nova linha foi escrita e falsa quando
+// a mensagem já estava presente (uma duplicata). Isso permite que os chamadores produzam
+// contagens precisas de observabilidade "novo vs duplicado".
 func (r *Repository) SaveRawMessage(ctx context.Context, msg *RawMessage) (inserted bool, err error) {
 	res, err := r.stmtSaveMessage.ExecContext(ctx,
 		msg.ChannelID, msg.MessageID, string(msg.Payload),
@@ -261,14 +261,14 @@ func (r *Repository) SaveRawMessage(ctx context.Context, msg *RawMessage) (inser
 	}
 	affected, err := res.RowsAffected()
 	if err != nil {
-		// RowsAffected errors are rare and driver-specific; treat as "unknown"
-		// rather than failing the save — the message was persisted either way.
+		// Erros de RowsAffected são raros e específicos do driver; trate como "desconhecido"
+		// em vez de falhar o salvamento — a mensagem foi persistida de qualquer forma.
 		return true, nil
 	}
 	return affected > 0, nil
 }
 
-// CountRawMessages returns the total number of stored raw messages.
+// CountRawMessages retorna o número total de mensagens brutas (raw messages) armazenadas.
 func (r *Repository) CountRawMessages(ctx context.Context) (int64, error) {
 	var n int64
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM raw_messages`).Scan(&n); err != nil {
@@ -277,8 +277,8 @@ func (r *Repository) CountRawMessages(ctx context.Context) (int64, error) {
 	return n, nil
 }
 
-// ListMessages returns recent messages, optionally filtered by channelID.
-// Pass 0 for channelID to list all channels. Results are ordered by received_at DESC.
+// ListMessages retorna mensagens recentes, opcionalmente filtradas pelo channelID.
+// Passe 0 para channelID para listar todos os canais. Os resultados são ordenados por received_at DESC.
 func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, offset int) ([]*RawMessage, error) {
 	query := `SELECT id, channel_id, message_id, payload, received_at, schema_version
 		FROM raw_messages`
@@ -310,14 +310,14 @@ func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, o
 	return messages, nil
 }
 
-// ChannelStats holds message count for a single channel.
+// ChannelStats mantém a contagem de mensagens para um único canal.
 type ChannelStats struct {
 	ChannelID    int64
 	Username     string
 	MessageCount int64
 }
 
-// CountMessagesByChannel returns message counts grouped by channel.
+// CountMessagesByChannel retorna as contagens de mensagens agrupadas por canal.
 func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]ChannelStats, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT c.id, c.username, COUNT(m.id) as msg_count
@@ -344,7 +344,7 @@ func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]ChannelStats
 	return stats, nil
 }
 
-// GetMessageByID returns a single message by its database ID.
+// GetMessageByID retorna uma única mensagem pelo seu ID no banco de dados.
 func (r *Repository) GetMessageByID(ctx context.Context, id int64) (*RawMessage, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, channel_id, message_id, payload, received_at, schema_version
@@ -361,7 +361,7 @@ func (r *Repository) GetMessageByID(ctx context.Context, id int64) (*RawMessage,
 
 // --- helpers ---
 
-// scanner abstracts *sql.Row and *sql.Rows for shared channel scanning.
+// scanner abstrai *sql.Row e *sql.Rows para escaneamento (scanning) compartilhado de canais.
 type scanner interface {
 	Scan(dest ...any) error
 }
@@ -411,7 +411,7 @@ func parseDBTime(s string) time.Time {
 	}
 	t, err := time.Parse(dbTimeLayout, s)
 	if err != nil {
-		// Fall back to RFC3339 in case a caller stored that form.
+		// Fallback para RFC3339 caso um chamador tenha armazenado dessa forma.
 		if t2, err2 := time.Parse(time.RFC3339, s); err2 == nil {
 			return t2
 		}

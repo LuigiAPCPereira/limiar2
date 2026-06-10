@@ -6,29 +6,29 @@ import (
 	"testing"
 )
 
-// TestWizardCreation verifica que o wizard pode ser instanciado
+// TestWizardCreation verifica se o assistente (wizard) pode ser instanciado
 func TestWizardCreation(t *testing.T) {
 	w := NewWizard()
 	if w == nil {
-		t.Fatal("NewWizard() returned nil")
+		t.Fatal("NewWizard() retornou nil")
 	}
 	if w.reader == nil {
-		t.Fatal("wizard reader is nil")
+		t.Fatal("reader do wizard é nil")
 	}
 }
 
-// TestWizardAppIDValidation verifica validação de App ID
+// TestWizardAppIDValidation verifica a validação do App ID
 func TestWizardAppIDValidation(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
 		wantErr bool
 	}{
-		{"empty input", "", true},
-		{"non-numeric", "abc", true},
+		{"entrada vazia", "", true},
+		{"não numérico", "abc", true},
 		{"zero", "0", true},
-		{"negative", "-123", true},
-		{"valid", "12345", false},
+		{"negativo", "-123", true},
+		{"válido", "12345", false},
 	}
 
 	for _, tt := range tests {
@@ -51,13 +51,13 @@ func TestWizardAppIDValidation(t *testing.T) {
 			_, err = wizard.promptAppID()
 
 			if (err != nil) != tt.wantErr {
-				t.Errorf("promptAppID() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("promptAppID() erro = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestSaveEnvFile verifica que o .env é criado com permissões 0600
+// TestSaveEnvFile verifica se o .env é criado com permissões 0600
 func TestSaveEnvFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
@@ -67,24 +67,24 @@ func TestSaveEnvFile(t *testing.T) {
 	wizard := NewWizard()
 	err := wizard.saveEnvFile(31620060, "test_hash_abc123")
 	if err != nil {
-		t.Fatalf("saveEnvFile failed: %v", err)
+		t.Fatalf("saveEnvFile falhou: %v", err)
 	}
 
 	envPath := filepath.Join(tmpDir, ".env")
 	info, err := os.Stat(envPath)
 	if err != nil {
-		t.Fatalf("expected .env to exist: %v", err)
+		t.Fatalf("esperado que o .env existisse: %v", err)
 	}
 
-	// Verify permissions are 0600
+	// Verifica se as permissões são 0600
 	if mode := info.Mode().Perm(); mode != 0600 {
-		t.Errorf("expected permissions 0600, got %o", mode)
+		t.Errorf("esperado permissões 0600, obteve %o", mode)
 	}
 
-	// Verify content
+	// Verifica o conteúdo
 	content, err := os.ReadFile(envPath)
 	if err != nil {
-		t.Fatalf("failed to read .env: %v", err)
+		t.Fatalf("falha ao ler o .env: %v", err)
 	}
 	expectedContains := []string{
 		"LIMIAR_APP_ID=31620060",
@@ -92,12 +92,12 @@ func TestSaveEnvFile(t *testing.T) {
 	}
 	for _, s := range expectedContains {
 		if !indexOfBytes(content, s) {
-			t.Errorf(".env missing line: %q\nGot:\n%s", s, content)
+			t.Errorf(".env faltando linha: %q\nObteve:\n%s", s, content)
 		}
 	}
 }
 
-// indexOfBytes returns true if needle is contained in haystack.
+// indexOfBytes retorna true se needle estiver contido em haystack.
 func indexOfBytes(haystack []byte, needle string) bool {
 	n := []byte(needle)
 	if len(n) == 0 {
@@ -123,7 +123,7 @@ func indexOfBytes(haystack []byte, needle string) bool {
 // de como testar manualmente (veja comentário).
 func TestReadPasswordMasked_TTYOnly(t *testing.T) {
 	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY-dependent test in CI; run locally with: go test -run TestReadPasswordMasked")
+		t.Skip("pulando teste dependente de TTY no CI; rode localmente com: go test -run TestReadPasswordMasked")
 	}
-	t.Skip("requires interactive TTY; covered by manual end-to-end test (see wizard smoke test script)")
+	t.Skip("requer TTY interativo; coberto por teste e2e manual (veja o script smoke test do wizard)")
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/limiar/collector/internal/config"
 )
 
-// valid returns a Config that passes Validate, as a base for mutation in tests.
+// valid retorna um Config que passa no Validate, como base para mutação nos testes.
 func valid() *config.Config {
 	return &config.Config{
 		AppID:                12345,
@@ -30,64 +30,64 @@ func valid() *config.Config {
 
 func TestValidAcceptsBaseline(t *testing.T) {
 	if err := valid().Validate(); err != nil {
-		t.Fatalf("baseline config should be valid, got: %v", err)
+		t.Fatalf("configuração base deve ser válida, obteve: %v", err)
 	}
 }
 
-// Feature: limiar-collector, Property 12: Config Defaults Applied.
-// Defaults() must populate documented defaults for optional fields.
+// Funcionalidade: limiar-collector, Propriedade 12: Config Defaults Applied (Padrões de Configuração Aplicados).
+// Defaults() deve preencher os padrões documentados para campos opcionais.
 func TestProperty12Defaults(t *testing.T) {
 	c := &config.Config{}
 	c.ApplyDefaults()
 
 	if c.DBPath != "./limiar.db" {
-		t.Errorf("DBPath default = %q, want ./limiar.db", c.DBPath)
+		t.Errorf("DBPath padrão = %q, esperado ./limiar.db", c.DBPath)
 	}
 	if c.LogLevel != "info" {
-		t.Errorf("LogLevel default = %q, want info", c.LogLevel)
+		t.Errorf("LogLevel padrão = %q, esperado info", c.LogLevel)
 	}
 	if c.LogFormat != "pretty" {
-		t.Errorf("LogFormat default = %q, want pretty", c.LogFormat)
+		t.Errorf("LogFormat padrão = %q, esperado pretty", c.LogFormat)
 	}
 	if c.ShutdownTimeout != 15 {
-		t.Errorf("ShutdownTimeout default = %d, want 15", c.ShutdownTimeout)
+		t.Errorf("ShutdownTimeout padrão = %d, esperado 15", c.ShutdownTimeout)
 	}
 	if c.MaxRetries != 10 {
-		t.Errorf("MaxRetries default = %d, want 10", c.MaxRetries)
+		t.Errorf("MaxRetries padrão = %d, esperado 10", c.MaxRetries)
 	}
 	if c.IOTimeout != 30*time.Second {
-		t.Errorf("IOTimeout default = %v, want 30s", c.IOTimeout)
+		t.Errorf("IOTimeout padrão = %v, esperado 30s", c.IOTimeout)
 	}
 	if c.DispatcherBufferSize != 256 {
-		t.Errorf("DispatcherBufferSize default = %d, want 256", c.DispatcherBufferSize)
+		t.Errorf("DispatcherBufferSize padrão = %d, esperado 256", c.DispatcherBufferSize)
 	}
 	if c.DBWriterBufferSize != 512 {
-		t.Errorf("DBWriterBufferSize default = %d, want 512", c.DBWriterBufferSize)
+		t.Errorf("DBWriterBufferSize padrão = %d, esperado 512", c.DBWriterBufferSize)
 	}
 	if c.HistoryMax != 5000 {
-		t.Errorf("HistoryMax default = %d, want 5000", c.HistoryMax)
+		t.Errorf("HistoryMax padrão = %d, esperado 5000", c.HistoryMax)
 	}
 	if c.HistoryMaxDays != 30 {
-		t.Errorf("HistoryMaxDays default = %d, want 30", c.HistoryMaxDays)
+		t.Errorf("HistoryMaxDays padrão = %d, esperado 30", c.HistoryMaxDays)
 	}
 }
 
-// Feature: limiar-collector, Property 11: Config Validation Collects All Errors.
-// For N missing/invalid required fields, Validate must reference all N.
+// Funcionalidade: limiar-collector, Propriedade 11: Config Validation Collects All Errors (A Validação de Configuração Coleta Todos os Erros).
+// Para N campos obrigatórios ausentes/inválidos, Validate deve referenciar todos os N.
 func TestProperty11ValidateCollectsAllErrors(t *testing.T) {
 	c := valid()
-	c.AppID = 0       // invalid (required)
-	c.APIHash = ""    // invalid (required)
-	c.LogLevel = "xx" // invalid enum
+	c.AppID = 0       // inválido (obrigatório)
+	c.APIHash = ""    // inválido (obrigatório)
+	c.LogLevel = "xx" // enumeração inválida
 
 	err := c.Validate()
 	if err == nil {
-		t.Fatal("expected aggregated validation error, got nil")
+		t.Fatal("esperava erro de validação agrupado, obteve nil")
 	}
 	msg := err.Error()
 	for _, field := range []string{"app_id", "api_hash", "log_level"} {
 		if !strings.Contains(msg, field) {
-			t.Errorf("aggregated error missing %q; got: %s", field, msg)
+			t.Errorf("erro agrupado faltando %q; obteve: %s", field, msg)
 		}
 	}
 }
@@ -98,14 +98,14 @@ func TestValidateMissingRequiredFields(t *testing.T) {
 	c.APIHash = ""
 	err := c.Validate()
 	if err == nil {
-		t.Fatal("expected error for missing AppID and APIHash")
+		t.Fatal("esperava erro por falta de AppID e APIHash")
 	}
 	if !strings.Contains(err.Error(), "app_id") || !strings.Contains(err.Error(), "api_hash") {
-		t.Errorf("error should name both missing fields: %s", err.Error())
+		t.Errorf("o erro deve nomear ambos os campos ausentes: %s", err.Error())
 	}
 }
 
-// Feature: limiar-collector, Property 13: Config Field Validation Rejects Invalid Values.
+// Funcionalidade: limiar-collector, Propriedade 13: Config Field Validation Rejects Invalid Values (Validação de Campo de Configuração Rejeita Valores Inválidos).
 func TestProperty13RejectsInvalidValues(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		c := valid()
@@ -138,7 +138,7 @@ func TestProperty13RejectsInvalidValues(t *testing.T) {
 		}
 
 		if err := c.Validate(); err == nil {
-			t.Fatalf("expected validation error for out-of-range value, config=%+v", c)
+			t.Fatalf("esperava erro de validação para valor fora do intervalo, config=%+v", c)
 		}
 	})
 }
@@ -148,7 +148,7 @@ func TestValidateAcceptsAllValidLogLevels(t *testing.T) {
 		c := valid()
 		c.LogLevel = lvl
 		if err := c.Validate(); err != nil {
-			t.Errorf("LogLevel %q should be valid: %v", lvl, err)
+			t.Errorf("LogLevel %q deveria ser válido: %v", lvl, err)
 		}
 	}
 }
@@ -158,20 +158,20 @@ func TestValidateAcceptsAllValidLogFormats(t *testing.T) {
 		c := valid()
 		c.LogFormat = f
 		if err := c.Validate(); err != nil {
-			t.Errorf("LogFormat %q should be valid: %v", f, err)
+			t.Errorf("LogFormat %q deveria ser válido: %v", f, err)
 		}
 	}
 }
 
-// Feature: limiar-collector, Property 14: Sensitive Data Masking.
-// For any APIHash, Config.String() must not contain it verbatim.
+// Funcionalidade: limiar-collector, Propriedade 14: Sensitive Data Masking (Ocultação de Dados Sensíveis).
+// Para qualquer APIHash, Config.String() não deve contê-lo literalmente.
 func TestProperty14StringMasksAPIHash(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		hash := rapid.StringMatching(`[a-f0-9]{8,64}`).Draw(t, "api_hash")
 		c := valid()
 		c.APIHash = hash
 		if strings.Contains(c.String(), hash) {
-			t.Fatalf("Config.String() leaked APIHash %q: %s", hash, c.String())
+			t.Fatalf("Config.String() vazou APIHash %q: %s", hash, c.String())
 		}
 	})
 }
@@ -180,9 +180,9 @@ func TestStringMasksButShowsOtherFields(t *testing.T) {
 	c := valid()
 	s := c.String()
 	if !strings.Contains(s, "./limiar.db") {
-		t.Errorf("String() should show non-sensitive DBPath: %s", s)
+		t.Errorf("String() deveria mostrar o DBPath (não sensível): %s", s)
 	}
 	if strings.Contains(s, c.APIHash) {
-		t.Errorf("String() leaked APIHash: %s", s)
+		t.Errorf("String() vazou APIHash: %s", s)
 	}
 }

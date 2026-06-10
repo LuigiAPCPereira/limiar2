@@ -17,50 +17,50 @@ import (
 	"github.com/limiar/collector/internal/storage"
 )
 
-// TelegramClient is the Facade hiding all gotd/td complexity (session, peers,
-// reconnection, auth) behind a small interface. No gotd/td type appears here,
-// so the CLI and collector layers never import gotd/td.
+// TelegramClient é a fachada (Facade) que esconde toda a complexidade do gotd/td (sessão, peers,
+// reconexão, auth) por trás de uma interface pequena. Nenhum tipo do gotd/td aparece aqui,
+// para que as camadas CLI e collector nunca importem o gotd/td.
 type TelegramClient interface {
-	// Auth runs the interactive authentication flow if not already authorized.
+	// Auth executa o fluxo interativo de autenticação, se ainda não estiver autorizado.
 	Auth(ctx context.Context) error
-	// IsAuthenticated reports whether a valid session is present.
+	// IsAuthenticated relata se uma sessão válida está presente.
 	IsAuthenticated(ctx context.Context) (bool, error)
-	// LoadPeers loads persisted peers from storage into the in-memory cache.
+	// LoadPeers carrega peers persistidos do storage para o cache em memória.
 	LoadPeers(ctx context.Context) error
-	// AddUpdateHandler registers an observer for incoming updates.
+	// AddUpdateHandler registra um observador para atualizações recebidas.
 	AddUpdateHandler(h UpdateHandler)
-	// ResolveChannel resolves a @username to a Peer with its access hash and
-	// persists it to the peer store.
+	// ResolveChannel resolve um @username para um Peer com o seu hash de acesso e
+	// o persiste no armazenamento de peers.
 	ResolveChannel(ctx context.Context, username string) (*storage.Peer, error)
-	// ResolveChannelChecked verifies authentication and resolves a channel in
-	// a single connection lifecycle. Returns ErrNotAuthenticated if the
-	// session is not authorized.
+	// ResolveChannelChecked verifica a autenticação e resolve um canal em
+	// um único ciclo de vida de conexão. Retorna ErrNotAuthenticated se a
+	// sessão não estiver autorizada.
 	ResolveChannelChecked(ctx context.Context, username string) (*storage.Peer, error)
-	// FetchHistory returns up to limit recent raw message payloads (newest
-	// first) for the channel, each already serialized to JSON. The access hash
-	// is looked up from the peer store; if the peer is unknown, it returns an
-	// error. minID filters out messages with id <= minID (0 means no filter).
+	// FetchHistory retorna até `limit` payloads brutos de mensagens recentes (as mais novas
+	// primeiro) para o canal, cada uma já serializada para JSON. O hash de acesso
+	// é buscado no armazenamento de peers; se o peer for desconhecido, ele retorna um
+	// erro. minID filtra mensagens com id <= minID (0 significa sem filtro).
 	FetchHistory(ctx context.Context, channelID int64, minID int64, limit int) ([]HistoryMessage, error)
-	// FetchHistoryWithOffset returns up to limit raw message payloads with
-	// id < offsetID for the channel (newest-first when offsetID == 0). It is
-	// the pagination primitive used by the collector's walk-backward backfill:
-	// each subsequent call uses offsetID = min(id) of the previous page.
+	// FetchHistoryWithOffset retorna até `limit` payloads brutos de mensagens com
+	// id < offsetID para o canal (as mais novas primeiro quando offsetID == 0). É a
+	// primitiva de paginação usada pelo backfill retroativo do collector:
+	// cada chamada subsequente usa offsetID = min(id) da página anterior.
 	FetchHistoryWithOffset(ctx context.Context, channelID int64, offsetID int64, limit int) ([]HistoryMessage, error)
-	// Run connects and blocks, dispatching updates until ctx is cancelled.
+	// Run conecta e bloqueia, despachando atualizações até que ctx seja cancelado.
 	Run(ctx context.Context) error
 }
 
-// HistoryMessage is a single historical message captured during backfill: its
-// Telegram message id, the send timestamp (Date), and the raw JSON payload.
-// Date is used by the collector to stop paginating when messages are older
-// than the configured temporal cutoff (LIMIAR_HISTORY_MAX_DAYS).
+// HistoryMessage é uma única mensagem histórica capturada durante o backfill: seu
+// id de mensagem do Telegram, o timestamp de envio (Date), e o payload JSON bruto.
+// Date é usado pelo collector para parar de paginar quando as mensagens são mais
+// velhas que o limite temporal configurado (LIMIAR_HISTORY_MAX_DAYS).
 type HistoryMessage struct {
 	MessageID int64
 	Date      time.Time
 	Payload   []byte
 }
 
-// BackoffConfig parameterizes exponential reconnection backoff.
+// BackoffConfig parametriza o backoff exponencial de reconexão.
 type BackoffConfig struct {
 	BaseDelay     time.Duration
 	Multiplier    float64
@@ -69,8 +69,8 @@ type BackoffConfig struct {
 	MaxRetries    int
 }
 
-// DefaultBackoff returns the spec's reconnection policy: 1s base, 2x, 10%
-// jitter, 5m ceiling.
+// DefaultBackoff retorna a política de reconexão da especificação: 1s base, 2x, 10%
+// de jitter, teto de 5m.
 func DefaultBackoff(maxRetries int) BackoffConfig {
 	return BackoffConfig{
 		BaseDelay:     time.Second,
@@ -81,8 +81,8 @@ func DefaultBackoff(maxRetries int) BackoffConfig {
 	}
 }
 
-// CalculateBackoff returns the delay for a given attempt, or
-// ErrMaxRetriesExceeded once attempts are exhausted.
+// CalculateBackoff retorna o atraso (delay) para uma dada tentativa, ou
+// ErrMaxRetriesExceeded quando as tentativas se esgotam.
 func CalculateBackoff(attempt int, cfg BackoffConfig, rng *rand.Rand) (time.Duration, error) {
 	if attempt >= cfg.MaxRetries {
 		return 0, apperrors.ErrMaxRetriesExceeded
@@ -99,9 +99,9 @@ func CalculateBackoff(attempt int, cfg BackoffConfig, rng *rand.Rand) (time.Dura
 	return time.Duration(delay), nil
 }
 
-// Client is the sole implementation of TelegramClient and the only type that
-// imports gotd/td. It owns the gotd client, the session store, the peer cache,
-// and the dispatcher.
+// Client é a única implementação de TelegramClient e o único tipo que
+// importa gotd/td. Ele possui o client gotd, o armazenamento de sessão, o cache de peers,
+// e o dispatcher.
 type Client struct {
 	appID      int
 	appHash    string
@@ -118,8 +118,8 @@ type Client struct {
 
 var _ TelegramClient = (*Client)(nil)
 
-// NewClient constructs the facade. The gotd client is lazily created on each
-// connection so that the same instance can be reused after disconnection.
+// NewClient constrói a fachada (facade). O client gotd é criado de forma preguiçosa (lazily)
+// a cada conexão para que a mesma instância possa ser reutilizada após a desconexão.
 func NewClient(
 	appID int,
 	appHash string,
@@ -147,9 +147,9 @@ func NewClient(
 	return c
 }
 
-// newGotdClient creates a fresh gotd client using the current session and
-// dispatcher. Each call returns a new instance because gotd clients cannot be
-// reused after Run returns.
+// newGotdClient cria um novo client gotd usando a sessão e o dispatcher atuais.
+// Cada chamada retorna uma nova instância porque clients gotd não podem ser
+// reutilizados após o retorno de Run.
 func (c *Client) newGotdClient() *telegram.Client {
 	return telegram.NewClient(c.appID, c.appHash, telegram.Options{
 		SessionStorage: c.session,
@@ -157,13 +157,13 @@ func (c *Client) newGotdClient() *telegram.Client {
 	})
 }
 
-// AddUpdateHandler registers an observer with the dispatcher.
+// AddUpdateHandler registra um observador no dispatcher.
 func (c *Client) AddUpdateHandler(h UpdateHandler) {
 	c.dispatcher.Register(h)
 }
 
-// onUpdate is the gotd UpdateHandler entrypoint: it extracts routing metadata
-// and forwards the update (with metadata) to the dispatcher for fan-out.
+// onUpdate é o ponto de entrada (entrypoint) do gotd UpdateHandler: ele extrai metadados
+// de roteamento e encaminha a atualização (com metadados) ao dispatcher para fan-out.
 func (c *Client) onUpdate(ctx context.Context, u tg.UpdatesClass) error {
 	// Early return no hot path. Extrai o metadata ANTES de
 	// codificar o payload. Evita alocações pesadas do json.Marshal
@@ -176,7 +176,7 @@ func (c *Client) onUpdate(ctx context.Context, u tg.UpdatesClass) error {
 	payload, err := encodeUpdate(u)
 	if err != nil {
 		c.log.Error("🔧 Falha ao codificar update", "erro", err)
-		return nil // never crash the recv loop on a single bad update
+		return nil // nunca encerre o loop de recebimento devido a uma única atualização ruim
 	}
 
 	c.dispatcher.Dispatch(ctx, Update{
@@ -187,8 +187,8 @@ func (c *Client) onUpdate(ctx context.Context, u tg.UpdatesClass) error {
 	return nil
 }
 
-// IsAuthenticated reports whether the current session is authorized. It runs
-// inside the gotd client lifecycle because auth status is a network call.
+// IsAuthenticated relata se a sessão atual está autorizada. Ele roda
+// dentro do ciclo de vida do client gotd porque o status de autenticação é uma chamada de rede.
 func (c *Client) IsAuthenticated(ctx context.Context) (bool, error) {
 	var authorized bool
 	err := c.runOnce(ctx, func(ctx context.Context) error {
@@ -205,12 +205,12 @@ func (c *Client) IsAuthenticated(ctx context.Context) (bool, error) {
 	return authorized, nil
 }
 
-// LoadPeers loads persisted peers from storage into the in-memory cache.
+// LoadPeers carrega os peers persistidos do storage para o cache em memória.
 func (c *Client) LoadPeers(ctx context.Context) error {
 	return c.peers.LoadFromDB(ctx)
 }
 
-// Auth runs the interactive flow if the session is not already authorized.
+// Auth executa o fluxo interativo se a sessão ainda não estiver autorizada.
 func (c *Client) Auth(ctx context.Context) error {
 	fmt.Fprintln(os.Stdout, "\n  📡 Conectando ao Telegram...")
 	return c.runOnce(ctx, func(ctx context.Context) error {
@@ -248,7 +248,7 @@ func (c *Client) doResolveChannel(ctx context.Context, username string) (*storag
 	return peer, nil
 }
 
-// ResolveChannel resolves a username to a Peer and caches it.
+// ResolveChannel resolve um username para um Peer e o armazena em cache.
 func (c *Client) ResolveChannel(ctx context.Context, username string) (*storage.Peer, error) {
 	username = NormalizeUsername(username)
 	var peer *storage.Peer
@@ -266,8 +266,8 @@ func (c *Client) ResolveChannel(ctx context.Context, username string) (*storage.
 	return peer, nil
 }
 
-// ResolveChannelChecked verifies authentication and resolves a channel in a
-// single connection lifecycle, avoiding the double-Run problem.
+// ResolveChannelChecked verifica a autenticação e resolve um canal em um
+// único ciclo de vida de conexão, evitando o problema de double-Run.
 func (c *Client) ResolveChannelChecked(ctx context.Context, username string) (*storage.Peer, error) {
 	username = NormalizeUsername(username)
 	var peer *storage.Peer
@@ -292,22 +292,22 @@ func (c *Client) ResolveChannelChecked(ctx context.Context, username string) (*s
 	return peer, nil
 }
 
-// FetchHistory backfills recent messages for a channel. minID excludes
-// messages with id <= minID, so repeated runs only fetch what is new.
+// FetchHistory faz o backfill de mensagens recentes de um canal. minID exclui
+// mensagens com id <= minID, para que execuções repetidas busquem apenas o que é novo.
 func (c *Client) FetchHistory(ctx context.Context, channelID int64, minID int64, limit int) ([]HistoryMessage, error) {
 	return c.fetchHistory(ctx, channelID, minID, 0, limit)
 }
 
-// FetchHistoryWithOffset fetches up to limit messages with id < offsetID
-// (newest-first when offsetID == 0). It is the pagination primitive used by
-// the collector's walk-backward backfill.
+// FetchHistoryWithOffset busca até 'limit' mensagens com id < offsetID
+// (as mais novas primeiro quando offsetID == 0). É a primitiva de paginação usada
+// pelo backfill retroativo (walk-backward) do collector.
 func (c *Client) FetchHistoryWithOffset(ctx context.Context, channelID int64, offsetID int64, limit int) ([]HistoryMessage, error) {
 	return c.fetchHistory(ctx, channelID, 0, offsetID, limit)
 }
 
-// fetchHistory is the shared implementation for FetchHistory and
-// FetchHistoryWithOffset. At most one of minID/offsetID should be non-zero;
-// if both are zero, the newest `limit` messages are returned.
+// fetchHistory é a implementação compartilhada para FetchHistory e
+// FetchHistoryWithOffset. No máximo um de minID/offsetID deve ser não-zero;
+// se ambos forem zero, as `limit` mensagens mais novas serão retornadas.
 func (c *Client) fetchHistory(ctx context.Context, channelID int64, minID int64, offsetID int64, limit int) ([]HistoryMessage, error) {
 	peer, ok := c.peers.Get(channelID)
 	if !ok {
@@ -342,8 +342,8 @@ func (c *Client) fetchHistory(ctx context.Context, channelID int64, minID int64,
 	return out, nil
 }
 
-// Run connects and dispatches updates until ctx is cancelled, reconnecting
-// with exponential backoff on connection loss.
+// Run conecta e despacha atualizações até que o contexto (ctx) seja cancelado, reconectando
+// com backoff exponencial em caso de perda de conexão.
 func (c *Client) Run(ctx context.Context) error {
 	c.dispatcher.Start(ctx)
 	defer func() { _ = c.dispatcher.Shutdown(ctx) }()
@@ -352,12 +352,12 @@ func (c *Client) Run(ctx context.Context) error {
 	for {
 		c.tg = c.newGotdClient()
 		err := c.tg.Run(ctx, func(ctx context.Context) error {
-			attempt = 0 // reset on successful connect
+			attempt = 0 // reseta em caso de conexão bem-sucedida
 			<-ctx.Done()
 			return ctx.Err()
 		})
 		if ctx.Err() != nil {
-			return nil // clean shutdown
+			return nil // desligamento limpo
 		}
 		if err != nil {
 			delay, berr := CalculateBackoff(attempt, c.backoff, c.rng)
@@ -375,14 +375,14 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 }
 
-// runOnce connects, runs f once, and disconnects. Used by the one-shot action
-// methods (auth, status, resolve, history).
+// runOnce conecta, executa f uma vez e desconecta. Usado pelos métodos
+// de ação "one-shot" (auth, status, resolve, history).
 func (c *Client) runOnce(ctx context.Context, f func(ctx context.Context) error) error {
 	c.tg = c.newGotdClient()
 	return c.tg.Run(ctx, f)
 }
 
-// sleep waits for d or ctx cancellation. It returns false if ctx was cancelled.
+// sleep aguarda por d ou pelo cancelamento de ctx. Retorna false se ctx for cancelado.
 func sleep(ctx context.Context, d time.Duration) bool {
 	t := time.NewTimer(d)
 	defer t.Stop()
@@ -395,18 +395,18 @@ func sleep(ctx context.Context, d time.Duration) bool {
 }
 
 func NormalizeUsername(u string) string {
-	// Accept t.me links: https://t.me/foo or t.me/foo
+	// Aceitar links t.me: https://t.me/foo ou t.me/foo
 	for _, prefix := range []string{"https://t.me/", "http://t.me/", "t.me/"} {
 		if len(u) > len(prefix) && u[:len(prefix)] == prefix {
 			u = u[len(prefix):]
 			break
 		}
 	}
-	// Strip trailing slash left by some link formats
+	// Remove a barra final deixada por alguns formatos de link
 	for len(u) > 0 && u[len(u)-1] == '/' {
 		u = u[:len(u)-1]
 	}
-	// Strip leading @
+	// Remove o @ inicial
 	for len(u) > 0 && u[0] == '@' {
 		u = u[1:]
 	}

@@ -7,25 +7,25 @@ import (
 	"github.com/limiar/collector/internal/logger"
 )
 
-// Update is a Telegram update with extracted routing metadata (channelID,
-// messageID) and the raw JSON payload. The dispatcher transports Updates from
-// the gotd callback to registered handlers.
+// Update é uma atualização do Telegram com metadados de roteamento extraídos (channelID,
+// messageID) e o payload JSON bruto. O dispatcher transporta Updates do
+// callback do gotd para os handlers registrados.
 type Update struct {
 	ChannelID int64
 	MessageID int64
 	Payload   []byte
 }
 
-// UpdateHandler is the Observer contract: a consumer of Telegram updates.
-// Implementations must be safe for concurrent use.
+// UpdateHandler é o contrato Observer: um consumidor de atualizações do Telegram.
+// As implementações devem ser seguras para uso concorrente.
 type UpdateHandler interface {
 	HandleUpdate(ctx context.Context, update Update) error
 }
 
-// Dispatcher is the Observer that fans incoming updates out to every
-// registered handler. Each handler owns a buffered channel drained by a
-// dedicated goroutine, so a slow handler cannot block its siblings. Handler
-// panics are recovered and logged at the goroutine boundary.
+// Dispatcher é o Observer que distribui (fan-out) as atualizações recebidas para todos
+// os handlers registrados. Cada handler possui um canal com buffer drenado por uma
+// goroutine dedicada, de forma que um handler lento não consiga bloquear os demais.
+// Panics nos handlers são recuperados e registrados no limite da goroutine.
 type Dispatcher struct {
 	bufferSize int
 	log        logger.Logger
@@ -38,9 +38,9 @@ type Dispatcher struct {
 	started bool
 }
 
-// NewDispatcher creates a dispatcher whose per-handler channels hold bufferSize
-// updates. log may be nil (treated as NopLogger). Register handlers before
-// calling Start.
+// NewDispatcher cria um dispatcher cujos canais por handler comportam bufferSize
+// atualizações. log pode ser nil (tratado como NopLogger). Registre os handlers antes
+// de chamar Start.
 func NewDispatcher(bufferSize int, log logger.Logger) *Dispatcher {
 	if log == nil {
 		log = logger.NopLogger{}
@@ -48,15 +48,15 @@ func NewDispatcher(bufferSize int, log logger.Logger) *Dispatcher {
 	return &Dispatcher{bufferSize: bufferSize, log: log}
 }
 
-// Register adds a handler. It must be called before Start.
+// Register adiciona um handler. Deve ser chamado antes de Start.
 func (d *Dispatcher) Register(h UpdateHandler) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.handlers = append(d.handlers, h)
 }
 
-// Start launches one consumer goroutine per registered handler. Calling Start
-// more than once is a no-op.
+// Start inicia uma goroutine consumidora por handler registrado. Chamar Start
+// mais de uma vez não tem efeito (no-op).
 func (d *Dispatcher) Start(ctx context.Context) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -74,8 +74,8 @@ func (d *Dispatcher) Start(ctx context.Context) {
 	}
 }
 
-// consume drains one handler's channel until it is closed, recovering from any
-// panic the handler raises so a single bad update cannot crash the process.
+// consume drena o canal de um handler até que ele seja fechado, recuperando-se de qualquer
+// panic que o handler levante, para que uma única atualização ruim não cause falha (crash) no processo.
 func (d *Dispatcher) consume(ctx context.Context, h UpdateHandler, ch <-chan Update) {
 	defer d.wg.Done()
 	for update := range ch {
@@ -83,7 +83,7 @@ func (d *Dispatcher) consume(ctx context.Context, h UpdateHandler, ch <-chan Upd
 	}
 }
 
-// invoke calls a handler with panic recovery and error logging.
+// invoke chama um handler com recuperação de panic e registro (logging) de erro.
 func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -95,8 +95,8 @@ func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update)
 	}
 }
 
-// Dispatch delivers an update to every handler's channel. It returns once the
-// update is enqueued for all handlers (blocking only if a buffer is full).
+// Dispatch entrega uma atualização para o canal de cada handler. Ele retorna assim que
+// a atualização for enfileirada para todos os handlers (bloqueando apenas se um buffer estiver cheio).
 func (d *Dispatcher) Dispatch(ctx context.Context, update Update) {
 	for _, ch := range d.chans {
 		select {
@@ -107,8 +107,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, update Update) {
 	}
 }
 
-// Shutdown closes all handler channels and waits for every consumer goroutine
-// to drain its buffer and exit.
+// Shutdown fecha todos os canais de handler e aguarda que toda goroutine consumidora
+// drene seu buffer e saia.
 func (d *Dispatcher) Shutdown(_ context.Context) error {
 	d.mu.Lock()
 	if !d.started {

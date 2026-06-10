@@ -13,10 +13,10 @@ func TestPeerStore_Get(t *testing.T) {
 
 	p, ok := ps.Get(123)
 	if ok {
-		t.Errorf("expected Get to return false for non-existent peer, got true")
+		t.Errorf("esperado que Get retornasse falso para peer não existente, obteve verdadeiro")
 	}
 	if p != nil {
-		t.Errorf("expected Get to return nil for non-existent peer, got %+v", p)
+		t.Errorf("esperado que Get retornasse nil para peer não existente, obteve %+v", p)
 	}
 }
 
@@ -35,9 +35,9 @@ func TestPeerStore_Set(t *testing.T) {
 
 	p, ok := ps.Get(123)
 	if !ok {
-		t.Fatalf("expected Get to return true after Set, got false")
+		t.Fatalf("esperado que Get retornasse verdadeiro após Set, obteve falso")
 	}
 	if p != peer {
-		t.Fatalf("expected returned peer pointer to be identical to the set peer pointer")
+		t.Fatalf("esperado que o ponteiro do peer retornado seja idêntico ao ponteiro do peer definido")
 	}
 }

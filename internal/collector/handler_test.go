@@ -12,8 +12,8 @@ import (
 	"github.com/limiar/collector/internal/telegram"
 )
 
-// Feature: limiar-collector, Property 6: NoopClassifier Identity.
-// For any RawMessage, NoopClassifier.Classify returns it unchanged.
+// Funcionalidade: limiar-collector, Propriedade 6: Identidade do NoopClassifier.
+// Para qualquer RawMessage, NoopClassifier.Classify a retorna inalterada.
 func TestProperty6NoopClassifierIdentity(t *testing.T) {
 	c := collector.NoopClassifier{}
 	ctx := context.Background()
@@ -34,9 +34,9 @@ func TestProperty6NoopClassifierIdentity(t *testing.T) {
 	})
 }
 
-// Feature: limiar-collector, Property 5: RawMessage Payload Preservation.
-// The handler adapts an update into a RawMessage whose Payload is the exact
-// bytes it was given; persisting and reading back is byte-identical.
+// Funcionalidade: limiar-collector, Propriedade 5: Preservação do Payload da RawMessage.
+// O handler adapta um update em uma RawMessage cujo Payload corresponde aos
+// mesmos bytes que ele recebeu; a persistência e a leitura de volta são idênticas byte a byte.
 func TestProperty5PayloadPreservation(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()
@@ -50,7 +50,7 @@ func TestProperty5PayloadPreservation(t *testing.T) {
 	h := collector.NewMessageHandler(collector.NoopClassifier{}, writeCh, monitored, nil)
 
 	rapid.Check(t, func(t *rapid.T) {
-		// Build a minimal update envelope the adapter can read.
+		// Constrói um envelope de update mínimo que o adaptador consegue ler.
 		payload := map[string]any{
 			"channel_id": 1,
 			"message_id": rapid.IntRange(1, 1_000_000).Draw(t, "mid"),
@@ -97,9 +97,9 @@ func TestMessageHandlerExtractsChannelAndMessageID(t *testing.T) {
 	}
 }
 
-// Regression: updates with channel_id=0 (DMs, system events, non-channel
-// updates) must be silently discarded. Previously the filter skipped the
-// monitored-channels check when ChannelID==0, letting these through.
+// Regressão: atualizações com channel_id=0 (mensagens diretas (DMs), eventos do sistema, atualizações
+// que não são de canal) devem ser silenciosamente descartadas. Anteriormente, o filtro ignorava a
+// verificação de canais monitorados quando ChannelID==0, deixando-as passar.
 func TestMessageHandlerDiscardsZeroChannelID(t *testing.T) {
 	ctx := context.Background()
 	writeCh := make(chan collector.WriteJob, 4)
@@ -117,8 +117,8 @@ func TestMessageHandlerDiscardsZeroChannelID(t *testing.T) {
 	}
 }
 
-// Regression: updates from channels not in the monitored set must be silently
-// discarded, regardless of ChannelID value.
+// Regressão: atualizações de canais que não estão no conjunto de canais monitorados devem
+// ser silenciosamente descartadas, independentemente do valor de ChannelID.
 func TestMessageHandlerDiscardsNonMonitoredChannel(t *testing.T) {
 	ctx := context.Background()
 	writeCh := make(chan collector.WriteJob, 4)

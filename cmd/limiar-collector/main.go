@@ -1,6 +1,6 @@
-// Command limiar-collector is the Phase 1 Telegram collector. This file is the
-// composition root: it is the ONLY place where concrete storage, telegram,
-// logger, and collector dependencies are constructed and wired together.
+// Command limiar-collector é o coletor do Telegram da Fase 1. Este arquivo é a
+// raiz de composição (composition root): é o ÚNICO lugar onde as dependências concretas
+// de storage, telegram, logger e collector são construídas e conectadas entre si.
 package main
 
 import (
@@ -18,21 +18,21 @@ import (
 	"github.com/limiar/collector/internal/telegram"
 )
 
-// provider is the concrete cli.Provider: it owns all dependency construction.
+// provider é a implementação concreta de cli.Provider: ele possui toda a construção de dependências.
 type provider struct {
 	cfg *config.Config
 }
 
-// Config returns the validated configuration.
+// Config retorna a configuração validada.
 func (p *provider) Config() *config.Config { return p.cfg }
 
-// Logger builds a SlogLogger at the configured level in the requested format.
+// Logger constrói um SlogLogger no nível configurado e no formato solicitado.
 func (p *provider) Logger(format string) logger.Logger {
 	return logger.NewSlogLogger(os.Stdout, logger.ParseLevel(p.cfg.LogLevel), format)
 }
 
-// OpenStore opens the Tursogo database and returns a Repository with a closer
-// that releases prepared statements and the connection.
+// OpenStore abre o banco de dados Tursogo e retorna um Repository com um fechador (closer)
+// que libera as instruções preparadas (prepared statements) e a conexão.
 func (p *provider) OpenStore(ctx context.Context) (*storage.Repository, func() error, error) {
 	db, err := storage.Open(ctx, p.cfg.DBPath)
 	if err != nil {
@@ -54,8 +54,8 @@ func (p *provider) OpenStore(ctx context.Context) (*storage.Repository, func() e
 	return repo, closeFn, nil
 }
 
-// NewClient assembles the Telegram facade: session storage, peer store, and
-// dispatcher, all backed by repo and log.
+// NewClient monta a fachada do Telegram: armazenamento de sessão, armazenamento de peers e
+// dispatcher, todos apoiados pelo repositório (repo) e pelo logger (log).
 func (p *provider) NewClient(log logger.Logger, repo *storage.Repository) telegram.TelegramClient {
 	session := telegram.NewTursoSessionStorage(repo, log)
 	peers := telegram.NewPeerStore(repo, log)
@@ -67,7 +67,7 @@ func (p *provider) NewClient(log logger.Logger, repo *storage.Repository) telegr
 	)
 }
 
-// NewCollector assembles the collector with a NoopClassifier (Phase 1).
+// NewCollector monta o coletor com um NoopClassifier (Fase 1).
 func (p *provider) NewCollector(client telegram.TelegramClient, repo *storage.Repository, log logger.Logger) *collector.Collector {
 	return collector.NewCollector(
 		client, repo, collector.NoopClassifier{}, log.WithComponent("collector"),

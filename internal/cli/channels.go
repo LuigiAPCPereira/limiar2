@@ -10,7 +10,7 @@ import (
 	"github.com/limiar/collector/internal/telegram"
 )
 
-// newChannelsCmd builds the `channels` subcommand group: list / add / remove.
+// newChannelsCmd constrói o grupo de subcomandos `channels`: list / add / remove.
 func newChannelsCmd(p Provider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "channels",
@@ -24,8 +24,8 @@ func newChannelsCmd(p Provider) *cobra.Command {
 	return cmd
 }
 
-// withAuthenticatedStore opens the store, verifies authentication, and invokes
-// fn with the repo.
+// withAuthenticatedStore abre o repositório, verifica a autenticação e invoca
+// fn com o repo.
 func withAuthenticatedStore(
 	cmd *cobra.Command,
 	p Provider,
@@ -53,7 +53,7 @@ func withAuthenticatedStore(
 	return fn(repo, log)
 }
 
-// logging is the minimal logger surface the channels handlers use.
+// logging é a interface mínima de logger que os handlers de canais utilizam.
 type logging interface {
 	Info(msg string, args ...any)
 }
@@ -136,7 +136,7 @@ func newChannelsAddCmd(p Provider) *cobra.Command {
 			fmt.Fprintf(out, "  • Username : @%s\n", peer.Username)
 			fmt.Fprintf(out, "  • ID       : %d\n", peer.ID)
 			fmt.Fprintln(out)
-			log.Info("channel added", "id", peer.ID, "username", peer.Username)
+			log.Info("canal adicionado", "id", peer.ID, "username", peer.Username)
 			return nil
 		},
 	}
@@ -154,7 +154,7 @@ func newChannelsRemoveCmd(p Provider) *cobra.Command {
 					return err
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "\n  ✅ Canal @%s removido.\n\n", username)
-				log.Info("channel removed", "username", username)
+				log.Info("canal removido", "username", username)
 				return nil
 			})
 		},

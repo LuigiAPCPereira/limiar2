@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// levelConfig holds the display name and ANSI colour for each slog level.
+// levelConfig contém o nome de exibição e a cor ANSI para cada nível do slog.
 var levelConfig = map[slog.Level]struct {
 	name  string
 	color string
@@ -21,9 +21,9 @@ var levelConfig = map[slog.Level]struct {
 }
 
 const resetCode = "\x1b[0m"
-const fieldWidth = 14 // width for aligned field names
+const fieldWidth = 14 // largura para alinhar nomes de campos
 
-// PrettyHandler writes human-friendly coloured log lines to an io.Writer.
+// PrettyHandler escreve linhas de log coloridas amigáveis para leitura humana em um io.Writer.
 type PrettyHandler struct {
 	w         io.Writer
 	attrs     []slog.Attr
@@ -31,11 +31,11 @@ type PrettyHandler struct {
 	useColors bool
 }
 
-// compile-time assertion
+// asserção em tempo de compilação
 var _ slog.Handler = (*PrettyHandler)(nil)
 
-// NewPrettyHandler creates a PrettyHandler writing to w. If w is not a TTY,
-// colours are disabled.
+// NewPrettyHandler cria um PrettyHandler escrevendo em w. Se w não for um TTY,
+// as cores são desativadas.
 func NewPrettyHandler(w io.Writer, minLevel slog.Level) *PrettyHandler {
 	return &PrettyHandler{
 		w:         w,
@@ -44,12 +44,12 @@ func NewPrettyHandler(w io.Writer, minLevel slog.Level) *PrettyHandler {
 	}
 }
 
-// Enabled reports whether the handler handles records at the given level.
+// Enabled relata se o handler lida com registros no nível fornecido.
 func (h *PrettyHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.minLevel
 }
 
-// Handle formats a single slog record into a pretty multi-line block.
+// Handle formata um único registro slog em um bloco multilinhas bem formatado.
 func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 	cfg, ok := levelConfig[r.Level]
 	if !ok {
@@ -58,7 +58,7 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 
 	var sb strings.Builder
 
-	// collect all attributes: static first, then record attrs
+	// coleta todos os atributos: estáticos primeiro, depois os atributos do registro
 	allAttrs := make([]slog.Attr, 0, len(h.attrs)+r.NumAttrs())
 	allAttrs = append(allAttrs, h.attrs...)
 	r.Attrs(func(a slog.Attr) bool {
@@ -66,7 +66,7 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 		return true
 	})
 
-	// main line: ◆ 15:04:05  LEVEL   msg
+	// linha principal: ◆ 15:04:05  NÍVEL   msg
 	timeStr := r.Time.Format("15:04:05")
 	if h.useColors {
 		sb.WriteString(cfg.color)
@@ -82,7 +82,7 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 	sb.WriteString(r.Message)
 	sb.WriteString("\n")
 
-	// fields
+	// campos
 	for i, a := range allAttrs {
 		prefix := "├"
 		if i == len(allAttrs)-1 {
@@ -101,14 +101,14 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 		sb.WriteString("\n")
 	}
 
-	// blank line between entries
+	// linha em branco entre os registros
 	sb.WriteString("\n")
 
 	_, err := h.w.Write([]byte(sb.String()))
 	return err
 }
 
-// WithAttrs returns a new handler that includes the given attributes.
+// WithAttrs retorna um novo handler que inclui os atributos fornecidos.
 func (h *PrettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newAttrs := make([]slog.Attr, len(h.attrs)+len(attrs))
 	copy(newAttrs, h.attrs)
@@ -121,13 +121,13 @@ func (h *PrettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	}
 }
 
-// WithGroup returns a new handler with the given group name.
+// WithGroup retorna um novo handler com o nome de grupo fornecido.
 func (h *PrettyHandler) WithGroup(name string) slog.Handler {
-	// Groups are flattened for simplicity in this pretty handler
+	// Grupos são achatados (flattened) por simplicidade neste pretty handler
 	return h
 }
 
-// padRight pads s with spaces on the right until it reaches width.
+// padRight preenche s com espaços à direita até que atinja a largura (width).
 func padRight(s string, width int) string {
 	if len(s) >= width {
 		return s[:width]
@@ -135,7 +135,7 @@ func padRight(s string, width int) string {
 	return s + strings.Repeat(" ", width-len(s))
 }
 
-// formatValue formats a slog.Value for display.
+// formatValue formata um slog.Value para exibição.
 func formatValue(v slog.Value) string {
 	switch v.Kind() {
 	case slog.KindString:
