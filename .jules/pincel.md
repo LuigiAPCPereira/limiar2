@@ -4,3 +4,7 @@
 ## 2025-02-28 - Acessibilidade em Dashboards Vanilla (Sem Framework)
 **Aprendizado:** Em um dashboard construído com HTML/JS vanilla (sem frameworks UI como React ou libs externas), componentes interativos customizados (como `div`s que agem como botões ou cards clicáveis) não ganham suporte a teclado ou semântica automaticamente. Leitores de tela precisam de atributos `aria` explícitos. Além disso, listas atualizadas via Server-Sent Events (SSE) são invisíveis para screen readers se não tiverem as roles apropriadas.
 **Ação:** Ao usar `<div onclick="...">`, sempre garanta que há `role="button"`, `tabindex="0"`, event handler para teclado (`onkeydown` com Enter ou Espaço), e estilos visíveis para estado de foco (`:focus-visible`). Para listas que recebem novos itens assincronamente (como via SSE), use `role="log"` e `aria-live="polite"` na div contêiner.
+
+## 2023-10-27 - Indicador de Conexão SSE Acessível
+**Aprendizado:** Quando trabalhamos com conexões contínuas como SSE no background (sem refresh de página), leitores de tela e usuários em geral podem não saber que os dados estão sendo atualizados dinamicamente ou se a conexão caiu (fallback para polling).
+**Ação:** Sempre usar regiões `aria-live="polite"` e `role="status"` combinadas com feedback visual (ex: status badge no header) para indicar o estado da conexão ("Ao vivo (SSE)" vs "Modo Polling (30s)"), mantendo a acessibilidade e previsibilidade da interface.
