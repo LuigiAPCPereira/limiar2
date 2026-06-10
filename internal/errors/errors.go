@@ -1,10 +1,10 @@
-// Package errors defines the limiar-collector error domain: named sentinel
-// errors that callers match with errors.Is, and a single Wrap helper that
-// adds layer/operation context while preserving the wrapped error's identity.
+// Package errors define o domínio de erros do limiar-collector: erros sentinel nomeados
+// que os chamadores verificam com errors.Is, e um único helper Wrap que
+// adiciona contexto de camada/operação enquanto preserva a identidade do erro encapsulado.
 //
-// Layers must wrap every error that crosses a package boundary via Wrap so
-// that messages read "layer: operation: cause" and sentinel identity is
-// retained through arbitrary nesting.
+// As camadas devem encapsular todo erro que cruze um limite de pacote via Wrap, para
+// que as mensagens sejam lidas como "layer: operation: cause" e a identidade do sentinel
+// seja mantida através de aninhamentos arbitrários.
 package errors
 
 import (
@@ -12,26 +12,26 @@ import (
 	"fmt"
 )
 
-// Sentinel errors for the collector domain. Callers compare against these
-// with errors.Is rather than matching on message strings.
+// Erros Sentinel para o domínio do collector. Os chamadores comparam contra estes
+// com errors.Is em vez de fazer correspondência em strings de mensagens.
 var (
-	// ErrNotAuthenticated indicates no valid Telegram session is persisted.
-	ErrNotAuthenticated = stderrors.New("not authenticated")
-	// ErrChannelNotFound indicates a requested channel is absent from storage.
-	ErrChannelNotFound = stderrors.New("channel not found")
-	// ErrSessionCorrupted indicates a stored session could not be decoded.
-	ErrSessionCorrupted = stderrors.New("session corrupted")
-	// ErrDBWriteFailed indicates a database write failed after all retries.
-	ErrDBWriteFailed = stderrors.New("database write failed")
-	// ErrMaxRetriesExceeded indicates a retry loop exhausted its budget.
-	ErrMaxRetriesExceeded = stderrors.New("max retries exceeded")
+	// ErrNotAuthenticated indica que nenhuma sessão válida do Telegram está persistida.
+	ErrNotAuthenticated = stderrors.New("não autenticado")
+	// ErrChannelNotFound indica que um canal solicitado está ausente do armazenamento.
+	ErrChannelNotFound = stderrors.New("canal não encontrado")
+	// ErrSessionCorrupted indica que uma sessão armazenada não pôde ser decodificada.
+	ErrSessionCorrupted = stderrors.New("sessão corrompida")
+	// ErrDBWriteFailed indica que uma gravação no banco de dados falhou após todas as tentativas.
+	ErrDBWriteFailed = stderrors.New("falha ao gravar no banco de dados")
+	// ErrMaxRetriesExceeded indica que um loop de repetição esgotou seu limite.
+	ErrMaxRetriesExceeded = stderrors.New("máximo de tentativas excedido")
 )
 
-// Wrap annotates err with the originating layer and operation, preserving the
-// wrapped error for errors.Is/errors.As. It returns nil when err is nil so it
-// can be used directly in return statements.
+// Wrap anota err com a camada e a operação de origem, preservando o
+// erro encapsulado para errors.Is/errors.As. Retorna nil quando err for nil, para que
+// possa ser usado diretamente em declarações de retorno.
 //
-// The resulting message has the form "layer: op: cause".
+// A mensagem resultante tem o formato "camada: operação: causa".
 func Wrap(layer, op string, err error) error {
 	if err == nil {
 		return nil

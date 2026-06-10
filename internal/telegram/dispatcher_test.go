@@ -11,7 +11,7 @@ import (
 	"github.com/limiar/collector/internal/telegram"
 )
 
-// countingHandler records how many updates it received.
+// countingHandler registra quantas atualizações ele recebeu.
 type countingHandler struct {
 	count atomic.Int64
 	got   chan struct{}
@@ -25,14 +25,14 @@ func (h *countingHandler) HandleUpdate(_ context.Context, _ telegram.Update) err
 	return nil
 }
 
-// panicHandler always panics, to verify the dispatcher isolates and recovers.
+// panicHandler sempre levanta um panic, para verificar se o dispatcher isola e se recupera.
 type panicHandler struct{}
 
 func (panicHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
 	panic("boom")
 }
 
-// errHandler returns an error, to verify the dispatcher logs without crashing.
+// errHandler retorna um erro, para verificar se o dispatcher faz log sem falhar.
 type errHandler struct{ called atomic.Bool }
 
 func (h *errHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
@@ -81,7 +81,7 @@ func TestDispatcherDeliversManyUpdates(t *testing.T) {
 	_ = d.Shutdown(ctx)
 }
 
-// A panicking handler must not crash the dispatcher; other handlers keep working.
+// Um handler em panic não deve derrubar o dispatcher; os outros handlers continuam trabalhando.
 func TestDispatcherRecoversFromHandlerPanic(t *testing.T) {
 	d := telegram.NewDispatcher(256, nil)
 	good := &countingHandler{got: make(chan struct{}, 10)}
@@ -111,7 +111,7 @@ func TestDispatcherShutdownIsClean(t *testing.T) {
 	}
 }
 
-// Concurrent dispatch from multiple producers must be race-free (run -race).
+// Dispatch concorrente a partir de múltiplos produtores deve ser livre de corrida (execute com -race).
 func TestDispatcherConcurrentDispatch(t *testing.T) {
 	d := telegram.NewDispatcher(512, nil)
 	h := &countingHandler{got: make(chan struct{}, 4000)}
@@ -135,7 +135,7 @@ func TestDispatcherConcurrentDispatch(t *testing.T) {
 	_ = d.Shutdown(ctx)
 }
 
-// waitN blocks until n signals arrive on ch or the test times out.
+// waitN bloqueia até que n sinais cheguem em ch ou o teste atinja o tempo limite (timeout).
 func waitN(t *testing.T, ch <-chan struct{}, n int) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)

@@ -11,7 +11,7 @@ import (
 	apperrors "github.com/limiar/collector/internal/errors"
 )
 
-// sentinels is the set of named domain errors the package must export.
+// sentinels é o conjunto de erros de domínio nomeados que o pacote deve exportar.
 var sentinels = []error{
 	apperrors.ErrNotAuthenticated,
 	apperrors.ErrChannelNotFound,
@@ -42,9 +42,9 @@ func TestWrapNilReturnsNil(t *testing.T) {
 	}
 }
 
-// Feature: limiar-collector, Property 15: Error Wrapping Preserves Sentinel Identity.
-// For any sentinel wrapped N levels deep via Wrap(layer, op, sentinel),
-// errors.Is(wrapped, sentinel) must return true.
+// Funcionalidade: limiar-collector, Propriedade 15: Encapsulamento de Erro Preserva a Identidade do Sentinel.
+// Para qualquer sentinel encapsulado N níveis abaixo via Wrap(layer, op, sentinel),
+// errors.Is(wrapped, sentinel) deve retornar verdadeiro (true).
 func TestProperty15WrapPreservesSentinelNLevels(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		idx := rapid.IntRange(0, len(sentinels)-1).Draw(t, "sentinel")

@@ -1,45 +1,45 @@
-# ADR 001 — Tursogo as the Single Datastore
+# ADR 001 — Tursogo como Único Banco de Dados
 
 ## Status
 
-Accepted
+Aceito
 
-## Context
+## Contexto
 
-`limiar-collector` must persist several kinds of state: the MTProto session, a
-peer/access-hash cache, the monitored-channel list, and raw message payloads. We
-wanted one embedded datastore (a single `.db` file mountable as a persistent
-volume) rather than juggling multiple stores, and we wanted a portable binary
-with no C toolchain requirement.
+O `limiar-collector` deve persistir vários tipos de estado: a sessão MTProto, um
+cache de peer/access-hash, a lista de canais monitorados e os payloads brutos das mensagens.
+Queríamos um armazenamento de dados embutido (um único arquivo `.db` montável como um volume
+persistente) em vez de lidar com múltiplos armazenamentos, e queríamos um binário portável
+sem exigência de toolchain C.
 
-`turso.tech/database/tursogo` provides an embedded database accessible through
-the standard `database/sql` interface under the driver name `turso`, using
-`purego` for FFI — so **no CGO** is needed.
+O `turso.tech/database/tursogo` fornece um banco de dados embutido acessível através
+da interface padrão `database/sql` sob o nome de driver `turso`, usando
+`purego` para FFI — portanto, **sem CGO**.
 
-## Decision
+## Decisão
 
-Use Tursogo as the single datastore for everything: `sessions`, `peers`,
-`channels`, and `raw_messages` all live in one `.db` file
-(`LIMIAR_DB_PATH`, default `./limiar.db`). It is accessed only through
-`database/sql` from `internal/storage`, with `?` placeholders and prepared
-statements. The driver is registered with a blank import
-(`_ "turso.tech/database/tursogo"`) in `storage/db.go`.
+Usar o Tursogo como o único datastore para tudo: `sessions`, `peers`,
+`channels`, e `raw_messages` todos vivem em um arquivo `.db`
+(`LIMIAR_DB_PATH`, padrão `./limiar.db`). Ele é acessado apenas através
+de `database/sql` de `internal/storage`, com placeholders (marcadores) `?` e prepared statements
+(instruções preparadas). O driver é registrado com um blank import
+(`_ "turso.tech/database/tursogo"`) em `storage/db.go`.
 
-## Consequences
+## Consequências
 
-- One file to back up, mount, and reason about; session + peer cache + channels +
-  messages share a transactional store.
-- No C toolchain, no `CGO_ENABLED`; the binary is portable.
-- The storage layer stays on the portable `database/sql` surface (`Exec`,
-  `Query`, `QueryRow`, `Prepare`), which keeps it testable.
-- We accept a dependency on Tursogo's compatibility with standard `database/sql`
-  semantics; the storage layer avoids driver-specific extensions to limit risk.
+- Um arquivo para backup, montagem e para raciocinar; sessão + cache de peers + canais +
+  mensagens compartilham um armazenamento transacional.
+- Nenhuma toolchain C, sem `CGO_ENABLED`; o binário é portável.
+- A camada de storage (armazenamento) permanece na superfície portável do `database/sql` (`Exec`,
+  `Query`, `QueryRow`, `Prepare`), o que a mantém testável.
+- Aceitamos uma dependência da compatibilidade do Tursogo com a semântica padrão
+  do `database/sql`; a camada de storage evita extensões específicas do driver para limitar o risco.
 
-## Alternatives considered
+## Alternativas consideradas
 
-- **SQLite via `mattn/go-sqlite3`** — requires CGO, defeating the portable-binary
-  goal. Explicitly forbidden by the requirements.
-- **An ORM (GORM)** — adds a heavy abstraction, hides SQL, and (in the case of
-  GoTGProto's storage) couples to SQLite. Forbidden.
-- **Multiple stores** (e.g. file-based session + separate DB) — more moving
-  parts, no transactional cohesion, harder ops.
+- **SQLite via `mattn/go-sqlite3`** — requer CGO, anulando o objetivo de binário
+  portável. Explicitamente proibido pelos requisitos.
+- **Um ORM (GORM)** — adiciona uma abstração pesada, esconde o SQL e (no caso do
+  storage do GoTGProto) acopla ao SQLite. Proibido.
+- **Armazenamentos múltiplos** (ex: sessão baseada em arquivo + DB separado) — mais partes
+  móveis, sem coesão transacional, operações mais difíceis.

@@ -14,8 +14,8 @@ import (
 	"github.com/limiar/collector/internal/storage"
 )
 
-// newTestRepo opens a fresh Tursogo database in a temp dir, runs migrations,
-// and returns a ready Repository. It registers cleanup automatically.
+// newTestRepo abre um banco de dados Tursogo novo em um diretório temporário, executa as migrações,
+// e retorna um Repository pronto. Ele registra o cleanup (limpeza) automaticamente.
 func newTestRepo(t *testing.T) *storage.Repository {
 	t.Helper()
 	repo, cleanup, err := openTempRepo()
@@ -26,9 +26,9 @@ func newTestRepo(t *testing.T) *storage.Repository {
 	return repo
 }
 
-// openTempRepo opens a Repository backed by a fresh temp-dir database without
-// requiring *testing.T, so it is usable inside rapid property closures. The
-// returned cleanup closes the repo/db and removes the temp dir.
+// openTempRepo abre um Repository apoiado por um banco de dados novo num diretório temporário sem
+// requerer *testing.T, para que seja utilizável dentro das closures de propriedades do rapid. O
+// cleanup retornado fecha o repo/db e remove o diretório temporário.
 func openTempRepo() (*storage.Repository, func(), error) {
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("", "limiar-storage-")
@@ -74,7 +74,7 @@ func TestOpenRunsMigrations(t *testing.T) {
 	}
 }
 
-// Feature: limiar-collector, Property 1: Session Storage Round-Trip.
+// Funcionalidade: limiar-collector, Propriedade 1: Session Storage Round-Trip.
 func TestProperty1SessionRoundTrip(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := context.Background()
@@ -93,7 +93,7 @@ func TestProperty1SessionRoundTrip(t *testing.T) {
 	})
 }
 
-// Feature: limiar-collector, Property 2: Auth Idempotence.
+// Funcionalidade: limiar-collector, Propriedade 2: Idempotência de Autenticação (Auth Idempotence).
 func TestProperty2SessionSingleRow(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := context.Background()
@@ -119,7 +119,7 @@ func TestLoadSessionAbsentReturnsNotFound(t *testing.T) {
 	}
 }
 
-// Feature: limiar-collector, Property 4: Channel CRUD Round-Trip.
+// Funcionalidade: limiar-collector, Propriedade 4: Channel CRUD Round-Trip.
 func TestProperty4ChannelCRUD(t *testing.T) {
 	ctx := context.Background()
 	rapid.Check(t, func(t *rapid.T) {
@@ -246,7 +246,7 @@ func TestSaveRawMessageDedupsByChannelAndMessageID(t *testing.T) {
 	}
 }
 
-// Feature: limiar-collector, Property 7: Channel Metadata Update on Persist.
+// Funcionalidade: limiar-collector, Propriedade 7: Atualização de Metadados de Canal na Persistência.
 func TestProperty7ChannelMetadataUpdate(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := context.Background()

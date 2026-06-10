@@ -6,10 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newAuthCmd builds the `auth` subcommand: interactive, idempotent
-// authentication that persists the session. The interactive wizard for
-// collecting missing credentials runs earlier in config.Load() when stdin
-// is a TTY. Uses a text-format logger.
+// newAuthCmd constrói o subcomando `auth`: autenticação interativa e idempotente
+// que persiste a sessão. O assistente interativo para coletar
+// credenciais ausentes é executado antecipadamente em config.Load() quando o stdin
+// é um TTY. Utiliza um logger no formato texto.
 func newAuthCmd(p Provider) *cobra.Command {
 	return &cobra.Command{
 		Use:   "auth",
@@ -34,7 +34,7 @@ func newAuthCmd(p Provider) *cobra.Command {
 			fmt.Println()
 			fmt.Println("  ✅ Autenticação concluída! Sessão persistida.")
 			fmt.Println()
-			log.Debug("authentication complete; session persisted")
+			log.Debug("autenticação concluída; sessão persistida")
 			return nil
 		},
 	}

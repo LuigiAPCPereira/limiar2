@@ -1,157 +1,151 @@
-# AGENTS.md — Guidance for AI Agents and Contributors
+# AGENTS.md — Orientação para Agentes de IA e Contribuidores
 
-This file defines the hard rules for working on `limiar-collector`. Read it
-before touching any code. The constraints here are not stylistic preferences —
-they are the contract that keeps the codebase modular, testable, and decoupled
-from third-party internals.
+Este arquivo define as regras rígidas para trabalhar no `limiar-collector`. Leia-o
+antes de alterar qualquer código. As restrições aqui não são preferências de estilo —
+elas são o contrato que mantém a base de código modular, testável e desacoplada
+de implementações internas de terceiros.
 
-Module path: `github.com/limiar/collector`.
+Caminho do módulo: `github.com/limiar/collector`.
 
-## Required reading — always consult `docs/` first
+## Leitura obrigatória — sempre consulte `docs/` primeiro
 
-Before making any code change, **read the relevant documentation in `docs/`**.
-This is not optional. The `docs/` directory is the source of truth for
-architecture, design decisions, and library usage patterns:
+Antes de fazer qualquer alteração no código, **leia a documentação relevante em `docs/`**.
+Isso não é opcional. O diretório `docs/` é a fonte da verdade para a arquitetura,
+decisões de design e padrões de uso de bibliotecas:
 
-- `docs/ARCHITECTURE.md` — pipeline diagram, concurrency model, data model
-- `docs/CONTEXT.md` — system overview, scope boundaries, phase roadmap
-- `docs/PRODUCT_BRIEF.md` — product goals and positioning
-- `docs/specs/GOTD-TD.md` — gotd/td usage patterns and API surface
-- `docs/specs/TURSOGO.md` — Tursogo driver usage and constraints
-- `docs/guidelines/` — per-layer extension guidelines (storage, telegram, collector)
-- `docs/adr/` — architecture decision records (rationale for past choices)
+- `docs/ARCHITECTURE.md` — diagrama do pipeline, modelo de concorrência, modelo de dados
+- `docs/CONTEXT.md` — visão geral do sistema, limites de escopo, roadmap de fases
+- `docs/PRODUCT_BRIEF.md` — objetivos e posicionamento do produto
+- `docs/specs/GOTD-TD.md` — padrões de uso e superfície da API do gotd/td
+- `docs/specs/TURSOGO.md` — uso e restrições do driver Tursogo
+- `docs/guidelines/` — diretrizes de extensão por camada (storage, telegram, collector)
+- `docs/adr/` — registros de decisão de arquitetura (motivação para escolhas passadas)
 
-If a question can be answered by a document in `docs/`, use that document
-instead of guessing. If a change conflicts with what `docs/` describes, update
-the documentation as part of the same change.
-
----
-
-## Scope: Phase 1 is collection + observation
-
-`limiar-collector` (Phase 1) connects to Telegram, authenticates as a userbot,
-manages monitored channels, persists **raw** message payloads as JSON, and
-provides a lightweight dashboard for inspecting captured data.
-
-**In scope:** `auth`, `channels`, `run`, `dashboard`; session/peer persistence;
-raw capture; first-run history backfill; resume from cursor; graceful shutdown;
-connection resilience; interactive config wizard; HTTP dashboard with SSE
-real-time updates; pretty/text/JSON logging.
-
-**Out of scope (do NOT implement):** normalization, enrichment, semantic
-classification, LLM calls, deduplication beyond safe persistence, metrics
-export, alerting. These belong to `limiar-processor` and `limiar-api`.
-
-If a change introduces processing logic, stop — it is a different phase.
+Se uma pergunta puder ser respondida por um documento em `docs/`, use esse documento
+em vez de adivinhar. Se uma alteração conflitar com o que `docs/` descreve, atualize
+a documentação como parte da mesma alteração.
 
 ---
 
-## The closed stack
+## Escopo: A Fase 1 é coleta + observação
 
-Only these dependencies are permitted. **Never add a dependency outside this
-list.**
+O `limiar-collector` (Fase 1) conecta-se ao Telegram, autentica-se como um userbot,
+gerencia canais monitorados, persiste os payloads **brutos (raw)** das mensagens como JSON e
+fornece um dashboard leve para inspecionar os dados capturados.
 
-| Concern | Allowed | Forbidden |
+**No escopo:** `auth`, `channels`, `run`, `dashboard`; persistência de sessão/peer;
+captura bruta; backfill de histórico na primeira execução; retomada a partir do cursor; desligamento gracioso (graceful shutdown);
+resiliência de conexão; assistente de configuração interativo; dashboard HTTP com atualizações em tempo real via SSE;
+logging pretty/text/json.
+
+**Fora do escopo (NÃO implemente):** normalização, enriquecimento, classificação semântica,
+chamadas LLM, desduplicação além da persistência segura, exportação de métricas,
+alertas. Estes pertencem ao `limiar-processor` e `limiar-api`.
+
+Se uma alteração introduzir lógica de processamento, pare — é de uma fase diferente.
+
+---
+
+## A stack fechada
+
+Apenas estas dependências são permitidas. **Nunca adicione uma dependência fora desta lista.**
+
+| Funcionalidade | Permitido | Proibido |
 |---------|---------|-----------|
-| MTProto | `github.com/gotd/td` | GoTGProto or any other wrapper |
-| Database | `turso.tech/database/tursogo` (driver `turso`) | SQLite drivers, `mattn`, GORM, any ORM |
+| MTProto | `github.com/gotd/td` | GoTGProto ou qualquer outro wrapper |
+| Banco de dados | `turso.tech/database/tursogo` (driver `turso`) | Drivers SQLite, `mattn`, GORM, qualquer ORM |
 | CLI/config | `github.com/spf13/cobra`, `github.com/spf13/viper` | — |
-| Terminal | `golang.org/x/term` (masked input in wizard/auth) | — |
-| Logging | stdlib `log/slog` (behind `logger.Logger`) | zerolog, zap, logrus |
-| HTTP | stdlib `net/http` (dashboard only) | chi, gin, echo, fiber |
-| Property tests | `pgregory.net/rapid` (test files only) | — |
+| Terminal | `golang.org/x/term` (entrada mascarada no assistente/auth) | — |
+| Logging | stdlib `log/slog` (por trás de `logger.Logger`) | zerolog, zap, logrus |
+| HTTP | stdlib `net/http` (apenas para o dashboard) | chi, gin, echo, fiber |
+| Testes de propriedade | `pgregory.net/rapid` (apenas arquivos de teste) | — |
 
-`pgregory.net/rapid` is the only dependency allowed outside the runtime stack,
-and only inside `_test.go` files. `golang.org/x/term` is permitted because it
-is a stdlib-adjacent module used for secure terminal input.
+`pgregory.net/rapid` é a única dependência permitida fora da stack de tempo de execução,
+e apenas dentro de arquivos `_test.go`. `golang.org/x/term` é permitido porque
+é um módulo adjacente à stdlib usado para entrada segura no terminal.
 
 ---
 
-## Hard rules
+## Regras rígidas
 
-1. **Logger is instantiated only in `internal/logger/slog.go`.** Every other
-   layer receives a `logger.Logger` via its constructor. `NewSlogLogger` is the
-   sole place a concrete logger is created. Sensitive keys (`api_hash`,
-   `apihash`, `session`, `token`, `password`, `auth_code`) are redacted.
-2. **No `init()` functions and no global mutable state** in any `internal/`
-   package.
-3. **No `panic()` in production code.** `recover()` appears only at the
-   Dispatcher's goroutine boundary (`Dispatcher.invoke`), and every recovered
-   condition is logged.
-4. **A single DBWriter writes to the database.** Only the `Collector.dbWriter`
-   goroutine issues writes through the `*sql.DB` (fan-in via `writeCh chan
-   WriteJob`). No other goroutine writes. The dashboard's Repository queries
-   are read-only.
-5. **`context.Context` is the first argument of every I/O method.** See
+1. **O Logger é instanciado apenas em `internal/logger/slog.go`.** Todas as outras
+   camadas recebem um `logger.Logger` através de seu construtor. `NewSlogLogger` é o
+   único lugar onde um logger concreto é criado. Chaves sensíveis (`api_hash`,
+   `apihash`, `session`, `token`, `password`, `auth_code`) são redigidas (mascaradas).
+2. **Sem funções `init()` e sem estado mutável global** em qualquer pacote sob `internal/`.
+3. **Sem `panic()` em código de produção.** `recover()` aparece apenas no
+   limite da goroutine do Dispatcher (`Dispatcher.invoke`), e toda condição
+   recuperada é registrada nos logs.
+4. **Um único DBWriter escreve no banco de dados.** Apenas a goroutine `Collector.dbWriter`
+   emite escritas através de `*sql.DB` (fan-in via `writeCh chan WriteJob`). Nenhuma outra goroutine escreve. As consultas do Repository do dashboard são apenas de leitura (read-only).
+5. **`context.Context` é o primeiro argumento de todo método de I/O.** Veja
    `Repository`, `TelegramClient`, `UpdateHandler`, etc.
-6. **Errors crossing a layer boundary are wrapped via `errors.Wrap(layer, op,
-   err)`** so messages read `"layer: op: cause"` and sentinel identity is
-   preserved for `errors.Is`. Sentinels live in `internal/errors/errors.go`
+6. **Erros que cruzam o limite de uma camada são envolvidos via `errors.Wrap(layer, op, err)`**
+   para que as mensagens sejam lidas como `"layer: op: cause"` e a identidade do sentinel
+   seja preservada para `errors.Is`. Os sentinels residem em `internal/errors/errors.go`
    (`ErrNotAuthenticated`, `ErrChannelNotFound`, `ErrSessionCorrupted`,
    `ErrDBWriteFailed`, `ErrMaxRetriesExceeded`).
-7. **gotd/td types never leak past `internal/telegram`.** The CLI, collector,
-   and dashboard layers import only the `TelegramClient` facade and the domain
-   models in `internal/storage`. Updates leave the telegram package as `[]byte`
-   JSON wrapped in a `telegram.Update` struct (with routing metadata).
-8. **All SQL lives in `internal/storage/repository.go`.** Placeholders are `?`
-   only. Recurring writes use prepared statements.
-9. **Concrete dependencies are constructed only in
-   `cmd/limiar-collector/main.go`** (the composition root). The CLI depends on
-   the `cli.Provider` interface and never constructs storage or telegram
-   concretes itself. Manual DI — no DI framework.
-10. **The dashboard is read-only.** `internal/dashboard` only reads from the
-    Repository and pushes events via a Broker. It never writes to the database
-    and never imports `internal/telegram`.
+7. **Os tipos do gotd/td nunca vazam para fora de `internal/telegram`.** A CLI, collector,
+   e as camadas do dashboard importam apenas a facade `TelegramClient` e os modelos
+   de domínio em `internal/storage`. Updates deixam o pacote telegram como `[]byte` JSON
+   envolvido em uma struct `telegram.Update` (com metadados de roteamento).
+8. **Todo o SQL reside em `internal/storage/repository.go`.** Placeholders são apenas `?`.
+   Escritas recorrentes usam prepared statements (instruções preparadas).
+9. **Dependências concretas são construídas apenas em `cmd/limiar-collector/main.go`**
+   (a raiz de composição). A CLI depende da interface `cli.Provider` e nunca constrói
+   as dependências concretas de storage ou telegram por conta própria. DI manual — sem framework de DI.
+10. **O dashboard é apenas de leitura.** `internal/dashboard` lê apenas do Repository
+    e envia eventos via um Broker. Ele nunca escreve no banco de dados e nunca importa `internal/telegram`.
 
 ---
 
-## CLI subcommands
+## Subcomandos da CLI
 
-The binary exposes **four** subcommands:
+O binário expõe **quatro** subcomandos:
 
-| Command | Logger format | Purpose |
+| Comando | Formato de log | Propósito |
 |---------|--------------|---------|
-| `auth` | pretty/text | Interactive Telegram authentication (idempotent) |
+| `auth` | pretty/text | Autenticação do Telegram interativa (idempotente) |
 | `channels` | pretty/text | `list`, `add <username>`, `remove <username>` |
-| `run` | json | Production collector service; optional `--dashboard` flag |
-| `dashboard` | text | Standalone HTTP dashboard for inspecting captured data |
+| `run` | json | Serviço de produção do collector; flag opcional `--dashboard` |
+| `dashboard` | text | Dashboard HTTP standalone para inspecionar dados capturados |
 
 ---
 
-## Package structure
+## Estrutura de pacotes
 
 ```
-cmd/limiar-collector/main.go    — composition root (only place concretes are wired)
+cmd/limiar-collector/main.go    — raiz de composição (único lugar onde as instâncias concretas são ligadas)
 internal/
-├── cli/            — Cobra commands (root, auth, channels, run, dashboard)
-│                     Depends only on Provider interface
-├── collector/      — Orchestration: Collector, MessageHandler, Classifier
-├── config/         — Load (Viper + .env + wizard) + Validate
-├── dashboard/      — HTTP server (net/http) + SSE Broker
-├── errors/         — Sentinels + Wrap helper
-├── logger/         — Logger interface, SlogLogger, PrettyHandler, NopLogger
-├── storage/        — DB open/close, migrations (embed.FS), Repository (all SQL)
-└── telegram/       — TelegramClient facade, Dispatcher, PeerStore,
-                      TursoSessionStorage, encode/extract helpers
+├── cli/            — Comandos Cobra (root, auth, channels, run, dashboard)
+│                     Depende apenas da interface Provider
+├── collector/      — Orquestração: Collector, MessageHandler, Classifier
+├── config/         — Carga (Viper + .env + wizard) + Validação
+├── dashboard/      — Servidor HTTP (net/http) + Broker SSE
+├── errors/         — Sentinels + ajudante Wrap
+├── logger/         — Interface Logger, SlogLogger, PrettyHandler, NopLogger
+├── storage/        — Abertura/fechamento do BD, migrações (embed.FS), Repository (todo SQL)
+└── telegram/       — Facade TelegramClient, Dispatcher, PeerStore,
+                      TursoSessionStorage, ajudantes de codificação/extração
 tools/
-└── payload-analyzer/  — Offline payload analysis (development-time only)
+└── payload-analyzer/  — Análise offline de payload (apenas para momento de desenvolvimento)
 docs/
-├── ARCHITECTURE.md    — Pipeline diagram, concurrency model, data model
-├── CONTEXT.md         — System overview, scope, phase roadmap
-├── PRODUCT_BRIEF.md   — Product brief
+├── ARCHITECTURE.md    — Diagrama do pipeline, modelo de concorrência, modelo de dados
+├── CONTEXT.md         — Visão geral do sistema, escopo, roadmap de fases
+├── PRODUCT_BRIEF.md   — Resumo do produto
 ├── PAYLOAD_ANALYSIS_GUIDE.md
 ├── payload-analysis-report.md
-├── adr/               — Architecture decision records
-├── guidelines/        — Extension guidelines per layer
-└── specs/             — Library usage specs (GOTD-TD.md, TURSOGO.md)
+├── adr/               — Registros de decisão de arquitetura
+├── guidelines/        — Diretrizes de extensão por camada
+└── specs/             — Especificações de uso de bibliotecas (GOTD-TD.md, TURSOGO.md)
 ```
 
 ---
 
-## Key interfaces
+## Interfaces principais
 
 ```go
-// cli.Provider — dependency supply for CLI commands
+// cli.Provider — fornecimento de dependências para os comandos da CLI
 type Provider interface {
     Config() *config.Config
     Logger(format string) logger.Logger
@@ -160,7 +154,7 @@ type Provider interface {
     NewCollector(client telegram.TelegramClient, repo *storage.Repository, log logger.Logger) *collector.Collector
 }
 
-// logger.Logger — injected into every layer
+// logger.Logger — injetado em todas as camadas
 type Logger interface {
     Debug(msg string, args ...any)
     Info(msg string, args ...any)
@@ -170,7 +164,7 @@ type Logger interface {
     WithComponent(name string) Logger
 }
 
-// telegram.TelegramClient — Facade hiding gotd/td
+// telegram.TelegramClient — Facade ocultando o gotd/td
 type TelegramClient interface {
     Auth(ctx context.Context) error
     IsAuthenticated(ctx context.Context) (bool, error)
@@ -182,7 +176,7 @@ type TelegramClient interface {
     Run(ctx context.Context) error
 }
 
-// collector.Classifier — Strategy pattern (NoopClassifier in Phase 1)
+// collector.Classifier — Padrão Strategy (NoopClassifier na Fase 1)
 type Classifier interface {
     Classify(ctx context.Context, msg *storage.RawMessage) (*storage.RawMessage, error)
 }
@@ -190,9 +184,9 @@ type Classifier interface {
 
 ---
 
-## Build / dependency order
+## Ordem de build / dependências
 
-Packages form an acyclic graph. Build bottom-up:
+Os pacotes formam um grafo acíclico. A compilação ocorre de baixo para cima:
 
 ```
 errors
@@ -209,82 +203,82 @@ collector/handler  (← classifier, storage, logger, errors)
 collector/collector (← telegram, storage, logger, errors)
 dashboard          (← storage, logger)
 cli/{root,auth,channels,run,dashboard} (← Provider interface)
-cmd/limiar-collector/main.go (← everything; wires it all)
+cmd/limiar-collector/main.go (← tudo; liga tudo)
 ```
 
 ---
 
-## Configuration
+## Configuração
 
-All config is read from `LIMIAR_`-prefixed environment variables (+ optional
-`.env` file in CWD). When credentials are missing and stdin is a TTY, an
-interactive wizard collects them.
+Toda a configuração é lida de variáveis de ambiente prefixadas com `LIMIAR_` (+ arquivo `.env`
+opcional no diretório de trabalho (CWD)). Quando as credenciais estão ausentes e o stdin é um TTY, um
+assistente interativo as coleta.
 
-| Variable | Default | Valid values |
+| Variável | Padrão | Valores válidos |
 |----------|---------|-------------|
-| `LIMIAR_APP_ID` | — (required) | non-zero integer |
-| `LIMIAR_API_HASH` | — (required) | non-empty (masked in logs) |
-| `LIMIAR_DB_PATH` | `./limiar.db` | any valid path |
+| `LIMIAR_APP_ID` | — (obrigatório) | inteiro diferente de zero |
+| `LIMIAR_API_HASH` | — (obrigatório) | não vazio (mascarado nos logs) |
+| `LIMIAR_DB_PATH` | `./limiar.db` | qualquer caminho válido |
 | `LIMIAR_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `LIMIAR_LOG_FORMAT` | `pretty` | `json`, `text`, `pretty` |
-| `LIMIAR_SHUTDOWN_TIMEOUT` | `15` | 1–300 (seconds) |
-| `LIMIAR_MAX_RETRIES` | `10` | positive integer |
-| `LIMIAR_IO_TIMEOUT` | `30s` | Go duration |
+| `LIMIAR_SHUTDOWN_TIMEOUT` | `15` | 1–300 (segundos) |
+| `LIMIAR_MAX_RETRIES` | `10` | inteiro positivo |
+| `LIMIAR_IO_TIMEOUT` | `30s` | Duração do Go |
 | `LIMIAR_DISPATCHER_BUFFER_SIZE` | `256` | 64–4096 |
 | `LIMIAR_DB_WRITER_BUFFER_SIZE` | `512` | 128–8192 |
-| `LIMIAR_HISTORY_MAX` | `5000` | 100–100000 (per-channel backfill ceiling) |
-| `LIMIAR_HISTORY_MAX_DAYS` | `30` | 1–365 (temporal cutoff; backfill stops at older messages) |
+| `LIMIAR_HISTORY_MAX` | `5000` | 100–100000 (limite máximo de backfill por canal) |
+| `LIMIAR_HISTORY_MAX_DAYS` | `30` | 1–365 (limite temporal; backfill para em mensagens mais antigas) |
 
 ---
 
-## Concurrency model
+## Modelo de concorrência
 
 ```
 Telegram MTProto → Client.onUpdate → encodeUpdate → Update{ChannelID, MessageID, Payload}
                                           │
                                     Dispatcher.Dispatch
-                                          │  fan-out: buffered chan + goroutine per handler
+                                          │  fan-out: canal bufferizado + goroutine por handler
                                           ▼
                               MessageHandler.HandleUpdate
-                                    │  filter by monitored channels → Classify → writeCh
+                                    │  filtrar por canais monitorados → Classify → writeCh
                                     ▼
-                              Collector.dbWriter (single writer, fan-in)
+                              Collector.dbWriter (único escritor, fan-in)
                                     │  SaveRawMessage + UpdateChannelLastMessage
                                     ▼
-                              Tursogo DB (serialized writes)
+                              Tursogo DB (escritas serializadas)
                                     │
-                              onMessage callback → SSE Broker → dashboard clients
+                              callback onMessage → SSE Broker → clientes do dashboard
 ```
 
-- **Fan-out:** Dispatcher gives each handler a buffered channel (default 256)
-  drained by a dedicated goroutine.
-- **Panic isolation:** `Dispatcher.invoke` wraps each handler with `recover()`.
-- **Fan-in:** All handlers feed `writeCh` (default 512). Single `dbWriter`
-  goroutine eliminates write contention.
-- **Stateless handler:** `MessageHandler` holds no mutable state; no locks.
-- **Peer cache:** `PeerStore` guards `map[int64]*Peer` with `sync.RWMutex`.
-- **Graceful shutdown:** `signal.NotifyContext` → cancel context → close
-  `writeCh` → `WaitGroup.Wait()` → close DB. Enforced by `ShutdownTimeout`.
-- **Dashboard:** Non-blocking SSE via Broker; dropped events on slow clients.
+- **Fan-out:** O Dispatcher fornece a cada handler um canal com buffer (padrão 256)
+  drenado por uma goroutine dedicada.
+- **Isolamento de Panic:** `Dispatcher.invoke` envolve cada handler com `recover()`.
+- **Fan-in:** Todos os handlers alimentam `writeCh` (padrão 512). A goroutine única `dbWriter`
+  elimina a concorrência de escrita.
+- **Handler sem estado:** O `MessageHandler` não mantém estado mutável; sem locks.
+- **Cache de peer:** O `PeerStore` protege `map[int64]*Peer` com `sync.RWMutex`.
+- **Desligamento gracioso:** `signal.NotifyContext` → cancelar contexto → fechar
+  `writeCh` → `WaitGroup.Wait()` → fechar BD. Imposição feita por `ShutdownTimeout`.
+- **Dashboard:** SSE não bloqueante via Broker; eventos descartados para clientes lentos.
 
 ---
 
-## Quality gates
+## Critérios de Qualidade (Quality gates)
 
 ```sh
-go build ./...        # exit 0
-go vet ./...          # zero issues
-go test ./...         # all pass
-go test -race ./...   # no data races
+go build ./...        # saída 0
+go vet ./...          # zero problemas
+go test ./...         # todos passam
+go test -race ./...   # sem data races (condições de corrida)
 ```
 
-The build must exclude any import of `sqlite`, `mattn`, or `gorm`.
+O build não deve conter nenhum importe de `sqlite`, `mattn` ou `gorm`.
 
 ---
 
-## Style notes
+## Notas de estilo
 
-- Log messages use emoji prefixes for scanability: 📡 📩 📜 🔄 ❌ ✅ 🛑 ⏰ 🌐 ⚠️
-- User-facing strings are in Portuguese (pt-BR).
-- Code comments and documentation are in Portuguese(PT-BR).
-- All error messages follow `"layer: op: cause"` format.
+- Mensagens de log usam prefixos de emoji para escaneabilidade: 📡 📩 📜 🔄 ❌ ✅ 🛑 ⏰ 🌐 ⚠️
+- Strings visíveis ao usuário estão em Português (pt-BR).
+- Comentários de código e documentação estão em Português (pt-BR).
+- Todas as mensagens de erro seguem o formato `"layer: op: cause"`.

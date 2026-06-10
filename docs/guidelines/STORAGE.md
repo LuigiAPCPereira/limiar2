@@ -1,32 +1,32 @@
-# Guideline — Extending the Storage Layer
+# Diretrizes — Estendendo a Camada Storage (Armazenamento)
 
-The storage layer (`internal/storage`) owns **all** persistence against the
-embedded Tursogo database. Every SQL statement lives here; no other package
-touches `database/sql`. Follow these rules when extending it.
+A camada de armazenamento (`internal/storage`) é a dona de **toda** a persistência
+contra o banco de dados Tursogo embutido. Toda instrução SQL reside aqui; nenhum outro pacote
+toca no `database/sql`. Siga estas regras ao estender esta camada.
 
-## Rules
+## Regras
 
-1. **All SQL lives in `repository.go`.** Add new queries as `Repository`
-   methods. Never write SQL in `telegram`, `collector`, or `cli`.
-2. **Placeholders are `?` only.** Never use `$1` or named placeholders.
-3. **Recurring writes use prepared statements** created in `NewRepository` and
-   closed in `Close`.
-4. **`context.Context` is the first argument** of every query method; use the
-   `...Context` variants (`ExecContext`, `QueryContext`, `QueryRowContext`).
-5. **Wrap errors** with `apperrors.Wrap("storage", "<op>", err)` and map
-   "missing row" cases to a sentinel (e.g. `sql.ErrNoRows` → `ErrNoSession` or
+1. **Todo SQL reside em `repository.go`.** Adicione novas consultas (queries) como métodos de `Repository`.
+   Nunca escreva SQL nas camadas `telegram`, `collector`, ou `cli`.
+2. **Os marcadores de posição (placeholders) são apenas `?`.** Nunca use `$1` ou placeholders nomeados.
+3. **Escritas recorrentes usam prepared statements** criadas no `NewRepository` e
+   fechadas no `Close`.
+4. **`context.Context` é o primeiro argumento** de todo método de consulta; use as
+   variantes `...Context` (`ExecContext`, `QueryContext`, `QueryRowContext`).
+5. **Encapsule (Wrap) os erros** com `apperrors.Wrap("storage", "<op>", err)` e mapeie
+   casos de "linha faltando" para um sentinel (ex: `sql.ErrNoRows` → `ErrNoSession` ou
    `apperrors.ErrChannelNotFound`).
-6. **Only the DBWriter writes at runtime.** Repository write methods exist, but
-   in the `run` service they are called solely from `Collector.dbWriter`.
-7. **Schema changes go in a new migration file** under `migrations/`, kept
-   idempotent (`CREATE ... IF NOT EXISTS`). Files run in lexical order.
-8. **Datetimes are UTC text** in layout `2006-01-02 15:04:05` (the
-   `dbTimeLayout` constant), matching the schema `datetime('now')` defaults.
+6. **Apenas o DBWriter escreve em tempo de execução.** Os métodos de escrita do Repository existem,
+   mas no serviço `run` eles são chamados exclusivamente pelo `Collector.dbWriter`.
+7. **Alterações de schema vão em um novo arquivo de migração** em `migrations/`, mantidas
+   idempotentes (`CREATE ... IF NOT EXISTS`). Os arquivos são executados em ordem lexical.
+8. **As datas e horas (Datetimes) são texto em UTC** no formato `2006-01-02 15:04:05` (a constante
+   `dbTimeLayout`), correspondendo aos padrões `datetime('now')` do schema.
 
-## Correct
+## Correto
 
 ```go
-// New query: centralized, ?-placeholders, context-first, wrapped error.
+// Nova query: centralizada, placeholders '?', context-first, erro encapsulado (wrapped).
 func (r *Repository) GetChannelByUsername(ctx context.Context, username string) (*Channel, error) {
     row := r.db.QueryRowContext(ctx, `
         SELECT id, username, title, active, added_at, last_message_id, last_collected_at
@@ -43,39 +43,39 @@ func (r *Repository) GetChannelByUsername(ctx context.Context, username string) 
 ```
 
 ```go
-// Recurring write: prepared in NewRepository, closed in Close.
+// Escrita recorrente: preparada no NewRepository, fechada no Close.
 saveMsg, err := db.Prepare(`
     INSERT INTO raw_messages (channel_id, message_id, payload, received_at, schema_version)
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(channel_id, message_id) DO NOTHING`)
 ```
 
-## Incorrect
+## Incorreto
 
 ```go
-// WRONG: SQL outside repository.go, in the collector or telegram layer.
-rows, _ := someDB.Query("SELECT * FROM channels")   // never do this here
+// ERRADO: SQL fora do repository.go, na camada collector ou telegram.
+rows, _ := someDB.Query("SELECT * FROM channels")   // nunca faça isso aqui
 ```
 
 ```go
-// WRONG: non-? placeholder.
+// ERRADO: placeholder diferente de '?'.
 r.db.ExecContext(ctx, `INSERT INTO peers (id) VALUES ($1)`, id)
 ```
 
 ```go
-// WRONG: importing a SQLite/ORM driver.
+// ERRADO: importando um driver SQLite/ORM.
 import _ "github.com/mattn/go-sqlite3"
 import "gorm.io/gorm"
 ```
 
 ```go
-// WRONG: a second goroutine writing to *sql.DB concurrently with the DBWriter.
-go func() { repo.SaveRawMessage(ctx, msg) }()   // breaks single-writer invariant
+// ERRADO: uma segunda goroutine escrevendo concorrentemente no *sql.DB junto ao DBWriter.
+go func() { repo.SaveRawMessage(ctx, msg) }()   // quebra o invariante single-writer
 ```
 
-## Never do
+## O que nunca fazer
 
-- Add SQLite, `mattn`, GORM, or any ORM dependency (ADR 001).
-- Write to `*sql.DB` from anywhere but the single DBWriter goroutine (ADR 003).
-- Leak `database/sql` types or raw SQL outside `internal/storage`.
-- Introduce `init()` functions or package-level mutable state.
+- Adicionar dependência do SQLite, `mattn`, GORM, ou qualquer ORM (ADR 001).
+- Escrever no `*sql.DB` a partir de qualquer outro lugar que não seja a única goroutine DBWriter (ADR 003).
+- Vazar tipos do `database/sql` ou SQL puro para fora de `internal/storage`.
+- Introduzir funções `init()` ou estado mutável a nível de pacote.

@@ -13,9 +13,9 @@ import (
 	"github.com/limiar/collector/internal/storage"
 )
 
-// Server is a minimal HTTP dashboard for inspecting captured messages.
-// When broker is non-nil, the /api/events SSE endpoint is enabled for
-// real-time updates.
+// Server é um dashboard HTTP minimalista para inspecionar mensagens capturadas.
+// Quando o broker não é nil, o endpoint SSE /api/events é habilitado para
+// atualizações em tempo real.
 type Server struct {
 	repo   *storage.Repository
 	log    logger.Logger
@@ -23,8 +23,8 @@ type Server struct {
 	broker *Broker
 }
 
-// NewServer builds a dashboard server on the given port. broker may be nil
-// to disable SSE (the dashboard falls back to polling).
+// NewServer constrói um servidor de dashboard na porta fornecida. broker pode ser nil
+// para desabilitar o SSE (o dashboard fará fallback para polling).
 func NewServer(repo *storage.Repository, log logger.Logger, port int, broker *Broker) *Server {
 	if log == nil {
 		log = logger.NopLogger{}
@@ -32,7 +32,7 @@ func NewServer(repo *storage.Repository, log logger.Logger, port int, broker *Br
 	return &Server{repo: repo, log: log, port: port, broker: broker}
 }
 
-// ListenAndServe starts the HTTP server and blocks until ctx is cancelled.
+// ListenAndServe inicia o servidor HTTP e bloqueia até que ctx seja cancelado.
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)

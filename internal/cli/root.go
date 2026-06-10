@@ -1,7 +1,7 @@
-// Package cli builds the Cobra command tree for limiar-collector. It never
-// constructs concrete storage or telegram dependencies itself: all such
-// construction is supplied by a Provider implemented in
-// cmd/limiar-collector/main.go. This keeps dependency wiring in a single place.
+// Package cli constrói a árvore de comandos do Cobra para o limiar-collector. Ele nunca
+// constrói as dependências concretas de storage ou telegram por conta própria: toda
+// essa construção é fornecida por um Provider implementado em
+// cmd/limiar-collector/main.go. Isso mantém a ligação de dependências em um único lugar.
 package cli
 
 import (
@@ -16,28 +16,28 @@ import (
 	"github.com/limiar/collector/internal/telegram"
 )
 
-// Provider supplies runtime dependencies to the CLI commands. The concrete
-// implementation lives in main.go; the CLI depends only on this interface so
-// no concrete storage/telegram construction happens in this package.
+// Provider fornece dependências em tempo de execução para os comandos da CLI. A implementação
+// concreta reside em main.go; a CLI depende apenas desta interface para que
+// nenhuma construção concreta de storage/telegram aconteça neste pacote.
 type Provider interface {
-	// Config returns the validated configuration.
+	// Config retorna a configuração validada.
 	Config() *config.Config
-	// Logger builds a Logger in the given format ("json" or "text").
+	// Logger constrói um Logger no formato fornecido ("json" ou "text").
 	Logger(format string) logger.Logger
-	// OpenStore opens the database and returns a Repository plus a close func.
+	// OpenStore abre o banco de dados e retorna um Repository junto com uma função de fechamento.
 	OpenStore(ctx context.Context) (*storage.Repository, func() error, error)
-	// NewClient builds the Telegram facade bound to the given repo and logger.
+	// NewClient constrói a fachada (facade) do Telegram vinculada ao repositório e logger fornecidos.
 	NewClient(log logger.Logger, repo *storage.Repository) telegram.TelegramClient
-	// NewCollector builds the collector bound to the given client, repo, and logger.
+	// NewCollector constrói o coletor vinculado ao cliente, repositório e logger fornecidos.
 	NewCollector(client telegram.TelegramClient, repo *storage.Repository, log logger.Logger) *collector.Collector
 }
 
-// NewRootCmd builds the root command and attaches the auth, channels, and run
-// subcommands, all wired through p.
+// NewRootCmd constrói o comando raiz e anexa os subcomandos auth, channels e run,
+// todos injetados através de p.
 func NewRootCmd(p Provider) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "limiar-collector",
-		Short:         "Limiar Phase 1 collector: capture raw Telegram channel messages",
+		Short:         "Limiar Phase 1 collector: captura mensagens brutas de canais do Telegram",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

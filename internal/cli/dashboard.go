@@ -10,8 +10,8 @@ import (
 	"github.com/limiar/collector/internal/dashboard"
 )
 
-// newDashboardCmd builds the `dashboard` subcommand: starts an HTTP server for
-// inspecting captured messages in a browser.
+// newDashboardCmd constrói o subcomando `dashboard`: inicia um servidor HTTP para
+// inspecionar as mensagens capturadas em um navegador.
 func newDashboardCmd(p Provider) *cobra.Command {
 	var port int
 

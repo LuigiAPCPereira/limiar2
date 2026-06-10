@@ -1,122 +1,101 @@
 # limiar-collector
 
-Phase 1 of **Limiar**, a pipeline that monitors Brazilian Telegram promo
-channels via an MTProto userbot and persists **raw** messages as JSON for later
-processing.
+Fase 1 do **Limiar**, um pipeline que monitora canais promocionais brasileiros do Telegram através de um userbot MTProto e persiste as mensagens **brutas (raw)** como JSON para processamento posterior.
 
-`limiar-collector` does one job: connect to Telegram, authenticate as a userbot,
-manage the list of monitored channels, and capture raw message payloads into an
-embedded database. There is **zero** processing in this phase — no
-normalization, classification, enrichment, or deduplication beyond safe
-persistence. The goal of Phase 1 is to discover the real shape of Telegram's
-data so that later phases (`limiar-processor`, `limiar-api`) can build on it.
+O `limiar-collector` faz apenas um trabalho: conectar-se ao Telegram, autenticar-se como um userbot, gerenciar a lista de canais monitorados e capturar os payloads brutos das mensagens em um banco de dados embutido. Há **zero** processamento nesta fase — sem normalização, classificação, enriquecimento ou desduplicação além da persistência segura. O objetivo da Fase 1 é descobrir o formato real dos dados do Telegram para que as fases posteriores (`limiar-processor`, `limiar-api`) possam ser construídas sobre ele.
 
-## What it is
+## O que ele é
 
-- A standalone Go binary (`cmd/limiar-collector`, module `github.com/limiar/collector`).
-- An MTProto userbot built directly on [`gotd/td`](https://github.com/gotd/td) (no third-party wrapper).
-- A raw-message collector that writes JSON payloads to an embedded
-  [Tursogo](https://turso.tech) database (`turso` driver via `database/sql`, **no CGO**).
+- Um binário Go standalone (`cmd/limiar-collector`, módulo `github.com/limiar/collector`).
+- Um userbot MTProto construído diretamente sobre o [`gotd/td`](https://github.com/gotd/td) (sem wrappers de terceiros).
+- Um coletor de mensagens brutas que grava payloads JSON em um banco de dados embutido [Tursogo](https://turso.tech) (driver `turso` via `database/sql`, **sem CGO**).
 
-## What it is NOT
+## O que ele NÃO é
 
-- Not a Telegram bot (it does not reply to messages or interact with users).
-- Not an HTTP scraper (it speaks native MTProto).
-- Not an alerting system (it is a data pipeline stage).
-- Not a processor or API — normalization, classification, dedup, LLM calls,
-  REST, and SSE all belong to future phases and are explicitly out of scope.
+- Não é um bot do Telegram (ele não responde a mensagens nem interage com usuários).
+- Não é um scraper HTTP (ele fala nativamente o protocolo MTProto).
+- Não é um sistema de alertas (ele é uma etapa de um pipeline de dados).
+- Não é um processador ou API — normalização, classificação, desduplicação, chamadas de LLM, REST e SSE pertencem todos a fases futuras e estão explicitamente fora do escopo.
 
-## No CGO required
+## Não requer CGO
 
-Tursogo uses `purego` for FFI, so the binary builds and runs without a C
-toolchain and without `CGO_ENABLED=1`. No SQLite driver, no GORM, no ORM.
+O Tursogo utiliza `purego` para FFI, portanto o binário é compilado e executado sem uma toolchain C e sem `CGO_ENABLED=1`. Sem driver SQLite, sem GORM, sem ORM.
 
-## Install
+## Instalação
 
 ```sh
 go build ./...
-# or build just the binary:
+# ou compile apenas o binário:
 go build -o limiar-collector ./cmd/limiar-collector
 ```
 
-## Commands
+## Comandos
 
-The binary exposes three subcommands. `auth` and `channels` log in **text**
-format (interactive); `run` logs in **JSON** format (production service).
+O binário expõe três subcomandos. `auth` e `channels` fazem logging no formato **texto** (interativo); `run` faz logging no formato **JSON** (serviço de produção).
 
-### `auth` — authenticate once and persist the session
+### `auth` — autenticar uma vez e persistir a sessão
 
-Interactive, idempotent. Prompts for phone number, then login code, then the
-2FA password if the account has two-factor enabled. The session is persisted to
-the `sessions` table (single row). Running `auth` again when a valid session
-already exists is a no-op.
+Interativo, idempotente. Solicita o número de telefone, depois o código de login e, em seguida, a senha de 2FA se a conta tiver a autenticação de dois fatores ativada. A sessão é persistida na tabela `sessions` (linha única). Executar `auth` novamente quando já existe uma sessão válida não tem efeito.
 
 ```sh
 LIMIAR_APP_ID=12345 LIMIAR_API_HASH=abcdef... ./limiar-collector auth
-# Phone number (international format, e.g. +5511999999999): +55...
-# Login code: 12345
-# 2FA password: ****        (only if two-factor is enabled)
+# Número de telefone (formato internacional, ex: +5511999999999): +55...
+# Código de login: 12345
+# Senha 2FA: ****        (apenas se a autenticação de dois fatores estiver ativada)
 ```
 
-### `channels` — manage the monitored channel list
+### `channels` — gerenciar a lista de canais monitorados
 
-Requires a valid session (otherwise returns `ErrNotAuthenticated`).
+Requer uma sessão válida (caso contrário, retorna `ErrNotAuthenticated`).
 
 ```sh
 ./limiar-collector channels list
-./limiar-collector channels add <username>      # resolves @username via MTProto, persists it
-./limiar-collector channels remove <username>   # ErrChannelNotFound if absent
+./limiar-collector channels add <username>      # resolve @username via MTProto, persiste o canal
+./limiar-collector channels remove <username>   # ErrChannelNotFound se ausente
 ```
 
-### `run` — start the collector service
+### `run` — iniciar o serviço coletor
 
-Non-interactive, production-ready. Requires a valid session. Backfills the 20
-most recent messages on a channel's first run, then captures live messages and
-persists each raw JSON payload. Shuts down gracefully on `SIGTERM`/`SIGINT`,
-draining in-flight writes within `LIMIAR_SHUTDOWN_TIMEOUT` seconds.
+Não interativo, pronto para produção. Requer uma sessão válida. Faz o backfill das 20 mensagens mais recentes na primeira execução de um canal, depois captura as mensagens ao vivo e persiste cada payload JSON bruto. Desliga de forma graciosa (graceful shutdown) ao receber `SIGTERM`/`SIGINT`, finalizando as gravações pendentes dentro de `LIMIAR_SHUTDOWN_TIMEOUT` segundos.
 
 ```sh
 LIMIAR_APP_ID=12345 LIMIAR_API_HASH=abcdef... ./limiar-collector run
 ```
 
-## Configuration (environment variables)
+## Configuração (variáveis de ambiente)
 
-All configuration is read from `LIMIAR_`-prefixed environment variables via
-Viper. `Load()` populates the struct and applies defaults; `Validate()` is
-called explicitly before any I/O and reports every invalid field at once.
+Toda a configuração é lida de variáveis de ambiente com o prefixo `LIMIAR_` usando o Viper. `Load()` preenche a estrutura e aplica os padrões; `Validate()` é chamado explicitamente antes de qualquer operação de E/S e reporta todos os campos inválidos de uma vez.
 
-| Variable | Field | Default | Valid range / values |
+| Variável | Campo | Padrão | Intervalo válido / valores |
 |----------|-------|---------|----------------------|
-| `LIMIAR_APP_ID` | `AppID` | — (required) | non-zero integer |
-| `LIMIAR_API_HASH` | `APIHash` | — (required) | non-empty string (masked in logs) |
-| `LIMIAR_DB_PATH` | `DBPath` | `./limiar.db` | any valid path |
+| `LIMIAR_APP_ID` | `AppID` | — (obrigatório) | inteiro diferente de zero |
+| `LIMIAR_API_HASH` | `APIHash` | — (obrigatório) | string não vazia (mascarada nos logs) |
+| `LIMIAR_DB_PATH` | `DBPath` | `./limiar.db` | qualquer caminho válido |
 | `LIMIAR_LOG_LEVEL` | `LogLevel` | `info` | `debug`, `info`, `warn`, `error` |
 | `LIMIAR_LOG_FORMAT` | `LogFormat` | `json` | `json`, `text` |
-| `LIMIAR_SHUTDOWN_TIMEOUT` | `ShutdownTimeout` | `15` | 1–300 (seconds) |
-| `LIMIAR_MAX_RETRIES` | `MaxRetries` | `10` | positive integer |
-| `LIMIAR_IO_TIMEOUT` | `IOTimeout` | `30s` | Go duration |
+| `LIMIAR_SHUTDOWN_TIMEOUT` | `ShutdownTimeout` | `15` | 1–300 (segundos) |
+| `LIMIAR_MAX_RETRIES` | `MaxRetries` | `10` | inteiro positivo |
+| `LIMIAR_IO_TIMEOUT` | `IOTimeout` | `30s` | Duração do Go |
 | `LIMIAR_DISPATCHER_BUFFER_SIZE` | `DispatcherBufferSize` | `256` | 64–4096 |
 | `LIMIAR_DB_WRITER_BUFFER_SIZE` | `DBWriterBufferSize` | `512` | 128–8192 |
 
-`AppID` and `APIHash` are required and never defaulted; a missing value for
-either produces a validation error. The `APIHash` value is masked by
-`Config.String()` and redacted from all log output.
+`AppID` e `APIHash` são obrigatórios e nunca possuem valor padrão; um valor ausente para qualquer um deles produz um erro de validação. O valor de `APIHash` é mascarado por `Config.String()` e omitido de todas as saídas de log.
 
 ## Stack
 
-| Concern | Technology |
+| Funcionalidade | Tecnologia |
 |---------|-----------|
-| MTProto | `gotd/td` (no wrapper) |
-| Database | `turso.tech/database/tursogo` (driver `turso`, no CGO) |
-| CLI / config | `cobra` + `viper` |
-| Logging | `log/slog` behind a `Logger` interface |
-| Property tests | `pgregory.net/rapid` (test files only) |
+| MTProto | `gotd/td` (sem wrapper) |
+| Banco de dados | `turso.tech/database/tursogo` (driver `turso`, sem CGO) |
+| CLI / configuração | `cobra` + `viper` |
+| Logging | `log/slog` por trás de uma interface `Logger` |
+| Testes de propriedade | `pgregory.net/rapid` (apenas arquivos de teste) |
 
-## Documentation
+## Documentação
 
-- `docs/CONTEXT.md` — system overview, scope, phase roadmap
-- `docs/ARCHITECTURE.md` — pipeline diagram, concurrency model, data model
-- `docs/specs/GOTD-TD.md`, `docs/specs/TURSOGO.md` — library usage specs
-- `docs/guidelines/` — extension guidelines for storage, telegram, collector
-- `docs/adr/` — architecture decision records
-- `AGENTS.md` — rules for AI agents and contributors
+- `docs/CONTEXT.md` — visão geral do sistema, escopo, roadmap de fases
+- `docs/ARCHITECTURE.md` — diagrama do pipeline, modelo de concorrência, modelo de dados
+- `docs/specs/GOTD-TD.md`, `docs/specs/TURSOGO.md` — especificações de uso de bibliotecas
+- `docs/guidelines/` — diretrizes de extensão para armazenamento, telegram, collector
+- `docs/adr/` — registros de decisão de arquitetura (ADRs)
+- `AGENTS.md` — regras para agentes de IA e contribuidores
