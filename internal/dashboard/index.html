@@ -86,7 +86,7 @@
 
 <header>
   <h1>&#9670; <span>Limiar</span> Dashboard</h1>
-  <span class="conn-badge" :class="connClass" x-text="connLabel" role="status" aria-live="polite"></span>
+  <span class="conn-badge" :class="connClass" role="status"><span class="sr-only">Status da conexão: </span><span x-text="connLabel"></span></span>
 </header>
 
 <div class="container">
