@@ -48,6 +48,7 @@ type NormalizedMessage struct {
 	URLHash        string // SHA-256 da primeira URL normalizada
 	Merchant       string // merchant inferido do domínio da URL
 	ProductName    string // nome do produto (heurística)
+	IsDuplicate    bool   // mesma URL já processada em outro canal
 	UrgencySignals []string
 	MessageType    string // preenchido por Classify
 	Synthesis      string // JSON serializado de SynthesizedPromotion

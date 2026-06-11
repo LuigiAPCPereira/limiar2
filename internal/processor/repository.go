@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
@@ -33,8 +34,8 @@ func NewRepository(db *sql.DB) (*Repository, error) {
 			urgency_signals, posted_at, processed_at,
 			price_original, price_discount, coupon_code,
 			payment_method, shipping, installments, discount_percent,
-			url_hash, merchant, product_name, synthesis
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			url_hash, merchant, product_name, synthesis, is_duplicate
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(channel_id, message_id) DO NOTHING`)
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "prepare_insert_processed", err)
@@ -145,11 +146,43 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		msg.Merchant,
 		msg.ProductName,
 		msg.Synthesis,
+		boolToInt(msg.IsDuplicate),
 	)
 	if err != nil {
 		return apperrors.Wrap("processor", "save_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
 	}
 	return nil
+}
+
+// ExistsURLHashes retorna o conjunto de url_hashes que já existem no banco.
+// Uma única query IN para todo o batch (evita N queries individuais).
+func (r *Repository) ExistsURLHashes(ctx context.Context, hashes []string) (map[string]bool, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(hashes))
+	args := make([]any, len(hashes))
+	for i, h := range hashes {
+		placeholders[i] = "?"
+		args[i] = h
+	}
+	query := "SELECT DISTINCT url_hash FROM processed_messages WHERE url_hash IN (" +
+		strings.Join(placeholders, ",") + ")"
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			continue
+		}
+		result[h] = true
+	}
+	return result, nil
 }
 
 // SaveProcessedBatch persiste múltiplas mensagens em uma única transação.
@@ -203,6 +236,7 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			msg.Merchant,
 			msg.ProductName,
 			msg.Synthesis,
+			boolToInt(msg.IsDuplicate),
 		)
 		if err != nil {
 			failed++

@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS processed_messages (
     merchant         TEXT DEFAULT '',
     product_name     TEXT DEFAULT '',
     synthesis        TEXT DEFAULT '',
+    is_duplicate     INTEGER DEFAULT 0,
     UNIQUE(channel_id, message_id)
 );
 
