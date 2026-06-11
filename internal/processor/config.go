@@ -15,7 +15,6 @@ const (
 	defaultBatchSize    = 50
 	defaultDBPath       = "./limiar.db"
 	defaultLogLevel     = "info"
-	defaultLogFormat    = "json"
 )
 
 // Config do limiar-processor. Sem credenciais Telegram — o processor
@@ -68,9 +67,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.LogLevel == "" {
 		c.LogLevel = defaultLogLevel
-	}
-	if c.LogFormat == "" {
-		c.LogFormat = defaultLogFormat
 	}
 }
 

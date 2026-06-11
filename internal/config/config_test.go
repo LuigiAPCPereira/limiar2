@@ -46,8 +46,8 @@ func TestProperty12Defaults(t *testing.T) {
 	if c.LogLevel != "info" {
 		t.Errorf("LogLevel padrão = %q, esperado info", c.LogLevel)
 	}
-	if c.LogFormat != "pretty" {
-		t.Errorf("LogFormat padrão = %q, esperado pretty", c.LogFormat)
+	if c.LogFormat != "" {
+		t.Errorf("LogFormat padrão = %q, esperado vazio (resolvido por subcomando via ResolveFormat)", c.LogFormat)
 	}
 	if c.ShutdownTimeout != 15 {
 		t.Errorf("ShutdownTimeout padrão = %d, esperado 15", c.ShutdownTimeout)

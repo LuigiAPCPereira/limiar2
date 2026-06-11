@@ -25,74 +25,74 @@ func NewProcessor(repo *Repository, cfg *Config, log logger.Logger) *Processor {
 }
 
 // Run inicia o loop de processamento. Faz poll a cada PollInterval até
-// ctx ser cancelado (SIGTERM/SIGINT).
+// ctx ser cancelado (SIGTERM/SIGINT). Usa drain mode: se o batch encheu,
+// processa imediatamente sem esperar o ticker (drena backlog mais rápido).
 func (p *Processor) Run(ctx context.Context) error {
 	p.log.Info("🔄 Processor iniciado",
 		"poll_interval", p.cfg.PollInterval,
 		"batch_size", p.cfg.BatchSize)
 
-	// Processa backlog existente imediatamente no startup.
-	p.processBatch(ctx)
-
-	ticker := time.NewTicker(p.cfg.PollInterval)
-	defer ticker.Stop()
-
 	for {
+		full := p.processBatch(ctx)
+
+		if full {
+			// Batch encheu — há mais mensagens para processar.
+			// Continua imediatamente (drain mode).
+			continue
+		}
+
 		select {
 		case <-ctx.Done():
 			p.log.Info("🛑 Processor parando (contexto cancelado)")
 			return nil
-		case <-ticker.C:
-			p.processBatch(ctx)
+		case <-time.After(p.cfg.PollInterval):
 		}
 	}
 }
 
 // processBatch busca um lote de mensagens não processadas, normaliza cada uma,
-// classifica e persiste. Erros em mensagens individuais são logados e não
-// interrompem o batch.
-func (p *Processor) processBatch(ctx context.Context) {
+// classifica e persiste em transação única. Retorna true se o batch encheu
+// (indicando que há mais mensagens para processar — drain mode).
+func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 	start := time.Now()
 
 	msgs, err := p.repo.FetchUnprocessed(ctx, p.cfg.BatchSize)
 	if err != nil {
 		p.log.Error("❌ Erro ao buscar mensagens não processadas", "erro", err)
-		return
+		return false
 	}
 
 	if len(msgs) == 0 {
-		return
+		return false
 	}
 
-	var processed, failed int
+	batchFull = len(msgs) >= p.cfg.BatchSize
+
+	// Normaliza e classifica todas primeiro (CPU-bound, sem I/O).
+	var normalized []*NormalizedMessage
+	var normFailed int
 	for _, raw := range msgs {
+		msgLog := p.log.With("canal_id", raw.ChannelID, "msg_id", raw.MessageID)
 		nm, err := Normalize(raw)
 		if err != nil {
-			p.log.Warn("⚠️ Normalização falhou",
-				"raw_id", raw.ID,
-				"msg_id", raw.MessageID,
-				"erro", err)
-			failed++
+			msgLog.Warn("⚠️ Normalização falhou", "erro", err)
+			normFailed++
 			continue
 		}
-
 		nm.MessageType = string(Classify(nm))
-
-		if err := p.repo.SaveProcessed(ctx, nm); err != nil {
-			p.log.Error("❌ Persistência falhou",
-				"msg_id", nm.MessageID,
-				"erro", err)
-			failed++
-			continue
-		}
-		processed++
+		normalized = append(normalized, nm)
 	}
+
+	// Persiste todas em transação única (10-50x mais rápido que INSERTs individuais).
+	saved, saveFailed := p.repo.SaveProcessedBatch(ctx, normalized)
 
 	backlog, _ := p.repo.CountUnprocessed(ctx)
 
 	p.log.Info("⚙️ Batch processado",
-		"processadas", processed,
-		"falharam", failed,
+		"processadas", saved,
+		"falharam", normFailed+saveFailed,
 		"duração_ms", time.Since(start).Milliseconds(),
 		"backlog", backlog)
+
+	return batchFull
 }

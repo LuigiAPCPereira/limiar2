@@ -1,9 +1,11 @@
 package cli
 
 import (
-	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/limiar/collector/internal/logger"
 )
 
 // newAuthCmd constrói o subcomando `auth`: autenticação interativa e idempotente
@@ -18,7 +20,10 @@ func newAuthCmd(p Provider) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			cfg := p.Config()
-			log := p.Logger(cfg.LogFormat)
+
+			format, _ := logger.ResolveFormat("auth", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+			log := p.Logger(format)
+			presenter := p.Presenter()
 
 			repo, closeStore, err := p.OpenStore(ctx)
 			if err != nil {
@@ -31,10 +36,7 @@ func newAuthCmd(p Provider) *cobra.Command {
 			if err := client.Auth(ctx); err != nil {
 				return err
 			}
-			fmt.Println()
-			fmt.Println("  ✅ Autenticação concluída! Sessão persistida.")
-			fmt.Println()
-			log.Debug("autenticação concluída; sessão persistida")
+			presenter.Success("Autenticação concluída! Sessão persistida.")
 			return nil
 		},
 	}

@@ -2,12 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/spf13/cobra"
 
 	"github.com/limiar/collector/internal/dashboard"
+	"github.com/limiar/collector/internal/logger"
 )
 
 // newDashboardCmd constrói o subcomando `dashboard`: inicia um servidor HTTP para
@@ -29,10 +31,14 @@ func newDashboardCmd(p Provider) *cobra.Command {
 			}
 			defer func() { _ = closeStore() }()
 
-			log := p.Logger("text")
-			srv := dashboard.NewServer(repo, log, port, nil)
+			cfg := p.Config()
+			format, _ := logger.ResolveFormat("dashboard", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+			log := p.Logger(format)
+			presenter := p.Presenter()
 
-			fmt.Fprintf(cmd.OutOrStdout(), "\n  🌐 Dashboard: http://localhost:%d\n  Pressione Ctrl+C para encerrar\n\n", port)
+			srv := dashboard.NewServer(repo, log, port, nil)
+			presenter.Info(fmt.Sprintf("Dashboard: http://localhost:%d", port))
+			presenter.Step("Pressione Ctrl+C para encerrar")
 			return srv.ListenAndServe(ctx)
 		},
 	}

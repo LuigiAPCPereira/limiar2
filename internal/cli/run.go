@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/limiar/collector/internal/dashboard"
 	apperrors "github.com/limiar/collector/internal/errors"
+	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/storage"
 )
 
@@ -27,7 +28,10 @@ func newRunCmd(p Provider) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := p.Config()
-			log := p.Logger(cfg.LogFormat)
+
+			format, _ := logger.ResolveFormat("run", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+			log := p.Logger(format)
+			presenter := p.Presenter()
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
@@ -54,7 +58,7 @@ func newRunCmd(p Provider) *cobra.Command {
 				})
 
 				go func() { _ = srv.ListenAndServe(ctx) }()
-				fmt.Fprintf(cmd.OutOrStdout(), "\n  🌐 Dashboard: http://localhost:8080\n\n")
+				presenter.Info("Dashboard: http://localhost:8080")
 			}
 
 			runErr := make(chan error, 1)

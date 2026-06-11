@@ -1,12 +1,14 @@
 package logger
 
 import (
+	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
-	"strings"
+	"strconv"
+	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // levelConfig contém o nome de exibição e a cor ANSI para cada nível do slog.
@@ -14,19 +16,22 @@ var levelConfig = map[slog.Level]struct {
 	name  string
 	color string
 }{
-	slog.LevelDebug: {"DEBUG", "\x1b[90m"}, // grey
-	slog.LevelInfo:  {"INFO ", "\x1b[36m"}, // cyan
-	slog.LevelWarn:  {"WARN ", "\x1b[33m"}, // yellow
-	slog.LevelError: {"ERROR", "\x1b[31m"}, // red
+	slog.LevelDebug: {"DEBUG", "\x1b[90m"},
+	slog.LevelInfo:  {"INFO ", "\x1b[36m"},
+	slog.LevelWarn:  {"WARN ", "\x1b[33m"},
+	slog.LevelError: {"ERROR", "\x1b[31m"},
 }
 
-const resetCode = "\x1b[0m"
-const fieldWidth = 14 // largura para alinhar nomes de campos
+const prettyResetCode = "\x1b[0m"
+const fieldWidth = 14
 
 // PrettyHandler escreve linhas de log coloridas amigáveis para leitura humana em um io.Writer.
+// Seguro para uso concorrente: um mutex compartilhado serializa a escrita de cada registro.
 type PrettyHandler struct {
 	w         io.Writer
+	mu        *sync.Mutex
 	attrs     []slog.Attr
+	groups    []string
 	minLevel  slog.Level
 	useColors bool
 }
@@ -34,13 +39,14 @@ type PrettyHandler struct {
 // asserção em tempo de compilação
 var _ slog.Handler = (*PrettyHandler)(nil)
 
-// NewPrettyHandler cria um PrettyHandler escrevendo em w. Se w não for um TTY,
-// as cores são desativadas.
-func NewPrettyHandler(w io.Writer, minLevel slog.Level) *PrettyHandler {
+// NewPrettyHandler cria um PrettyHandler escrevendo em w.
+// useColors controla a emissão de sequências ANSI.
+func NewPrettyHandler(w io.Writer, minLevel slog.Level, useColors bool) *PrettyHandler {
 	return &PrettyHandler{
 		w:         w,
+		mu:        &sync.Mutex{},
 		minLevel:  minLevel,
-		useColors: isTerminalWriter(w),
+		useColors: useColors,
 	}
 }
 
@@ -50,109 +56,174 @@ func (h *PrettyHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 // Handle formata um único registro slog em um bloco multilinhas bem formatado.
+// Uma única operação Write sob mutex garante atomicidade do registro.
 func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
+	if r.Level < h.minLevel {
+		return nil
+	}
+
 	cfg, ok := levelConfig[r.Level]
 	if !ok {
 		cfg = levelConfig[slog.LevelInfo]
 	}
 
-	var sb strings.Builder
-
-	// coleta todos os atributos: estáticos primeiro, depois os atributos do registro
-	allAttrs := make([]slog.Attr, 0, len(h.attrs)+r.NumAttrs())
-	allAttrs = append(allAttrs, h.attrs...)
-	r.Attrs(func(a slog.Attr) bool {
-		allAttrs = append(allAttrs, a)
-		return true
-	})
+	var buf bytes.Buffer
 
 	// linha principal: ◆ 15:04:05  NÍVEL   msg
 	timeStr := r.Time.Format("15:04:05")
 	if h.useColors {
-		sb.WriteString(cfg.color)
+		buf.WriteString(cfg.color)
 	}
-	sb.WriteString("◆ ")
-	sb.WriteString(timeStr)
-	sb.WriteString("  ")
-	sb.WriteString(cfg.name)
-	sb.WriteString("  ")
+	buf.WriteString("◆ ")
+	buf.WriteString(timeStr)
+	buf.WriteString("  ")
+	buf.WriteString(cfg.name)
+	buf.WriteString("  ")
 	if h.useColors {
-		sb.WriteString(resetCode)
+		buf.WriteString(prettyResetCode)
 	}
-	sb.WriteString(r.Message)
-	sb.WriteString("\n")
+	buf.WriteString(r.Message)
+	buf.WriteByte('\n')
 
-	// campos
-	for i, a := range allAttrs {
+	// atributos estáticos (pré-redigidos em WithAttrs) + atributos do registro
+	allAttrs := make([]flatAttr, 0, len(h.attrs)+r.NumAttrs())
+	for _, a := range h.attrs {
+		collectFlatAttrs(h.groups, a, &allAttrs)
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		a = redactAttr(h.groups, a)
+		collectFlatAttrs(h.groups, a, &allAttrs)
+		return true
+	})
+
+	last := len(allAttrs) - 1
+	for i, fa := range allAttrs {
 		prefix := "├"
-		if i == len(allAttrs)-1 {
+		if i == last {
 			prefix = "└"
 		}
 		if h.useColors {
-			sb.WriteString(cfg.color)
+			buf.WriteString(cfg.color)
 		}
-		sb.WriteString(prefix)
+		buf.WriteString(prefix)
 		if h.useColors {
-			sb.WriteString(resetCode)
+			buf.WriteString(prettyResetCode)
 		}
-		sb.WriteString(" ")
-		sb.WriteString(padRight(a.Key, fieldWidth))
-		sb.WriteString(formatValue(a.Value))
-		sb.WriteString("\n")
+		buf.WriteByte(' ')
+		padRightRunes(&buf, fa.key, fieldWidth)
+		buf.Write(fa.value)
+		buf.WriteByte('\n')
 	}
 
-	// linha em branco entre os registros
-	sb.WriteString("\n")
-
-	_, err := h.w.Write([]byte(sb.String()))
+	h.mu.Lock()
+	_, err := h.w.Write(buf.Bytes())
+	h.mu.Unlock()
 	return err
 }
 
-// WithAttrs retorna um novo handler que inclui os atributos fornecidos.
+// WithAttrs retorna um novo handler que inclui os atributos fornecidos (pré-redigidos).
 func (h *PrettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newAttrs := make([]slog.Attr, len(h.attrs)+len(attrs))
 	copy(newAttrs, h.attrs)
-	copy(newAttrs[len(h.attrs):], attrs)
+	for i, a := range attrs {
+		newAttrs[len(h.attrs)+i] = redactAttr(h.groups, a)
+	}
 	return &PrettyHandler{
 		w:         h.w,
+		mu:        h.mu,
 		attrs:     newAttrs,
+		groups:    h.groups,
 		minLevel:  h.minLevel,
 		useColors: h.useColors,
 	}
 }
 
-// WithGroup retorna um novo handler com o nome de grupo fornecido.
+// WithGroup retorna um novo handler com o nome de grupo empilhado.
+// Grupos são renderizados em flat dotted notation (ex: auth.api_hash).
 func (h *PrettyHandler) WithGroup(name string) slog.Handler {
-	// Grupos são achatados (flattened) por simplicidade neste pretty handler
-	return h
-}
-
-// padRight preenche s com espaços à direita até que atinja a largura (width).
-func padRight(s string, width int) string {
-	if len(s) >= width {
-		return s[:width]
+	if name == "" {
+		return h
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	newGroups := make([]string, len(h.groups)+1)
+	copy(newGroups, h.groups)
+	newGroups[len(h.groups)] = name
+	return &PrettyHandler{
+		w:         h.w,
+		mu:        h.mu,
+		attrs:     h.attrs,
+		groups:    newGroups,
+		minLevel:  h.minLevel,
+		useColors: h.useColors,
+	}
 }
 
-// formatValue formata um slog.Value para exibição.
-func formatValue(v slog.Value) string {
+// flatAttr representa um atributo já resolvido em chave pontuada e valor formatado.
+type flatAttr struct {
+	key   string
+	value []byte
+}
+
+// collectFlatAttrs expande grupos em notação pontuada e redige recursivamente.
+func collectFlatAttrs(groups []string, a slog.Attr, out *[]flatAttr) {
+	if a.Value.Kind() == slog.KindGroup {
+		subGroups := append(groups, a.Key)
+		for _, ga := range a.Value.Group() {
+			collectFlatAttrs(subGroups, ga, out)
+		}
+		return
+	}
+	a = redactAttr(groups, a)
+	key := dottedKey(groups, a.Key)
+	*out = append(*out, flatAttr{key: key, value: formatScalar(a.Value)})
+}
+
+// dottedKey constrói a chave em flat dotted notation a partir do caminho de grupos.
+func dottedKey(groups []string, key string) string {
+	if len(groups) == 0 {
+		return key
+	}
+	var buf bytes.Buffer
+	for _, g := range groups {
+		buf.WriteString(g)
+		buf.WriteByte('.')
+	}
+	buf.WriteString(key)
+	return buf.String()
+}
+
+// padRightRunes preenche s com espaços até atingir a largura em runes.
+// Garante no mínimo 2 espaços de separação entre chave e valor.
+// Usa utf8.RuneCountInString para acomodar chaves pt-BR com caracteres multibyte.
+func padRightRunes(buf *bytes.Buffer, s string, width int) {
+	buf.WriteString(s)
+	n := utf8.RuneCountInString(s)
+	padding := width - n
+	if padding < 2 {
+		padding = 2
+	}
+	for i := 0; i < padding; i++ {
+		buf.WriteByte(' ')
+	}
+}
+
+// formatScalar formata um slog.Value para exibição sem reflexão.
+func formatScalar(v slog.Value) []byte {
 	switch v.Kind() {
 	case slog.KindString:
-		return v.String()
+		return []byte(v.String())
 	case slog.KindInt64:
-		return fmt.Sprintf("%d", v.Int64())
+		return strconv.AppendInt(nil, v.Int64(), 10)
 	case slog.KindUint64:
-		return fmt.Sprintf("%d", v.Uint64())
+		return strconv.AppendUint(nil, v.Uint64(), 10)
 	case slog.KindFloat64:
-		return fmt.Sprintf("%g", v.Float64())
+		return strconv.AppendFloat(nil, v.Float64(), 'g', -1, 64)
 	case slog.KindBool:
-		return fmt.Sprintf("%t", v.Bool())
+		return strconv.AppendBool(nil, v.Bool())
 	case slog.KindDuration:
-		return v.Duration().String()
+		return []byte(v.Duration().String())
 	case slog.KindTime:
-		return v.Time().Format(time.RFC3339)
+		return []byte(v.Time().Format(time.RFC3339))
 	default:
-		return fmt.Sprintf("%v", v.Any())
+		return []byte(v.String())
 	}
 }

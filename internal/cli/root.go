@@ -22,8 +22,10 @@ import (
 type Provider interface {
 	// Config retorna a configuração validada.
 	Config() *config.Config
-	// Logger constrói um Logger no formato fornecido ("json" ou "text").
+	// Logger constrói um Logger no formato fornecido ("json", "text" ou "pretty").
 	Logger(format string) logger.Logger
+	// Presenter constrói um Presenter para Mensagens_de_Apresentação ao operador.
+	Presenter() logger.Presenter
 	// OpenStore abre o banco de dados e retorna um Repository junto com uma função de fechamento.
 	OpenStore(ctx context.Context) (*storage.Repository, func() error, error)
 	// NewClient constrói a fachada (facade) do Telegram vinculada ao repositório e logger fornecidos.

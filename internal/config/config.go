@@ -20,7 +20,6 @@ import (
 const (
 	defaultDBPath          = "./limiar.db"
 	defaultLogLevel        = "info"
-	defaultLogFormat       = "pretty"
 	defaultShutdownTimeout = 15
 	defaultMaxRetries      = 10
 	defaultIOTimeout       = 30 * time.Second
@@ -170,9 +169,6 @@ func (c *Config) ApplyDefaults() {
 	if c.LogLevel == "" {
 		c.LogLevel = defaultLogLevel
 	}
-	if c.LogFormat == "" {
-		c.LogFormat = defaultLogFormat
-	}
 	if c.ShutdownTimeout == 0 {
 		c.ShutdownTimeout = defaultShutdownTimeout
 	}
@@ -211,7 +207,7 @@ func (c *Config) Validate() error {
 	if !isValidLogLevel(c.LogLevel) {
 		errs = append(errs, fmt.Errorf("log_level %q inválido (esperado: debug|info|warn|error)", c.LogLevel))
 	}
-	if c.LogFormat != "json" && c.LogFormat != "text" && c.LogFormat != "pretty" {
+	if c.LogFormat != "" && c.LogFormat != "json" && c.LogFormat != "text" && c.LogFormat != "pretty" {
 		errs = append(errs, fmt.Errorf("log_format %q inválido (esperado: json|text|pretty)", c.LogFormat))
 	}
 	if c.ShutdownTimeout < minShutdownTimeout || c.ShutdownTimeout > maxShutdownTimeout {

@@ -2,10 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
 	apperrors "github.com/limiar/collector/internal/errors"
+	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/telegram"
 )
@@ -29,11 +31,14 @@ func newChannelsCmd(p Provider) *cobra.Command {
 func withAuthenticatedStore(
 	cmd *cobra.Command,
 	p Provider,
-	fn func(repo *storage.Repository, log logging) error,
+	fn func(repo *storage.Repository, log logger.Logger, presenter logger.Presenter) error,
 ) error {
 	ctx := cmd.Context()
 	cfg := p.Config()
-	log := p.Logger(cfg.LogFormat)
+
+	format, _ := logger.ResolveFormat("channels", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+	log := p.Logger(format)
+	presenter := p.Presenter()
 
 	repo, closeStore, err := p.OpenStore(ctx)
 	if err != nil {
@@ -47,15 +52,10 @@ func withAuthenticatedStore(
 		return err
 	}
 	if !authed {
-		fmt.Fprintln(cmd.OutOrStdout(), "\n  ⚠️  Sessão não autenticada. Execute 'limiar-collector auth' primeiro.")
+		presenter.Warning("Sessão não autenticada. Execute 'limiar-collector auth' primeiro.")
 		return apperrors.Wrap("cli", "channels", apperrors.ErrNotAuthenticated)
 	}
-	return fn(repo, log)
-}
-
-// logging é a interface mínima de logger que os handlers de canais utilizam.
-type logging interface {
-	Info(msg string, args ...any)
+	return fn(repo, log, presenter)
 }
 
 func newChannelsListCmd(p Provider) *cobra.Command {
@@ -64,7 +64,7 @@ func newChannelsListCmd(p Provider) *cobra.Command {
 		Short: "Listar canais monitorados",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return withAuthenticatedStore(cmd, p, func(repo *storage.Repository, log logging) error {
+			return withAuthenticatedStore(cmd, p, func(repo *storage.Repository, _ logger.Logger, presenter logger.Presenter) error {
 				channels, err := repo.ListChannels(cmd.Context())
 				if err != nil {
 					return err
@@ -103,8 +103,10 @@ func newChannelsAddCmd(p Provider) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := p.Config()
-			log := p.Logger(cfg.LogFormat)
-			out := cmd.OutOrStdout()
+
+			format, _ := logger.ResolveFormat("channels", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+			log := p.Logger(format)
+			presenter := p.Presenter()
 
 			repo, closeStore, err := p.OpenStore(ctx)
 			if err != nil {
@@ -112,7 +114,7 @@ func newChannelsAddCmd(p Provider) *cobra.Command {
 			}
 			defer func() { _ = closeStore() }()
 
-			fmt.Fprintln(out, "\n  📡 Conectando ao Telegram...")
+			presenter.Step("Conectando ao Telegram...")
 
 			client := p.NewClient(log, repo)
 			peer, err := client.ResolveChannelChecked(ctx, args[0])
@@ -131,12 +133,7 @@ func newChannelsAddCmd(p Provider) *cobra.Command {
 			if err := repo.SavePeer(ctx, peer); err != nil {
 				return err
 			}
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "  ✅ Canal adicionado com sucesso!")
-			fmt.Fprintf(out, "  • Username : @%s\n", peer.Username)
-			fmt.Fprintf(out, "  • ID       : %d\n", peer.ID)
-			fmt.Fprintln(out)
-			log.Info("canal adicionado", "id", peer.ID, "username", peer.Username)
+			presenter.Success(fmt.Sprintf("Canal @%s adicionado (id: %d)", peer.Username, peer.ID))
 			return nil
 		},
 	}
@@ -148,13 +145,12 @@ func newChannelsRemoveCmd(p Provider) *cobra.Command {
 		Short: "Remover um canal monitorado pelo username ou link",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return withAuthenticatedStore(cmd, p, func(repo *storage.Repository, log logging) error {
+			return withAuthenticatedStore(cmd, p, func(repo *storage.Repository, _ logger.Logger, presenter logger.Presenter) error {
 				username := telegram.NormalizeUsername(args[0])
 				if err := repo.RemoveChannel(cmd.Context(), username); err != nil {
 					return err
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "\n  ✅ Canal @%s removido.\n\n", username)
-				log.Info("canal removido", "username", username)
+				presenter.Success(fmt.Sprintf("Canal @%s removido.", username))
 				return nil
 			})
 		},

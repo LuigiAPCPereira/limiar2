@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 
@@ -27,8 +29,17 @@ type provider struct {
 func (p *provider) Config() *config.Config { return p.cfg }
 
 // Logger constrói um SlogLogger no nível configurado e no formato solicitado.
+// Vincula automaticamente run_id, service e pipeline_stage para correlação.
 func (p *provider) Logger(format string) logger.Logger {
-	return logger.NewSlogLogger(os.Stdout, logger.ParseLevel(p.cfg.LogLevel), format)
+	log := logger.NewSlogLogger(os.Stdout, logger.ParseLevel(p.cfg.LogLevel), format)
+	return log.With("run_id", generateRunID(), "service", "limiar-collector", "pipeline_stage", "collector")
+}
+
+// Presenter constrói um TerminalPresenter escrevendo em stderr.
+// Cores são ativadas quando stderr é TTY e NO_COLOR não está definido.
+func (p *provider) Presenter() logger.Presenter {
+	useColors := logger.IsTerminalWriter(os.Stderr) && !logger.NoColorEnvSet()
+	return logger.NewTerminalPresenter(os.Stderr, useColors)
 }
 
 // OpenStore abre o banco de dados Tursogo e retorna um Repository com um fechador (closer)
@@ -93,4 +104,14 @@ func run() error {
 
 	root := cli.NewRootCmd(&provider{cfg: cfg})
 	return root.ExecuteContext(context.Background())
+}
+
+// generateRunID produz 8 bytes aleatórios formatados como hex (16 chars).
+// Usa crypto/rand para garantir unicidade entre execuções.
+func generateRunID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "0000000000000000"
+	}
+	return hex.EncodeToString(b)
 }
