@@ -11,3 +11,7 @@
 ## 2023-10-27 - Indicador de Conexão SSE Acessível
 **Aprendizado:** Quando trabalhamos com conexões contínuas como SSE no background (sem refresh de página), leitores de tela e usuários em geral podem não saber que os dados estão sendo atualizados dinamicamente ou se a conexão caiu (fallback para polling).
 **Ação:** Sempre usar regiões `aria-live="polite"` e `role="status"` combinadas com feedback visual (ex: status badge no header) para indicar o estado da conexão ("Ao vivo (SSE)" vs "Modo Polling (30s)"), mantendo a acessibilidade e previsibilidade da interface.
+
+## 2025-06-11 - Estilos globais para foco acessível em Vanilla HTML
+**Aprendizado:** Em dashboards vanilla (sem uso de frameworks utilitários que provêm reset consistente como Tailwind), desenvolvedores frequentemente esquecem de adicionar estados de foco customizados para interações criadas com `<div>`, `<span>`, ou `<a>`.
+**Ação:** Em projetos desse tipo, adicionar uma regra global de CSS como `:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }` é a forma mais eficaz e segura de garantir suporte visual universal à navegação por teclado sem afetar a usabilidade normal de clique de mouse, preenchendo as lacunas esquecidas em componentes individuais.
