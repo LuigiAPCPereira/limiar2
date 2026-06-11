@@ -57,6 +57,7 @@
   .type-deal_no_price { background: #78350f; color: var(--yellow); }
   .type-category_header { background: #312e81; color: var(--purple); }
   .type-coupon_expired { background: #7f1d1d; color: var(--red); }
+  .type-coupon_only { background: #4a1d96; color: #c4b5fd; }
   .type-commentary { background: var(--border); color: var(--muted); }
   .type-video { background: #581c87; color: var(--purple); }
   .type-document { background: #713f12; color: var(--orange); }
@@ -64,6 +65,10 @@
   .type-admin_meta { background: var(--border); color: var(--muted); }
   .price-tag { font-size: 0.75rem; color: var(--green); font-weight: 600; }
   .urgency-chip { font-size: 0.6rem; padding: 0.05rem 0.3rem; border-radius: 0.2rem; background: #78350f; color: var(--yellow); }
+  .modifier-chip { font-size: 0.6rem; padding: 0.05rem 0.3rem; border-radius: 0.2rem; background: #1e3a5f; color: var(--accent); margin-right: 0.2rem; }
+  .dup-badge { font-size: 0.55rem; padding: 0.05rem 0.25rem; border-radius: 0.15rem; background: #7f1d1d; color: var(--red); margin-left: 0.3rem; }
+  .merchant-tag { font-size: 0.65rem; color: var(--muted); }
+  .coupon-code { font-size: 0.7rem; font-family: monospace; background: #1e1b4b; color: #a78bfa; padding: 0.1rem 0.3rem; border-radius: 0.15rem; }
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10; }
   .detail { position: fixed; top: 0; right: 0; width: min(550px, 90vw); height: 100vh; background: var(--surface); border-left: 1px solid var(--border); padding: 1.25rem; overflow-y: auto; z-index: 11; }
   .detail .close { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; line-height: 1; }
@@ -191,9 +196,16 @@
           <div class="msg-item" @click="showProcDetail(m)" role="button" tabindex="0" @keydown.enter.prevent="showProcDetail(m)" @keydown.space.prevent="showProcDetail(m)">
             <div class="meta">
               <span class="type-badge" :class="'type-' + m.message_type" x-text="m.message_type"></span>
+              <span x-show="m.is_duplicate" class="dup-badge">DUP</span>
               <span x-text="channelName(m.channel_id)"></span>
               <span x-text="formatDate(m.posted_at)"></span>
+              <span x-show="m.merchant" class="merchant-tag" x-text="m.merchant"></span>
               <span x-show="m.has_price" class="price-tag" x-text="formatPrice(m.price_amount)"></span>
+              <span x-show="m.price_discount > 0" style="color:var(--red);font-size:0.6rem" x-text="'-' + m.price_discount + '%'"></span>
+              <span x-show="m.coupon_code" class="coupon-code" x-text="m.coupon_code"></span>
+              <span x-show="m.payment_method" class="modifier-chip" x-text="m.payment_method"></span>
+              <span x-show="m.shipping" class="modifier-chip" x-text="m.shipping"></span>
+              <span x-show="m.installments" class="modifier-chip" x-text="m.installments"></span>
               <template x-for="sig in parseUrgency(m.urgency_signals)" :key="sig">
                 <span class="urgency-chip" x-text="urgencyLabel(sig)"></span>
               </template>
@@ -216,14 +228,17 @@
       <template x-if="detailProc">
         <div>
           <dl>
-            <div class="field"><dt>Tipo</dt><dd><span class="type-badge" :class="'type-' + detailProc.message_type" x-text="detailProc.message_type"></span></dd></div>
+            <div class="field"><dt>Tipo</dt><dd><span class="type-badge" :class="'type-' + detailProc.message_type" x-text="detailProc.message_type"></span><span x-show="detailProc.is_duplicate" class="dup-badge">DUP</span></dd></div>
             <div class="field"><dt>Canal</dt><dd x-text="channelName(detailProc.channel_id)"></dd></div>
             <div class="field"><dt>Postada em</dt><dd x-text="formatDate(detailProc.posted_at)"></dd></div>
             <div class="field"><dt>Processada em</dt><dd x-text="formatDate(detailProc.processed_at)"></dd></div>
             <div class="field"><dt>Media</dt><dd x-text="detailProc.media_type"></dd></div>
-            <div class="field" x-show="detailProc.has_price"><dt>Preço</dt><dd class="price-tag" x-text="formatPrice(detailProc.price_amount)"></dd></div>
+            <div class="field" x-show="detailProc.merchant"><dt>Loja</dt><dd class="merchant-tag" x-text="detailProc.merchant"></dd></div>
+            <div class="field" x-show="detailProc.product_name"><dt>Produto</dt><dd x-text="truncate(detailProc.product_name, 60)"></dd></div>
+            <div class="field" x-show="detailProc.has_price"><dt>Preço</dt><dd><span class="price-tag" x-text="formatPrice(detailProc.price_amount)"></span><span x-show="detailProc.price_original > 0" style="color:var(--muted);font-size:0.65rem;margin-left:0.3rem;text-decoration:line-through" x-text="formatPrice(detailProc.price_original)"></span><span x-show="detailProc.price_discount > 0" style="color:var(--red);font-size:0.65rem;margin-left:0.3rem" x-text="'-' + detailProc.price_discount + '%'"></span></dd></div>
             <div class="field"><dt>URL</dt><dd x-text="detailProc.has_url ? 'Sim' : 'Não'"></dd></div>
-            <div class="field"><dt>Cupom</dt><dd x-text="detailProc.has_coupon ? 'Sim' : 'Não'"></dd></div>
+            <div class="field"><dt>Cupom</dt><dd><span x-text="detailProc.has_coupon ? 'Sim' : 'Não'"></span><span x-show="detailProc.coupon_code" class="coupon-code" style="margin-left:0.3rem" x-text="detailProc.coupon_code"></span></dd></div>
+            <div class="field" x-show="detailProc.payment_method || detailProc.shipping || detailProc.installments || detailProc.discount_percent > 0"><dt>Modificadores</dt><dd><span x-show="detailProc.payment_method" class="modifier-chip" x-text="detailProc.payment_method"></span><span x-show="detailProc.shipping" class="modifier-chip" x-text="detailProc.shipping"></span><span x-show="detailProc.installments" class="modifier-chip" x-text="detailProc.installments"></span><span x-show="detailProc.discount_percent > 0" class="modifier-chip" x-text="detailProc.discount_percent + '% OFF'"></span></dd></div>
             <div class="field" x-show="detailProc.urgency_signals"><dt>Urgência</dt><dd x-text="detailProc.urgency_signals"></dd></div>
           </dl>
           <h3 style="margin-top:1rem">Texto limpo</h3>

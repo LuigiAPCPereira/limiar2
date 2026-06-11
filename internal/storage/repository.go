@@ -379,6 +379,16 @@ type ProcessedMessage struct {
 	UrgencySignals string   `json:"urgency_signals"`
 	PostedAt       time.Time `json:"posted_at"`
 	ProcessedAt    time.Time `json:"processed_at"`
+	PriceOriginal  int64     `json:"price_original"`
+	PriceDiscount  int       `json:"price_discount"`
+	CouponCode     string    `json:"coupon_code"`
+	PaymentMethod  string    `json:"payment_method"`
+	Shipping       string    `json:"shipping"`
+	Installments   string    `json:"installments"`
+	DiscountPct    int       `json:"discount_percent"`
+	Merchant       string    `json:"merchant"`
+	ProductName    string    `json:"product_name"`
+	IsDuplicate    bool      `json:"is_duplicate"`
 }
 
 // ProcessedTypeStats contém contagem de mensagens processadas por tipo.
@@ -392,7 +402,9 @@ type ProcessedTypeStats struct {
 func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64, msgType string, limit, offset int) ([]*ProcessedMessage, error) {
 	query := `SELECT id, raw_message_id, channel_id, message_id, message_type,
 		text_clean, text_length, media_type, has_url, has_price, has_coupon,
-		price_amount, price_currency, urgency_signals, posted_at, processed_at
+		price_amount, price_currency, urgency_signals, posted_at, processed_at,
+		price_original, price_discount, coupon_code, payment_method, shipping,
+		installments, discount_percent, merchant, product_name, is_duplicate
 		FROM processed_messages`
 	var conditions []string
 	args := []any{}
@@ -429,18 +441,22 @@ func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64,
 			hasURL  int
 			hasPrc  int
 			hasCpn  int
+			isDup   int
 			price   sql.NullInt64
 			urgency sql.NullString
 			curr    sql.NullString
 		)
 		if err := rows.Scan(&m.ID, &m.RawMessageID, &m.ChannelID, &m.MessageID, &m.MessageType,
 			&m.TextClean, &m.TextLength, &m.MediaType, &hasURL, &hasPrc, &hasCpn,
-			&price, &curr, &urgency, &posted, &procAt); err != nil {
+			&price, &curr, &urgency, &posted, &procAt,
+			&m.PriceOriginal, &m.PriceDiscount, &m.CouponCode, &m.PaymentMethod, &m.Shipping,
+			&m.Installments, &m.DiscountPct, &m.Merchant, &m.ProductName, &isDup); err != nil {
 			return nil, apperrors.Wrap("storage", "scan_processed_message", err)
 		}
 		m.HasURL = hasURL != 0
 		m.HasPrice = hasPrc != 0
 		m.HasCoupon = hasCpn != 0
+		m.IsDuplicate = isDup != 0
 		if price.Valid {
 			m.PriceAmount = price.Int64
 		}
