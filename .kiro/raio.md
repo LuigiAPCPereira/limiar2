@@ -9,3 +9,7 @@
 
 ## 2024-05-20 - Otimizando o tamanho dos slices em extractMessages
 **Aprendizado:** Em `extractMessages` o limit dos slices criados por `messages.getHistory` geralmente vem do tamanho do array `Messages` da resposta. Porém, no codebase estava hardcoded um parse manual que podia sofrer `append` num loop sem `make` com capacidade pré-alocada em outros cantos. Em `extractMessages`, pre-alocar o `make([]HistoryMessage, 0, len(raw))` já é a melhor prática para evitar alocações de array extra à medida que os items são convertidos.
+
+## 2024-05-20 - Index para ListMessages sem channelID
+**Aprendizado:** A view de "All channels" do dashboard invoca `Repository.ListMessages(ctx, 0, 50, 0)`, que ordena por `received_at DESC`. Antes, isso ativava um TEMP B-TREE na engine do SQLite para ordenação porque o único índice relacionado era `(channel_id, received_at DESC)` da migration 002. O benchmark passava de ~5.8ms/op para ~0.7ms/op criando um index em `received_at DESC` diretamente, garantindo que `ORDER BY` não necessite carregar e sortear a tabela `raw_messages` inteira na memória.
+**Ação:** Incluir migration `004_dashboard_index.sql` criando o índice sobre `received_at DESC`.
