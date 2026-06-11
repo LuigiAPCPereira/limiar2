@@ -359,6 +359,142 @@ func (r *Repository) GetMessageByID(ctx context.Context, id int64) (*RawMessage,
 	return msg, nil
 }
 
+// --- Processed Messages (read-only para dashboard) ---
+
+// ProcessedMessage representa uma mensagem normalizada e classificada pelo processor.
+type ProcessedMessage struct {
+	ID             int64     `json:"id"`
+	RawMessageID   int64     `json:"raw_message_id"`
+	ChannelID      int64     `json:"channel_id"`
+	MessageID      int64     `json:"message_id"`
+	MessageType    string    `json:"message_type"`
+	TextClean      string    `json:"text_clean"`
+	TextLength     int       `json:"text_length"`
+	MediaType      string    `json:"media_type"`
+	HasURL         bool      `json:"has_url"`
+	HasPrice       bool      `json:"has_price"`
+	HasCoupon      bool      `json:"has_coupon"`
+	PriceAmount    int64     `json:"price_amount"`
+	PriceCurrency  string    `json:"price_currency"`
+	UrgencySignals string   `json:"urgency_signals"`
+	PostedAt       time.Time `json:"posted_at"`
+	ProcessedAt    time.Time `json:"processed_at"`
+}
+
+// ProcessedTypeStats contém contagem de mensagens processadas por tipo.
+type ProcessedTypeStats struct {
+	MessageType string `json:"message_type"`
+	Count       int64  `json:"count"`
+}
+
+// ListProcessedMessages retorna mensagens processadas com paginação e filtro opcional
+// por tipo e canal. Resultados ordenados por posted_at DESC.
+func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64, msgType string, limit, offset int) ([]*ProcessedMessage, error) {
+	query := `SELECT id, raw_message_id, channel_id, message_id, message_type,
+		text_clean, text_length, media_type, has_url, has_price, has_coupon,
+		price_amount, price_currency, urgency_signals, posted_at, processed_at
+		FROM processed_messages`
+	var conditions []string
+	args := []any{}
+
+	if channelID > 0 {
+		conditions = append(conditions, "channel_id = ?")
+		args = append(args, channelID)
+	}
+	if msgType != "" {
+		conditions = append(conditions, "message_type = ?")
+		args = append(args, msgType)
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + conditions[0]
+		for _, c := range conditions[1:] {
+			query += " AND " + c
+		}
+	}
+	query += " ORDER BY posted_at DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, apperrors.Wrap("storage", "list_processed_messages", err)
+	}
+	defer rows.Close()
+
+	var msgs []*ProcessedMessage
+	for rows.Next() {
+		var (
+			m       ProcessedMessage
+			posted  string
+			procAt  string
+			hasURL  int
+			hasPrc  int
+			hasCpn  int
+			price   sql.NullInt64
+			urgency sql.NullString
+			curr    sql.NullString
+		)
+		if err := rows.Scan(&m.ID, &m.RawMessageID, &m.ChannelID, &m.MessageID, &m.MessageType,
+			&m.TextClean, &m.TextLength, &m.MediaType, &hasURL, &hasPrc, &hasCpn,
+			&price, &curr, &urgency, &posted, &procAt); err != nil {
+			return nil, apperrors.Wrap("storage", "scan_processed_message", err)
+		}
+		m.HasURL = hasURL != 0
+		m.HasPrice = hasPrc != 0
+		m.HasCoupon = hasCpn != 0
+		if price.Valid {
+			m.PriceAmount = price.Int64
+		}
+		if curr.Valid {
+			m.PriceCurrency = curr.String
+		}
+		if urgency.Valid {
+			m.UrgencySignals = urgency.String
+		}
+		m.PostedAt = parseDBTime(posted)
+		m.ProcessedAt = parseDBTime(procAt)
+		msgs = append(msgs, &m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, apperrors.Wrap("storage", "iterate_processed_messages", err)
+	}
+	return msgs, nil
+}
+
+// CountProcessedByType retorna contagem de mensagens processadas agrupadas por message_type.
+func (r *Repository) CountProcessedByType(ctx context.Context) ([]ProcessedTypeStats, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT message_type, COUNT(*) as cnt
+		FROM processed_messages
+		GROUP BY message_type
+		ORDER BY cnt DESC`)
+	if err != nil {
+		return nil, apperrors.Wrap("storage", "count_processed_by_type", err)
+	}
+	defer rows.Close()
+
+	var stats []ProcessedTypeStats
+	for rows.Next() {
+		var s ProcessedTypeStats
+		if err := rows.Scan(&s.MessageType, &s.Count); err != nil {
+			return nil, apperrors.Wrap("storage", "scan_processed_type_stats", err)
+		}
+		stats = append(stats, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, apperrors.Wrap("storage", "iterate_processed_type_stats", err)
+	}
+	return stats, nil
+}
+
+// CountProcessedMessages retorna o total de mensagens processadas.
+func (r *Repository) CountProcessedMessages(ctx context.Context) (int64, error) {
+	var n int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM processed_messages`).Scan(&n); err != nil {
+		return 0, apperrors.Wrap("storage", "count_processed_messages", err)
+	}
+	return n, nil
+}
+
 // --- helpers ---
 
 // scanner abstrai *sql.Row e *sql.Rows para escaneamento (scanning) compartilhado de canais.

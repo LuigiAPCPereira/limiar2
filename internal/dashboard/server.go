@@ -41,6 +41,8 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/api/channels", s.handleChannels)
 	mux.HandleFunc("/api/messages", s.handleMessages)
 	mux.HandleFunc("/api/message/", s.handleMessage)
+	mux.HandleFunc("/api/processed", s.handleProcessed)
+	mux.HandleFunc("/api/processed/stats", s.handleProcessedStats)
 	if s.broker != nil {
 		mux.HandleFunc("/api/events", s.handleEvents)
 	}
@@ -136,6 +138,39 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, msg)
+}
+
+func (s *Server) handleProcessed(w http.ResponseWriter, r *http.Request) {
+	channelID, _ := strconv.ParseInt(r.URL.Query().Get("channel_id"), 10, 64)
+	msgType := r.URL.Query().Get("type")
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	msgs, err := s.repo.ListProcessedMessages(r.Context(), channelID, msgType, limit, offset)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, msgs)
+}
+
+func (s *Server) handleProcessedStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := s.repo.CountProcessedByType(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	total, _ := s.repo.CountProcessedMessages(r.Context())
+	writeJSON(w, map[string]any{
+		"total":  total,
+		"by_type": stats,
+	})
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {

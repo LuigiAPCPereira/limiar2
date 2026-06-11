@@ -11,6 +11,7 @@
     --bg: #0f172a; --surface: #1e293b; --border: #334155;
     --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
     --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+    --purple: #a78bfa; --orange: #fb923c;
   }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
   header { background: var(--surface); padding: 1rem 2rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
@@ -21,6 +22,12 @@
   .conn-poll { background: #78350f; color: var(--yellow); }
   .conn-off  { background: #7f1d1d; color: var(--red); }
   .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem; }
+  .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .tab { padding: 0.75rem 1.25rem; cursor: pointer; font-size: 0.9rem; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab .badge { font-size: 0.7rem; background: var(--border); color: var(--muted); padding: 0.1rem 0.4rem; border-radius: 9999px; margin-left: 0.4rem; }
+  .tab.active .badge { background: #0c4a6e; color: var(--accent); }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
   .stat-card { background: var(--surface); border-radius: 0.5rem; padding: 1rem 1.25rem; border: 1px solid var(--border); }
   .stat-card .label { font-size: 0.7rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
@@ -39,9 +46,22 @@
   .msg-list { max-height: 65vh; overflow-y: auto; }
   .msg-item { padding: 0.6rem 1rem; border-bottom: 1px solid var(--bg); cursor: pointer; transition: background 0.1s; }
   .msg-item:hover { background: var(--border); }
-  .msg-item .meta { font-size: 0.7rem; color: var(--muted); display: flex; gap: 0.75rem; }
+  .msg-item .meta { font-size: 0.7rem; color: var(--muted); display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
   .msg-item .preview { font-size: 0.825rem; margin-top: 0.2rem; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .msg-item mark { background: #854d0e; color: var(--yellow); border-radius: 2px; padding: 0 2px; }
+  .type-badge { font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-weight: 500; }
+  .type-deal_complete { background: #064e3b; color: var(--green); }
+  .type-deal_no_coupon { background: #1e3a5f; color: var(--accent); }
+  .type-deal_no_price { background: #78350f; color: var(--yellow); }
+  .type-category_header { background: #312e81; color: var(--purple); }
+  .type-coupon_expired { background: #7f1d1d; color: var(--red); }
+  .type-commentary { background: var(--border); color: var(--muted); }
+  .type-video { background: #581c87; color: var(--purple); }
+  .type-document { background: #713f12; color: var(--orange); }
+  .type-poll { background: #14532d; color: var(--green); }
+  .type-admin_meta { background: var(--border); color: var(--muted); }
+  .price-tag { font-size: 0.75rem; color: var(--green); font-weight: 600; }
+  .urgency-chip { font-size: 0.6rem; padding: 0.05rem 0.3rem; border-radius: 0.2rem; background: #78350f; color: var(--yellow); }
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10; }
   .detail { position: fixed; top: 0; right: 0; width: min(550px, 90vw); height: 100vh; background: var(--surface); border-left: 1px solid var(--border); padding: 1.25rem; overflow-y: auto; z-index: 11; }
   .detail .close { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; line-height: 1; }
@@ -54,6 +74,10 @@
   .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 0.875rem; }
   .refresh-btn { background: none; border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.35rem 0.6rem; color: var(--muted); font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
   .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .type-stats { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .type-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem 0.75rem; text-align: center; min-width: 100px; }
+  .type-stat .t-count { font-size: 1.25rem; font-weight: 700; }
+  .type-stat .t-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
 </style>
 </head>
 <body x-data="dashboard()">
@@ -70,8 +94,12 @@
       <div class="value" x-text="channelStats.length"></div>
     </div>
     <div class="stat-card">
-      <div class="label">Total de mensagens</div>
+      <div class="label">Mensagens raw</div>
       <div class="value" x-text="totalMessages"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Processadas</div>
+      <div class="value" x-text="processedStats.total || 0"></div>
     </div>
     <div class="stat-card">
       <div class="label">Health</div>
@@ -83,52 +111,124 @@
     </div>
   </div>
 
-  <div class="toolbar">
-    <input class="search-input" type="search" placeholder="Buscar no texto da mensagem..." x-model="search" @input.debounce.300ms="filterMessages()">
-    <button class="refresh-btn" @click="refresh()">&#8635; Atualizar</button>
-  </div>
-
-  <div class="channels">
-    <button class="ch-chip" :class="{ active: selectedChannel === 0 }" @click="selectChannel(0)">
-      Todos
+  <div class="tabs">
+    <button class="tab" :class="{ active: activeTab === 'raw' }" @click="switchTab('raw')">
+      Raw <span class="badge" x-text="totalMessages"></span>
     </button>
-    <template x-for="c in channelStats" :key="c.ChannelID">
-      <button class="ch-chip" :class="{ active: selectedChannel === c.ChannelID }" @click="selectChannel(c.ChannelID)">
-        <span x-text="'@' + c.Username"></span><span class="count" x-text="c.MessageCount"></span>
-      </button>
-    </template>
+    <button class="tab" :class="{ active: activeTab === 'processed' }" @click="switchTab('processed')">
+      Processadas <span class="badge" x-text="processedStats.total || 0"></span>
+    </button>
   </div>
 
-  <div class="messages">
-    <h2>
-      <span x-text="messagesTitle"></span>
-      <span style="font-weight:400;color:var(--muted);font-size:0.75rem" x-text="filteredMessages.length + ' exibidas'"></span>
-    </h2>
-    <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens">
-      <template x-if="filteredMessages.length === 0">
-        <div class="empty" x-text="loading ? 'Carregando...' : 'Nenhuma mensagem encontrada'"></div>
+  <!-- ============ TAB: RAW ============ -->
+  <div x-show="activeTab === 'raw'">
+    <div class="toolbar">
+      <input class="search-input" type="search" placeholder="Buscar no texto da mensagem..." x-model="search" @input.debounce.300ms="filterMessages()">
+      <button class="refresh-btn" @click="refresh()">&#8635; Atualizar</button>
+    </div>
+
+    <div class="channels">
+      <button class="ch-chip" :class="{ active: selectedChannel === 0 }" @click="selectChannel(0)">Todos</button>
+      <template x-for="c in channelStats" :key="c.ChannelID">
+        <button class="ch-chip" :class="{ active: selectedChannel === c.ChannelID }" @click="selectChannel(c.ChannelID)">
+          <span x-text="'@' + c.Username"></span><span class="count" x-text="c.MessageCount"></span>
+        </button>
       </template>
-      <template x-for="m in filteredMessages" :key="m.ID">
-        <div class="msg-item" @click="showDetail(m.ID)" role="button" tabindex="0" @keydown.enter.prevent="showDetail(m.ID)" @keydown.space.prevent="showDetail(m.ID)">
-          <div class="meta">
-            <span x-text="'ID ' + m.MessageID"></span>
-            <span x-text="channelName(m.ChannelID)"></span>
-            <span x-text="formatDate(m.ReceivedAt)"></span>
+    </div>
+
+    <div class="messages">
+      <h2>
+        <span x-text="messagesTitle"></span>
+        <span style="font-weight:400;color:var(--muted);font-size:0.75rem" x-text="filteredMessages.length + ' exibidas'"></span>
+      </h2>
+      <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens raw">
+        <template x-if="filteredMessages.length === 0">
+          <div class="empty" x-text="loading ? 'Carregando...' : 'Nenhuma mensagem encontrada'"></div>
+        </template>
+        <template x-for="m in filteredMessages" :key="m.ID">
+          <div class="msg-item" @click="showRawDetail(m.ID)" role="button" tabindex="0" @keydown.enter.prevent="showRawDetail(m.ID)" @keydown.space.prevent="showRawDetail(m.ID)">
+            <div class="meta">
+              <span x-text="'ID ' + m.MessageID"></span>
+              <span x-text="channelName(m.ChannelID)"></span>
+              <span x-text="formatDate(m.ReceivedAt)"></span>
+            </div>
+            <div class="preview" x-html="highlightedPreview(m)"></div>
           </div>
-          <div class="preview" x-html="highlightedPreview(m)"></div>
-        </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: PROCESSED ============ -->
+  <div x-show="activeTab === 'processed'">
+    <div class="toolbar">
+      <input class="search-input" type="search" placeholder="Buscar no texto processado..." x-model="procSearch" @input.debounce.300ms="filterProcessed()">
+      <button class="refresh-btn" @click="loadProcessed()">&#8635; Atualizar</button>
+    </div>
+
+    <div class="type-stats">
+      <button class="ch-chip" :class="{ active: procTypeFilter === '' }" @click="procTypeFilter = ''; loadProcessed()">Todos os tipos</button>
+      <template x-for="s in (processedStats.by_type || [])" :key="s.message_type">
+        <button class="ch-chip" :class="{ active: procTypeFilter === s.message_type }" @click="procTypeFilter = s.message_type; loadProcessed()">
+          <span class="type-badge" :class="'type-' + s.message_type" x-text="s.message_type"></span>
+          <span class="count" x-text="s.count"></span>
+        </button>
       </template>
+    </div>
+
+    <div class="messages">
+      <h2>
+        <span x-text="procTitle"></span>
+        <span style="font-weight:400;color:var(--muted);font-size:0.75rem" x-text="filteredProcessed.length + ' exibidas'"></span>
+      </h2>
+      <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens processadas">
+        <template x-if="filteredProcessed.length === 0">
+          <div class="empty" x-text="procLoading ? 'Carregando...' : 'Nenhuma mensagem processada encontrada'"></div>
+        </template>
+        <template x-for="m in filteredProcessed" :key="m.id">
+          <div class="msg-item" @click="showProcDetail(m)" role="button" tabindex="0" @keydown.enter.prevent="showProcDetail(m)" @keydown.space.prevent="showProcDetail(m)">
+            <div class="meta">
+              <span class="type-badge" :class="'type-' + m.message_type" x-text="m.message_type"></span>
+              <span x-text="channelName(m.channel_id)"></span>
+              <span x-text="formatDate(m.posted_at)"></span>
+              <span x-show="m.has_price" class="price-tag" x-text="formatPrice(m.price_amount)"></span>
+              <template x-for="sig in parseUrgency(m.urgency_signals)" :key="sig">
+                <span class="urgency-chip" x-text="urgencyLabel(sig)"></span>
+              </template>
+            </div>
+            <div class="preview" x-text="truncate(m.text_clean, 180)"></div>
+          </div>
+        </template>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- ============ DETAIL PANEL ============ -->
 <template x-if="detailOpen">
   <div>
     <div class="overlay" @click="closeDetail()" @keydown.escape="closeDetail()"></div>
     <div class="detail" role="dialog" aria-labelledby="detail-title">
       <button class="close" @click="closeDetail()" aria-label="Fechar">&times;</button>
-      <h3 id="detail-title">Detalhes da mensagem</h3>
-      <template x-if="detailData">
+      <h3 id="detail-title" x-text="detailTitle"></h3>
+      <template x-if="detailProc">
+        <div>
+          <dl>
+            <div class="field"><dt>Tipo</dt><dd><span class="type-badge" :class="'type-' + detailProc.message_type" x-text="detailProc.message_type"></span></dd></div>
+            <div class="field"><dt>Canal</dt><dd x-text="channelName(detailProc.channel_id)"></dd></div>
+            <div class="field"><dt>Postada em</dt><dd x-text="formatDate(detailProc.posted_at)"></dd></div>
+            <div class="field"><dt>Processada em</dt><dd x-text="formatDate(detailProc.processed_at)"></dd></div>
+            <div class="field"><dt>Media</dt><dd x-text="detailProc.media_type"></dd></div>
+            <div class="field" x-show="detailProc.has_price"><dt>Preço</dt><dd class="price-tag" x-text="formatPrice(detailProc.price_amount)"></dd></div>
+            <div class="field"><dt>URL</dt><dd x-text="detailProc.has_url ? 'Sim' : 'Não'"></dd></div>
+            <div class="field"><dt>Cupom</dt><dd x-text="detailProc.has_coupon ? 'Sim' : 'Não'"></dd></div>
+            <div class="field" x-show="detailProc.urgency_signals"><dt>Urgência</dt><dd x-text="detailProc.urgency_signals"></dd></div>
+          </dl>
+          <h3 style="margin-top:1rem">Texto limpo</h3>
+          <pre x-text="detailProc.text_clean"></pre>
+        </div>
+      </template>
+      <template x-if="detailRaw">
         <div>
           <dl>
             <div class="field"><dt>Message ID</dt><dd x-text="detailMeta.MessageID"></dd></div>
@@ -147,21 +247,35 @@
 <script>
 function dashboard() {
   return {
+    // Common
     channelStats: [],
-    messages: [],
-    filteredMessages: [],
-    selectedChannel: 0,
-    search: '',
-    loading: true,
-    detailOpen: false,
-    detailData: null,
-    detailMeta: {},
-    detailJson: '',
     health: { status: 'unknown' },
-    startedAt: Date.now(),
     uptimeText: '--',
     connClass: 'conn-off',
     connLabel: 'conectando...',
+    loading: true,
+    activeTab: 'raw',
+    selectedChannel: 0,
+
+    // Raw tab
+    messages: [],
+    filteredMessages: [],
+    search: '',
+    detailOpen: false,
+    detailRaw: false,
+    detailProc: null,
+    detailMeta: {},
+    detailJson: '',
+    detailTitle: '',
+
+    // Processed tab
+    processed: [],
+    filteredProcessed: [],
+    processedStats: { total: 0, by_type: [] },
+    procSearch: '',
+    procTypeFilter: '',
+    procLoading: false,
+
     _es: null,
     _pollTimer: null,
     _uptimeTimer: null,
@@ -178,14 +292,34 @@ function dashboard() {
       return 'Mensagens recentes';
     },
 
+    get procTitle() {
+      const base = this.procTypeFilter ? `Tipo: ${this.procTypeFilter}` : 'Mensagens processadas';
+      return base;
+    },
+
     init() {
       this.refresh();
       this.connectSSE();
       this._uptimeTimer = setInterval(() => this.updateUptime(), 1000);
     },
 
+    switchTab(tab) {
+      this.activeTab = tab;
+      if (tab === 'processed' && this.processed.length === 0) {
+        this.loadProcessed();
+      }
+    },
+
     async refresh() {
-      await Promise.all([this.loadHealth(), this.loadStats(), this.loadMessages()]);
+      await Promise.all([
+        this.loadHealth(),
+        this.loadStats(),
+        this.loadMessages(),
+        this.loadProcessedStats(),
+      ]);
+      if (this.activeTab === 'processed') {
+        await this.loadProcessed();
+      }
       this.loading = false;
     },
 
@@ -203,6 +337,26 @@ function dashboard() {
       } catch {}
     },
 
+    async loadProcessedStats() {
+      try {
+        const res = await fetch('/api/processed/stats');
+        this.processedStats = await res.json();
+      } catch {}
+    },
+
+    async loadProcessed() {
+      this.procLoading = true;
+      try {
+        let url = '/api/processed?limit=100';
+        if (this.selectedChannel) url += '&channel_id=' + this.selectedChannel;
+        if (this.procTypeFilter) url += '&type=' + this.procTypeFilter;
+        const res = await fetch(url);
+        this.processed = await res.json();
+        this.filterProcessed();
+      } catch {}
+      this.procLoading = false;
+    },
+
     async loadMessages() {
       try {
         const url = '/api/messages?limit=100' + (this.selectedChannel ? '&channel_id=' + this.selectedChannel : '');
@@ -214,37 +368,54 @@ function dashboard() {
 
     filterMessages() {
       const q = this.search.trim().toLowerCase();
-      if (!q) {
-        this.filteredMessages = this.messages;
-        return;
-      }
+      if (!q) { this.filteredMessages = this.messages; return; }
       this.filteredMessages = this.messages.filter(m => {
         const text = this.extractPreview(m);
         return text.toLowerCase().includes(q);
       });
     },
 
+    filterProcessed() {
+      const q = this.procSearch.trim().toLowerCase();
+      if (!q) { this.filteredProcessed = this.processed; return; }
+      this.filteredProcessed = this.processed.filter(m =>
+        m.text_clean.toLowerCase().includes(q)
+      );
+    },
+
     selectChannel(id) {
       this.selectedChannel = this.selectedChannel === id ? 0 : id;
       this.loadMessages();
+      if (this.activeTab === 'processed') this.loadProcessed();
     },
 
-    async showDetail(id) {
+    // Detail panels
+    async showRawDetail(id) {
       try {
         const res = await fetch('/api/message/' + id);
         const data = await res.json();
         this.detailMeta = data;
+        this.detailProc = null;
+        this.detailRaw = true;
+        this.detailTitle = 'Mensagem Raw';
         let payload;
         try { payload = this.decodePayload(data.Payload); }
         catch { payload = data.Payload; }
-        this.detailData = payload;
         this.detailJson = JSON.stringify(payload, null, 2);
         this.detailOpen = true;
       } catch {}
     },
 
+    showProcDetail(m) {
+      this.detailProc = m;
+      this.detailRaw = false;
+      this.detailTitle = 'Mensagem Processada';
+      this.detailOpen = true;
+    },
+
     closeDetail() { this.detailOpen = false; },
 
+    // Helpers
     decodePayload(b64) {
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
@@ -288,6 +459,29 @@ function dashboard() {
     formatDate(s) {
       try { return new Date(s).toLocaleString('pt-BR'); }
       catch { return s; }
+    },
+
+    formatPrice(cents) {
+      if (!cents) return '';
+      return 'R$ ' + (cents / 100).toFixed(2).replace('.', ',');
+    },
+
+    parseUrgency(json) {
+      try { return JSON.parse(json || '[]'); }
+      catch { return []; }
+    },
+
+    urgencyLabel(sig) {
+      const labels = {
+        corre: 'Corra', frete_gratis: 'Frete grátis',
+        ultima_unidade: 'Últimas', envio_nacional: 'Nacional',
+      };
+      return labels[sig] || sig;
+    },
+
+    truncate(s, max) {
+      if (!s) return '';
+      return s.length > max ? s.substring(0, max) + '...' : s;
     },
 
     escapeHtml(s) {

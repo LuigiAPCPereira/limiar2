@@ -49,6 +49,20 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
+
+	// WAL mode permite readers e writers concorrentes — necessário quando
+	// collector e processor rodam simultaneamente no mesmo limiar.db.
+	if _, err := conn.ExecContext(ctx, `PRAGMA journal_mode=WAL`); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("storage: wal mode: %w", err)
+	}
+	// busy_timeout faz o SQLite esperar até 5s quando o banco está ocupado,
+	// em vez de retornar SQLITE_BUSY imediatamente.
+	if _, err := conn.ExecContext(ctx, `PRAGMA busy_timeout=5000`); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("storage: busy_timeout: %w", err)
+	}
+
 	if err := migrate(ctx, conn); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: migrate: %w", err)
