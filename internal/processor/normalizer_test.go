@@ -262,6 +262,16 @@ func TestDualPrice(t *testing.T) {
 			"De R$ 200 à vista por R$ 150",
 			20000, 15000, 25, true,
 		},
+		{
+			"POR REAIS sem R$",
+			"POR: 425 REAIS",
+			0, 42500, 0, true,
+		},
+		{
+			"por apenas sem R$",
+			"por apenas 99,90",
+			0, 9990, 0, true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -405,6 +415,9 @@ func TestDetectMerchant(t *testing.T) {
 		{"https://s.shopee.com.br/produto", "shopee"},
 		{"https://a.aliexpress.com/item", "aliexpress"},
 		{"https://magazineluiza.onelink.me/abc", "magalu"},
+		{"https://onelink.shein.com/item", "shein"},
+		{"https://www.terabyteshop.com.br/produto", "terabyte"},
+		{"https://www.magazinevoce.com.br/prod", "magalu"},
 		{"https://unknown-site.com/prod", ""},
 		{"sem url aqui", ""},
 	}
