@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS processed_messages (
     product_name     TEXT DEFAULT '',
     synthesis        TEXT DEFAULT '',
     is_duplicate     INTEGER DEFAULT 0,
+    feed_eligible    INTEGER DEFAULT 0,
     UNIQUE(channel_id, message_id)
 );
 
@@ -52,3 +53,6 @@ CREATE INDEX IF NOT EXISTS idx_processed_url_hash
 
 CREATE INDEX IF NOT EXISTS idx_processed_merchant
     ON processed_messages(merchant) WHERE merchant != '';
+
+CREATE INDEX IF NOT EXISTS idx_processed_feed
+    ON processed_messages(feed_eligible, posted_at DESC) WHERE feed_eligible = 1;

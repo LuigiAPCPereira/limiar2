@@ -49,6 +49,7 @@ type NormalizedMessage struct {
 	Merchant       string // merchant inferido do domínio da URL
 	ProductName    string // nome do produto (heurística)
 	IsDuplicate    bool   // mesma URL já processada em outro canal
+	FeedEligible   bool   // elegível para o feed (deal_complete ou deal_no_coupon)
 	UrgencySignals []string
 	MessageType    string // preenchido por Classify
 	Synthesis      string // JSON serializado de SynthesizedPromotion
@@ -137,6 +138,15 @@ func Normalize(raw *storage.RawMessage) (*NormalizedMessage, error) {
 	// Extração de sinais
 	nm.HasURL = hasURL(nm.Text)
 	nm.URLHash = computeURLHash(nm.Text)
+
+	// 2.4: Fallback — URL de Media.Webpage quando texto não tem URL
+	if !nm.HasURL {
+		if wpURL := extractWebpageURL(msg); wpURL != "" {
+			nm.HasURL = true
+			nm.URLHash = computeURLHash(wpURL)
+		}
+	}
+
 	extractPrices(nm.Text, nm)
 	extractCoupon(nm.Text, nm)
 	extractModifiers(nm.Text, nm)
@@ -145,7 +155,6 @@ func Normalize(raw *storage.RawMessage) (*NormalizedMessage, error) {
 	// Estágio 3: Síntese
 	syn := Synthesize(nm)
 	nm.Merchant = syn.Merchant
-	nm.ProductName = syn.ProductName
 	synJSON, err := json.Marshal(syn)
 	if err == nil {
 		nm.Synthesis = string(synJSON)
@@ -363,6 +372,20 @@ func extractReplyTo(msg map[string]any) int64 {
 		return 0
 	}
 	return toInt64(reply["ReplyToMsgID"])
+}
+
+// extractWebpageURL extrai URL de Media.Webpage quando presente.
+func extractWebpageURL(msg map[string]any) string {
+	media, ok := msg["Media"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	wp, ok := media["Webpage"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	u, _ := wp["URL"].(string)
+	return u
 }
 
 func hasURL(text string) bool {

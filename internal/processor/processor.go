@@ -80,6 +80,7 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 			continue
 		}
 		nm.MessageType = string(Classify(nm))
+		nm.FeedEligible = nm.MessageType == string(TypeDealComplete) || nm.MessageType == string(TypeDealNoCoupon)
 		normalized = append(normalized, nm)
 	}
 
@@ -101,11 +102,10 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 }
 
 // markDuplicates detecta mensagens com mesma URL em canais diferentes.
-// Usa uma única query IN para checar todos os hashes do batch contra o DB.
+// Apenas duplicatas cross-channel são marcadas (mesmo canal = normal).
 func (p *Processor) markDuplicates(ctx context.Context, msgs []*NormalizedMessage) {
-	// Coleta hashes únicos do batch e detecta duplicatas intra-batch
+	// Intra-batch: detecta se dois canais diferentes no mesmo batch têm a mesma URL
 	seen := make(map[string]int64, len(msgs))
-	var uniqueHashes []string
 	for _, nm := range msgs {
 		if nm.URLHash == "" {
 			continue
@@ -116,20 +116,19 @@ func (p *Processor) markDuplicates(ctx context.Context, msgs []*NormalizedMessag
 			}
 		} else {
 			seen[nm.URLHash] = nm.ChannelID
-			uniqueHashes = append(uniqueHashes, nm.URLHash)
 		}
 	}
 
-	// Cross-batch: uma query IN para todos os hashes
-	if len(uniqueHashes) == 0 {
+	// Cross-batch: checa cada (hash, channelID) contra o banco
+	if len(seen) == 0 {
 		return
 	}
-	existing, err := p.repo.ExistsURLHashes(ctx, uniqueHashes)
-	if err != nil || len(existing) == 0 {
+	crossDups, err := p.repo.CrossChannelDuplicates(ctx, seen)
+	if err != nil || len(crossDups) == 0 {
 		return
 	}
 	for _, nm := range msgs {
-		if nm.URLHash != "" && existing[nm.URLHash] {
+		if nm.URLHash != "" && crossDups[nm.URLHash] {
 			nm.IsDuplicate = true
 		}
 	}

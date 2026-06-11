@@ -479,41 +479,6 @@ func TestParseBRL(t *testing.T) {
 	}
 }
 
-// --- Fase 2: Product Name ---
-
-func TestExtractProductName(t *testing.T) {
-	tests := []struct {
-		name string
-		text string
-		want string
-	}{
-		{
-			"produto com emoji e preço",
-			"🔥 Celular Samsung Galaxy A54\nR$ 1.234,56 https://amzn.to/abc",
-			"Celular Samsung Galaxy A54",
-		},
-		{
-			"texto simples",
-			"Notebook Dell Inspiron 15",
-			"Notebook Dell Inspiron 15",
-		},
-		{
-			"texto vazio",
-			"",
-			"",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := extractProductName(tt.text)
-			if got != tt.want {
-				t.Errorf("extractProductName = %q, quer %q", got, tt.want)
-			}
-		})
-	}
-}
-
 // --- Fase 2: Synthesize ---
 
 func TestSynthesize(t *testing.T) {

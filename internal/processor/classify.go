@@ -21,7 +21,10 @@ const (
 )
 
 var (
-	reAdminMeta    = regexp.MustCompile(`(?i)(regras_grupo|cupons_hoje|grupos_whatsapp|canal_telegram)`)
+	reAdminMeta = regexp.MustCompile(`(?i)(regras_grupo|cupons_hoje|grupos_whatsapp|canal_telegram` +
+		`|entre\s+no\s+grupo|grupo\s+de\s+ofertas|grupo\s+do\s+whatsapp` +
+		`|canal\s+de\s+ofertas|salvando\s+o\s+bolso|quase\s+\d+\s*mil` +
+		`|pessoas\s+somando|noss[oa]\s+grupo|noss[oa]\s+canal)`)
 	reCouponHeader = regexp.MustCompile(`(?i)^(?:🎟️?\s*)?(?:cup[ao]m|cupons|c[oó]digo|code)\b`)
 )
 
