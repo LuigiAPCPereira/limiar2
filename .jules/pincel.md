@@ -11,3 +11,7 @@
 ## 2023-10-27 - Indicador de Conexão SSE Acessível
 **Aprendizado:** Quando trabalhamos com conexões contínuas como SSE no background (sem refresh de página), leitores de tela e usuários em geral podem não saber que os dados estão sendo atualizados dinamicamente ou se a conexão caiu (fallback para polling).
 **Ação:** Sempre usar regiões `aria-live="polite"` e `role="status"` combinadas com feedback visual (ex: status badge no header) para indicar o estado da conexão ("Ao vivo (SSE)" vs "Modo Polling (30s)"), mantendo a acessibilidade e previsibilidade da interface.
+
+## 2025-06-11 - Empty States Orientadores e :focus-visible Global
+**Aprendizado:** Telas vazias ("Nenhuma mensagem") sem contexto causam confusão em aplicações híbridas CLI/Web. Além disso, elementos interativos customizados não indicam foco visual na navegação por teclado (Tab) se não configurarmos `:focus-visible`.
+**Ação:** Em estados vazios, sempre avalie se a lista está vazia por falta de configuração e forneça o comando CLI exato para corrigir o problema. Aplique `:focus-visible` globalmente com `outline` e `outline-offset` adequados.
