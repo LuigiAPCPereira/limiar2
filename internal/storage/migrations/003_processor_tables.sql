@@ -1,5 +1,5 @@
 -- migrations/003_processor_tables.sql
--- Tabelas do limiar-processor (Sprint 1: normalização + classificação).
+-- Tabelas do limiar-processor: normalização, classificação, sintetização.
 -- O collector nunca escreve nestas tabelas.
 
 CREATE TABLE IF NOT EXISTS processed_messages (
@@ -23,6 +23,17 @@ CREATE TABLE IF NOT EXISTS processed_messages (
     urgency_signals  TEXT,
     posted_at        TEXT NOT NULL,
     processed_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    price_original   INTEGER DEFAULT 0,
+    price_discount   INTEGER DEFAULT 0,
+    coupon_code      TEXT DEFAULT '',
+    payment_method   TEXT DEFAULT '',
+    shipping         TEXT DEFAULT '',
+    installments     TEXT DEFAULT '',
+    discount_percent INTEGER DEFAULT 0,
+    url_hash         TEXT DEFAULT '',
+    merchant         TEXT DEFAULT '',
+    product_name     TEXT DEFAULT '',
+    synthesis        TEXT DEFAULT '',
     UNIQUE(channel_id, message_id)
 );
 
@@ -34,3 +45,9 @@ CREATE INDEX IF NOT EXISTS idx_processed_messages_type
 
 CREATE INDEX IF NOT EXISTS idx_processed_messages_posted
     ON processed_messages(posted_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_processed_url_hash
+    ON processed_messages(url_hash) WHERE url_hash != '';
+
+CREATE INDEX IF NOT EXISTS idx_processed_merchant
+    ON processed_messages(merchant) WHERE merchant != '';
