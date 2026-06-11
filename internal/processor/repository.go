@@ -30,8 +30,11 @@ func NewRepository(db *sql.DB) (*Repository, error) {
 			text_clean, text_length, media_type, photo_id,
 			views, forwards, reply_to_msg_id,
 			has_url, has_price, has_coupon, price_amount, price_currency,
-			urgency_signals, posted_at, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			urgency_signals, posted_at, processed_at,
+			price_original, price_discount, coupon_code,
+			payment_method, shipping, installments, discount_percent,
+			url_hash, merchant, product_name, synthesis
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(channel_id, message_id) DO NOTHING`)
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "prepare_insert_processed", err)
@@ -131,6 +134,17 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		string(urgencyJSON),
 		msg.PostedAt.UTC().Format(dbTimeLayout),
 		msg.ProcessedAt.UTC().Format(dbTimeLayout),
+		msg.PriceOriginal,
+		msg.PriceDiscount,
+		msg.CouponCode,
+		msg.PaymentMethod,
+		msg.Shipping,
+		msg.Installments,
+		msg.DiscountPct,
+		msg.URLHash,
+		msg.Merchant,
+		msg.ProductName,
+		msg.Synthesis,
 	)
 	if err != nil {
 		return apperrors.Wrap("processor", "save_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
@@ -178,6 +192,17 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			string(urgencyJSON),
 			msg.PostedAt.UTC().Format(dbTimeLayout),
 			msg.ProcessedAt.UTC().Format(dbTimeLayout),
+			msg.PriceOriginal,
+			msg.PriceDiscount,
+			msg.CouponCode,
+			msg.PaymentMethod,
+			msg.Shipping,
+			msg.Installments,
+			msg.DiscountPct,
+			msg.URLHash,
+			msg.Merchant,
+			msg.ProductName,
+			msg.Synthesis,
 		)
 		if err != nil {
 			failed++

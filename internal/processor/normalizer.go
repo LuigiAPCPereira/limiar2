@@ -1,8 +1,12 @@
 package processor
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -32,17 +36,73 @@ type NormalizedMessage struct {
 	HasURL         bool
 	HasPrice       bool
 	HasCoupon      bool
-	PriceAmount    int64 // centavos de BRL
+	PriceAmount    int64  // centavos BRL — preço final (o que o usuário paga)
+	PriceOriginal  int64  // centavos BRL — preço "De" (0 se não há dual price)
+	PriceDiscount  int    // percentual de desconto 0-100 (calculado se dual price)
+	CouponCode     string // código do cupom extraído (vazio se não há)
+	PaymentMethod  string // "pix" | ""
+	Shipping       string // "frete_gratis" | "frete_gratis_prime" | ""
+	Installments   string // "9x_sem_juros" | ""
+	DiscountPct    int    // "20% OFF" → 20 (do texto, não-calculado)
+	IsCashback     bool   // cashback mencionado
+	URLHash        string // SHA-256 da primeira URL normalizada
+	Merchant       string // merchant inferido do domínio da URL
+	ProductName    string // nome do produto (heurística)
 	UrgencySignals []string
 	MessageType    string // preenchido por Classify
+	Synthesis      string // JSON serializado de SynthesizedPromotion
 }
 
-// reWhitespace colapsa 3+ newlines consecutivos em 2.
-var reWhitespace = regexp.MustCompile(`\n{3,}`)
+// --- Estágio 1: Normalização de texto ---
+
+var (
+	reWhitespace  = regexp.MustCompile(`\n{3,}`)
+	reMultiSpace  = regexp.MustCompile(` {2,}`)
+	reSmartQuotes = strings.NewReplacer(
+		"\u201c", `"`, "\u201d", `"`,
+		"\u2018", `'`, "\u2019", `'`,
+		"\u2013", "-", "\u2014", "-",
+		"\u00a0", " ",
+	)
+)
+
+// cleanText normaliza whitespace e pontuação tipográfica.
+// Preserva emojis e formatação original relevante.
+func cleanText(s string) string {
+	s = reSmartQuotes.Replace(s)
+	s = reWhitespace.ReplaceAllString(s, "\n\n")
+	s = reMultiSpace.ReplaceAllString(s, " ")
+	return strings.TrimSpace(s)
+}
+
+// --- Estágio 2: Pré-processamento (extração de sinais) ---
+
+var (
+	reURL    = regexp.MustCompile(`https?://[^\s<>"']+`)
+	rePrice  = regexp.MustCompile(`R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)`)
+	reCoupon = regexp.MustCompile(`(?i)(?:cup[ao]m|c[oó]digo|code)[\s:\n]+([A-Za-z0-9_]{3,25})`)
+
+	// Dual price: "De R$ 429 por R$ 208,92", "De: R$ 429 | Por: R$ 208", "R$ 50 OFF em R$ 250"
+	reDualPrice = regexp.MustCompile(
+		`(?i)(?:de[:\s]+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)[^\n]*?(?:por|à\s*vista|no\s*pix)[:\s]+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?))` +
+			`|(?:R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)\s*OFF\s+em\s+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?))`)
+
+	// Modifiers
+	rePix       = regexp.MustCompile(`(?i)no\s*pix|via\s*pix|pagamento\s+pix|[àa]\s+vista\s+no\s+pix`)
+	reFretePrime = regexp.MustCompile(`(?i)frete\s*gr[áa]tis\s*prime|prime.*frete\s*gr[áa]tis`)
+	reFreteG    = regexp.MustCompile(`(?i)frete\s*gr[áa]tis`)
+	reInstall   = regexp.MustCompile(`(?i)(\d+)x\s*(?:sem\s*juros|s/\s*juros)`)
+	reCashback  = regexp.MustCompile(`(?i)cash\s*back|cashback`)
+	reDiscPct   = regexp.MustCompile(`(?i)(\d+)\s*%\s*(?:de\s+)?(?:desconto|off|desc)`)
+
+	// Urgency
+	reExpired  = regexp.MustCompile(`(?i)(esgotado|acabou|encerrado|expirado)`)
+	reCorre    = regexp.MustCompile(`(?i)\b(corre|corram)\b`)
+	reUltima   = regexp.MustCompile(`(?i)[úu]ltima[s]?\s*unidade|acabando|esgotando`)
+	reNacional = regexp.MustCompile(`(?i)envio\s+(nacional|do\s+brasil)`)
+)
 
 // Normalize transforma um payload bruto (Shape A ou B) em NormalizedMessage.
-// Shape A: payload direto do tg.Message (history backfill)
-// Shape B: wrapper tg.Updates com Updates[0].Message (live capture)
 func Normalize(raw *storage.RawMessage) (*NormalizedMessage, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(raw.Payload, &payload); err != nil {
@@ -71,17 +131,138 @@ func Normalize(raw *storage.RawMessage) (*NormalizedMessage, error) {
 	nm.Forwards = toInt(msg["Forwards"])
 	nm.ReplyToMsgID = extractReplyTo(msg)
 
+	// Extração de sinais
 	nm.HasURL = hasURL(nm.Text)
-	nm.HasPrice, nm.PriceAmount = extractPrice(nm.Text)
-	nm.HasCoupon = hasCoupon(nm.Text)
+	nm.URLHash = computeURLHash(nm.Text)
+	extractPrices(nm.Text, nm)
+	extractCoupon(nm.Text, nm)
+	extractModifiers(nm.Text, nm)
 	nm.UrgencySignals = extractUrgency(nm.Text)
+
+	// Estágio 3: Síntese
+	syn := Synthesize(nm)
+	nm.Merchant = syn.Merchant
+	nm.ProductName = syn.ProductName
+	synJSON, err := json.Marshal(syn)
+	if err == nil {
+		nm.Synthesis = string(synJSON)
+	}
 
 	return nm, nil
 }
 
-// extractMessage detecta o shape e retorna o map da mensagem real.
+// extractPrices detecta preço dual (De X por Y) ou preço único.
+// Se dual: PriceOriginal = X, PriceAmount = Y, PriceDiscount = calculado.
+// Se único: PriceAmount = primeiro preço encontrado, PriceOriginal = 0.
+func extractPrices(text string, nm *NormalizedMessage) {
+	if dual := reDualPrice.FindStringSubmatch(text); dual != nil {
+		var origRaw, finalRaw string
+		if dual[1] != "" && dual[2] != "" {
+			origRaw, finalRaw = dual[1], dual[2]
+		} else if dual[3] != "" && dual[4] != "" {
+			// "R$ X OFF em R$ Y" → original é Y, desconto é X, final = Y - X
+			discountRaw := dual[3]
+			origRaw = dual[4]
+			origCents := parseBRL(origRaw)
+			discCents := parseBRL(discountRaw)
+			if origCents > 0 {
+				nm.HasPrice = true
+				nm.PriceOriginal = origCents
+				if discCents > 0 && discCents < origCents {
+					nm.PriceAmount = origCents - discCents
+				} else {
+					nm.PriceAmount = origCents
+				}
+				if nm.PriceOriginal > 0 && nm.PriceAmount > 0 {
+					nm.PriceDiscount = int(math.Round((1.0 - float64(nm.PriceAmount)/float64(nm.PriceOriginal)) * 100))
+				}
+				return
+			}
+		}
+		if origRaw != "" && finalRaw != "" {
+			nm.HasPrice = true
+			nm.PriceOriginal = parseBRL(origRaw)
+			nm.PriceAmount = parseBRL(finalRaw)
+			if nm.PriceOriginal > 0 && nm.PriceAmount > 0 {
+				nm.PriceDiscount = int(math.Round((1.0 - float64(nm.PriceAmount)/float64(nm.PriceOriginal)) * 100))
+				if nm.PriceDiscount < 0 {
+					nm.PriceDiscount = 0
+				}
+			}
+			return
+		}
+	}
+
+	// Preço único
+	if match := rePrice.FindStringSubmatch(text); match != nil {
+		nm.HasPrice = true
+		nm.PriceAmount = parseBRL(match[1])
+	}
+}
+
+// extractCoupon extrai código de cupom e seta HasCoupon + CouponCode.
+func extractCoupon(text string, nm *NormalizedMessage) {
+	if match := reCoupon.FindStringSubmatch(text); match != nil {
+		nm.HasCoupon = true
+		nm.CouponCode = strings.ToUpper(match[1])
+	}
+}
+
+// extractModifiers detecta Pix, frete grátis, parcelamento, cashback, % desconto.
+func extractModifiers(text string, nm *NormalizedMessage) {
+	if rePix.MatchString(text) {
+		nm.PaymentMethod = "pix"
+	}
+	if reFretePrime.MatchString(text) {
+		nm.Shipping = "frete_gratis_prime"
+	} else if reFreteG.MatchString(text) {
+		nm.Shipping = "frete_gratis"
+	}
+	if match := reInstall.FindStringSubmatch(text); match != nil {
+		nm.Installments = match[1] + "x_sem_juros"
+	}
+	if reCashback.MatchString(text) {
+		nm.IsCashback = true
+	}
+	if match := reDiscPct.FindStringSubmatch(text); match != nil {
+		n, _ := strconv.Atoi(match[1])
+		if n > 0 && n <= 100 {
+			nm.DiscountPct = n
+		}
+	}
+}
+
+// computeURLHash retorna SHA-256 da primeira URL normalizada no texto.
+func computeURLHash(text string) string {
+	u := reURL.FindString(text)
+	if u == "" {
+		return ""
+	}
+	normalized := normalizeURL(u)
+	h := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(h[:])
+}
+
+// normalizeURL lowercases o host, remove trailing slash e query params de tracking.
+func normalizeURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return strings.ToLower(strings.TrimRight(raw, "/"))
+	}
+	u.Host = strings.ToLower(u.Host)
+	u.Fragment = ""
+	q := u.Query()
+	for _, k := range []string{"tag", "ref", "ref_", "campaign", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"} {
+		q.Del(k)
+	}
+	u.RawQuery = q.Encode()
+	result := u.String()
+	return strings.TrimRight(result, "/")
+}
+
+// --- Helpers de payload ---
+
 func extractMessage(payload map[string]any) (map[string]any, error) {
-	// Shape B: wrapper com campo "Updates"
 	if updates, ok := payload["Updates"]; ok {
 		arr, ok := updates.([]any)
 		if !ok || len(arr) == 0 {
@@ -91,22 +272,17 @@ func extractMessage(payload map[string]any) (map[string]any, error) {
 		if !ok {
 			return nil, fmt.Errorf("shape B: Updates[0] não é objeto")
 		}
-		// Updates[0] pode ter "Message" diretamente ou ser o próprio update
 		if inner, ok := first["Message"].(map[string]any); ok {
 			return inner, nil
 		}
 		return first, nil
 	}
-
-	// Shape A: payload direto do tg.Message
 	if _, hasID := payload["ID"]; hasID {
 		return payload, nil
 	}
-
 	return nil, fmt.Errorf("shape desconhecido: nem Shape A (ID) nem Shape B (Updates)")
 }
 
-// extractChannelID extrai PeerID.ChannelID do payload.
 func extractChannelID(msg map[string]any) int64 {
 	peerID, ok := msg["PeerID"].(map[string]any)
 	if !ok {
@@ -115,7 +291,6 @@ func extractChannelID(msg map[string]any) int64 {
 	return toInt64(peerID["ChannelID"])
 }
 
-// extractDate converte o campo Date (Unix timestamp int) para time.Time.
 func extractDate(msg map[string]any) time.Time {
 	switch v := msg["Date"].(type) {
 	case float64:
@@ -133,7 +308,6 @@ func extractDate(msg map[string]any) time.Time {
 	return time.Time{}
 }
 
-// extractMediaType detecta o tipo de media presente na mensagem.
 func extractMediaType(msg map[string]any) string {
 	media, ok := msg["Media"]
 	if !ok || media == nil {
@@ -143,7 +317,6 @@ func extractMediaType(msg map[string]any) string {
 	if !ok {
 		return "none"
 	}
-	// tg types usam campo "_" ou nomes específicos
 	if _, ok := mediaMap["Photo"]; ok {
 		return "photo"
 	}
@@ -162,7 +335,6 @@ func extractMediaType(msg map[string]any) string {
 	return "none"
 }
 
-// extractPhotoID extrai Media.Photo.ID quando presente.
 func extractPhotoID(msg map[string]any) int64 {
 	media, ok := msg["Media"].(map[string]any)
 	if !ok {
@@ -175,7 +347,6 @@ func extractPhotoID(msg map[string]any) int64 {
 	return toInt64(photo["ID"])
 }
 
-// extractReplyTo extrai ReplyTo.ReplyToMsgID quando presente.
 func extractReplyTo(msg map[string]any) int64 {
 	reply, ok := msg["ReplyTo"].(map[string]any)
 	if !ok {
@@ -184,50 +355,8 @@ func extractReplyTo(msg map[string]any) int64 {
 	return toInt64(reply["ReplyToMsgID"])
 }
 
-// cleanText normaliza whitespace: NBSP → espaço, 3+ newlines → 2.
-// Preserva emojis e formatação original.
-func cleanText(s string) string {
-	s = strings.ReplaceAll(s, "\u00a0", " ")
-	s = reWhitespace.ReplaceAllString(s, "\n\n")
-	return strings.TrimSpace(s)
-}
-
-// --- Detecções via regex ---
-
-var (
-	reURL     = regexp.MustCompile(`https?://[^\s<>"']+`)
-	rePrice   = regexp.MustCompile(`R\$\s*([0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)`)
-	reCoupon  = regexp.MustCompile(`(?i)cupom[:\s]+([A-Z0-9_]{3,25})`)
-	reExpired = regexp.MustCompile(`(?i)(esgotado|acabou|encerrado|expirado)`)
-	reCorre   = regexp.MustCompile(`(?i)\b(corre|corram)\b`)
-	reFreteG  = regexp.MustCompile(`(?i)frete\s+gr[áa]tis`)
-	reUltima  = regexp.MustCompile(`(?i)[úu]ltima[s]?\s*unidade|acabando|esgotando`)
-	reNacional = regexp.MustCompile(`(?i)envio\s+(nacional|do\s+brasil)`)
-)
-
 func hasURL(text string) bool {
 	return reURL.MatchString(text)
-}
-
-// extractPrice retorna (true, centavos) se um preço BRL é encontrado.
-func extractPrice(text string) (bool, int64) {
-	match := rePrice.FindStringSubmatch(text)
-	if match == nil {
-		return false, 0
-	}
-	// match[1] = "1.234,56" ou "83" ou "99,90"
-	raw := match[1]
-	raw = strings.ReplaceAll(raw, ".", "")
-	raw = strings.ReplaceAll(raw, ",", ".")
-	f, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return false, 0
-	}
-	return true, int64(f * 100)
-}
-
-func hasCoupon(text string) bool {
-	return reCoupon.MatchString(text)
 }
 
 func isExpired(text string) bool {
@@ -251,7 +380,18 @@ func extractUrgency(text string) []string {
 	return signals
 }
 
-// --- Helpers de conversão de tipo ---
+// --- Conversão de tipos ---
+
+// parseBRL converte "1.234,56" ou "83" ou "99,90" em centavos (int64).
+func parseBRL(raw string) int64 {
+	raw = strings.ReplaceAll(raw, ".", "")
+	raw = strings.ReplaceAll(raw, ",", ".")
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0
+	}
+	return int64(math.Round(f * 100))
+}
 
 func toInt64(v any) int64 {
 	switch n := v.(type) {
