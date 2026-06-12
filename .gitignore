@@ -37,4 +37,6 @@ vendor/
 .omc/
 .claude/
 .qoder/
+.kiro/
+.remember/
 limiar-processor
