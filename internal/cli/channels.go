@@ -71,12 +71,12 @@ func newChannelsListCmd(p Provider) *cobra.Command {
 				}
 				out := cmd.OutOrStdout()
 				_, _ = fmt.Fprintln(out)
-				fmt.Fprintln(out, "  📋 Canais monitorados")
-				fmt.Fprintln(out, "  ──────────────────────────────────────")
+				_, _ = fmt.Fprintln(out, "  📋 Canais monitorados")
+				_, _ = fmt.Fprintln(out, "  ──────────────────────────────────────")
 				if len(channels) == 0 {
-					fmt.Fprintln(out, "  Nenhum canal configurado.")
-					fmt.Fprintln(out, "  Use 'channels add <username ou link>' para adicionar.")
-					fmt.Fprintln(out)
+					_, _ = fmt.Fprintln(out, "  Nenhum canal configurado.")
+					_, _ = fmt.Fprintln(out, "  Use 'channels add <username ou link>' para adicionar.")
+					_, _ = fmt.Fprintln(out)
 					return nil
 				}
 				for _, ch := range channels {
