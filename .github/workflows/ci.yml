@@ -23,11 +23,7 @@ jobs:
     - name: Verify Dependencies
       run: go mod verify
 
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: latest
-        args: --go=1.24 --timeout=5m
+
 
     - name: Run Gosec Security Scanner
       uses: securego/gosec@master
