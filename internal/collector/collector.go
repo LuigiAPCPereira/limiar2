@@ -22,8 +22,18 @@ const historyPageSize = 100
 type Repository interface {
 	ListChannels(ctx context.Context) ([]*storage.Channel, error)
 	SaveRawMessage(ctx context.Context, msg *storage.RawMessage) (inserted bool, err error)
+	// SaveRawMessageBatch persiste múltiplas mensagens em uma única transação.
+	// inserted[i] indica se msgs[i] foi efetivamente inserida (true) ou era duplicata (false).
+	// totalInserted é a soma dos true. Em falha, inserted é nil e err não é nil.
+	SaveRawMessageBatch(ctx context.Context, msgs []*storage.RawMessage) (inserted []bool, totalInserted int, err error)
 	UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error
 }
+
+// defaultFlushInterval é a janela padrão de acúmulo de jobs no dbWriter antes do
+// flush em transação única. 10ms é o ponto de equilíbrio empírico entre latência
+// (o dashboard vê mensagens em até ~10ms) e throughput (rajadas de backfill
+// colapsam centenas de fsyncs em 1 fsync só).
+const defaultFlushInterval = 10 * time.Millisecond
 
 // Collector orquestra a captura: ele faz o backfill do histórico, registra o handler
 // de mensagens, executa o client do Telegram e serializa todas as gravações através de uma
@@ -37,6 +47,7 @@ type Collector struct {
 	maxWriteRetry  int
 	historyMax     int
 	historyMaxDays int
+	flushInterval  time.Duration
 	onMessage      func(*storage.RawMessage)
 
 	writeCh chan WriteJob
@@ -45,8 +56,8 @@ type Collector struct {
 	// Observabilidade: contadores atômicos atualizados pelo dbWriter em cada gravação
 	// bem-sucedida. Leia com atomic.LoadInt64 para uma inspeção segura entre goroutines
 	// (ex: logs periódicos de estatísticas).
-	statsNew        int64
-	statsDuplicate  int64
+	statsNew       int64
+	statsDuplicate int64
 }
 
 // SetOnMessage registra um callback invocado após cada gravação bem-sucedida no
@@ -88,6 +99,7 @@ func NewCollector(
 		maxWriteRetry:  maxWriteRetry,
 		historyMax:     historyMax,
 		historyMaxDays: historyMaxDays,
+		flushInterval:  defaultFlushInterval,
 	}
 }
 
@@ -311,12 +323,120 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 }
 
 // dbWriter é a única goroutine que escreve no banco de dados (fan-in). Ele
-// drena o writeCh até ser fechado, repetindo cada escrita até maxWriteRetry vezes.
+// drena o writeCh até ser fechado, acumulando jobs em micro-lotes dentro de
+// uma janela de tempo (flushInterval) para disparar uma única transação por
+// lote em vez de uma transação por mensagem. Isso colapsa N fsyncs em 1 fsync,
+// reduzindo a latência de escrita em ordens de magnitude durante backfill
+// (milhares de mensagens) sem prejudicar a latência percebida pelo dashboard
+// (~flushInterval de atraso adicional).
 func (c *Collector) dbWriter(ctx context.Context) {
 	defer c.wg.Done()
-	for job := range c.writeCh {
+
+	batch := make([]WriteJob, 0, cap(c.writeCh))
+	var timer *time.Timer
+	var timerC <-chan time.Time
+
+	for {
+		select {
+		case job, ok := <-c.writeCh:
+			if !ok {
+				// Canal fechado: drena o lote pendente e sai.
+				if len(batch) > 0 {
+					c.flush(ctx, batch)
+				}
+				return
+			}
+			// Primeiro job do lote: arma o timer de flush.
+			if len(batch) == 0 && timerC == nil {
+				if timer == nil {
+					timer = time.NewTimer(c.flushInterval)
+				} else {
+					timer.Reset(c.flushInterval)
+				}
+				timerC = timer.C
+			}
+			batch = append(batch, job)
+			// Lote cheio: flush imediato sem esperar o timer.
+			if len(batch) >= cap(c.writeCh) {
+				c.flush(ctx, batch)
+				batch = batch[:0]
+				if timer != nil && !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timerC = nil
+			}
+		case <-timerC:
+			c.flush(ctx, batch)
+			batch = batch[:0]
+			timerC = nil
+		}
+	}
+}
+
+// flush persiste um lote acumulado de WriteJobs em uma única transação e
+// dispara callbacks (onMessage) para cada mensagem persistida. Jobs marcados
+// como Backfill não avançam o cursor — o orquestrador do backfill é dono
+// disso (evita a corrida da ordem descendente). Falhas de lote caem para
+// escrita individual com retry (writeWithRetry) para maximizar recuperação.
+func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
+	if len(batch) == 0 {
+		return
+	}
+
+	// Separa mensagens para o commit em lote.
+	msgs := make([]*storage.RawMessage, len(batch))
+	for i, job := range batch {
+		msgs[i] = job.Message
+	}
+
+	inserted, err := c.writeBatchWithRetry(ctx, msgs)
+
+	// Caminho feliz: lote commitado. Avança cursores, atualiza stats, dispara callbacks.
+	if err == nil {
+		for i, job := range batch {
+			if inserted[i] {
+				atomic.AddInt64(&c.statsNew, 1)
+			} else {
+				atomic.AddInt64(&c.statsDuplicate, 1)
+			}
+			if !job.Backfill && job.Message.ChannelID != 0 {
+				if updErr := c.repo.UpdateChannelLastMessage(ctx, job.Message.ChannelID, job.Message.MessageID, job.Message.ReceivedAt); updErr != nil {
+					c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", updErr)
+				}
+			}
+			if c.onMessage != nil {
+				c.onMessage(job.Message)
+			}
+		}
+		return
+	}
+
+	// Falha persistente do lote: cai para escrita individual (writeWithRetry),
+	// que tem seu próprio loop de retry. Menor throughput, mas maximiza
+	// recuperação de mensagens sob falha transitória do DB.
+	c.log.Warn("⚠️  Lote falhou, caindo para escrita individual",
+		"tamanho_lote", len(batch), "erro", err)
+	for _, job := range batch {
 		c.writeWithRetry(ctx, job)
 	}
+}
+
+// writeBatchWithRetry tenta commitar um lote em transação única até maxWriteRetry+1
+// vezes. Idempotente graças ao ON CONFLICT DO NOTHING — retries não criam
+// duplicatas. Retorna nil no sucesso, o último erro após retries esgotados.
+func (c *Collector) writeBatchWithRetry(ctx context.Context, msgs []*storage.RawMessage) ([]bool, error) {
+	var lastErr error
+	for attempt := 0; attempt <= c.maxWriteRetry; attempt++ {
+		inserted, _, err := c.repo.SaveRawMessageBatch(ctx, msgs)
+		if err == nil {
+			return inserted, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 // writeWithRetry persiste um job, com retentativa (retry) em caso de falha. Uma falha persistente

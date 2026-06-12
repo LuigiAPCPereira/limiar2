@@ -63,6 +63,17 @@ func (f *fakeRepo) SaveRawMessage(_ context.Context, msg *storage.RawMessage) (b
 	return true, nil
 }
 
+func (f *fakeRepo) SaveRawMessageBatch(_ context.Context, msgs []*storage.RawMessage) ([]bool, int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	inserted := make([]bool, len(msgs))
+	for i, msg := range msgs {
+		f.saved = append(f.saved, msg)
+		inserted[i] = true
+	}
+	return inserted, len(msgs), nil
+}
+
 func (f *fakeRepo) UpdateChannelLastMessage(_ context.Context, channelID, messageID int64, _ time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
