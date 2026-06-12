@@ -27,7 +27,7 @@ func newRepo(t *testing.T) *storage.Repository {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	repo, err := storage.NewRepository(db.Conn())
+	repo, err := storage.NewRepository(db.DB())
 	if err != nil {
 		t.Fatalf("repo: %v", err)
 	}

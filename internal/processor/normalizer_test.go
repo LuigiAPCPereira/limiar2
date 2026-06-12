@@ -10,12 +10,12 @@ import (
 
 func TestNormalize_ShapeA(t *testing.T) {
 	payload := map[string]any{
-		"ID":      float64(12345),
-		"Message": "🔥 Celular Samsung R$ 1.234,56\nhttps://amzn.to/abc\nCupom: SAMSUNG10",
-		"PeerID":  map[string]any{"ChannelID": float64(999)},
-		"Date":    float64(1717891200),
-		"Media":   nil,
-		"Views":   float64(500),
+		"ID":       float64(12345),
+		"Message":  "🔥 Celular Samsung R$ 1.234,56\nhttps://amzn.to/abc\nCupom: SAMSUNG10",
+		"PeerID":   map[string]any{"ChannelID": float64(999)},
+		"Date":     float64(1717891200),
+		"Media":    nil,
+		"Views":    float64(500),
 		"Forwards": float64(10),
 	}
 	raw := makeRaw(t, 1, 999, 12345, payload)
@@ -51,6 +51,15 @@ func TestNormalize_ShapeA(t *testing.T) {
 	}
 	if !nm.HasCoupon {
 		t.Error("HasCoupon = false, quer true")
+	}
+	if nm.CouponCode != "SAMSUNG10" {
+		t.Errorf("CouponCode = %q, quer SAMSUNG10", nm.CouponCode)
+	}
+	if nm.Merchant != "amazon" {
+		t.Errorf("Merchant = %q, quer amazon", nm.Merchant)
+	}
+	if nm.URLHash == "" {
+		t.Error("URLHash vazio, esperava hash")
 	}
 }
 
@@ -97,6 +106,9 @@ func TestNormalize_ShapeB(t *testing.T) {
 	}
 	if nm.PriceAmount != 2990 {
 		t.Errorf("PriceAmount = %d, quer 2990 (centavos de R$ 29,90)", nm.PriceAmount)
+	}
+	if nm.Merchant != "shopee" {
+		t.Errorf("Merchant = %q, quer shopee", nm.Merchant)
 	}
 }
 
@@ -199,33 +211,6 @@ func TestNormalize_MediaTypes(t *testing.T) {
 	}
 }
 
-func TestNormalize_PriceExtraction(t *testing.T) {
-	tests := []struct {
-		text      string
-		wantOK    bool
-		wantCents int64
-	}{
-		{"R$ 1.234,56", true, 123456},
-		{"R$1234", true, 123400},
-		{"R$ 83", true, 8300},
-		{"R$99,90", true, 9990},
-		{"sem preço", false, 0},
-		{"R$ 0,01", true, 1},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.text, func(t *testing.T) {
-			ok, cents := extractPrice(tt.text)
-			if ok != tt.wantOK {
-				t.Errorf("hasPrice = %v, quer %v", ok, tt.wantOK)
-			}
-			if cents != tt.wantCents {
-				t.Errorf("cents = %d, quer %d", cents, tt.wantCents)
-			}
-		})
-	}
-}
-
 func TestNormalize_UnknownShape(t *testing.T) {
 	payload := map[string]any{"Foo": "bar"}
 	raw := makeRaw(t, 1, 1, 1, payload)
@@ -233,6 +218,299 @@ func TestNormalize_UnknownShape(t *testing.T) {
 	_, err := Normalize(raw)
 	if err == nil {
 		t.Fatal("esperava erro para shape desconhecido")
+	}
+}
+
+// --- Fase 2: Dual Price ---
+
+func TestDualPrice(t *testing.T) {
+	tests := []struct {
+		name      string
+		text      string
+		wantOrig  int64
+		wantFinal int64
+		wantDisc  int
+		wantHas   bool
+	}{
+		{
+			"De por Pix",
+			"De R$ 429 por R$ 208,92 no Pix",
+			42900, 20892, 51, true,
+		},
+		{
+			"De: por:",
+			"De: R$ 1.048 por R$ 478 no Pix",
+			104800, 47800, 54, true,
+		},
+		{
+			"OFF em",
+			"R$ 50 OFF em R$ 250: CODE123",
+			25000, 20000, 20, true,
+		},
+		{
+			"single price",
+			"R$ 99,90",
+			0, 9990, 0, true,
+		},
+		{
+			"no price",
+			"sem preço aqui",
+			0, 0, 0, false,
+		},
+		{
+			"De por à vista",
+			"De R$ 200 à vista por R$ 150",
+			20000, 15000, 25, true,
+		},
+		{
+			"POR REAIS sem R$",
+			"POR: 425 REAIS",
+			0, 42500, 0, true,
+		},
+		{
+			"por apenas sem R$",
+			"por apenas 99,90",
+			0, 9990, 0, true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nm := &NormalizedMessage{}
+			extractPrices(tt.text, nm)
+			if nm.HasPrice != tt.wantHas {
+				t.Errorf("HasPrice = %v, quer %v", nm.HasPrice, tt.wantHas)
+			}
+			if nm.PriceOriginal != tt.wantOrig {
+				t.Errorf("PriceOriginal = %d, quer %d", nm.PriceOriginal, tt.wantOrig)
+			}
+			if nm.PriceAmount != tt.wantFinal {
+				t.Errorf("PriceAmount = %d, quer %d", nm.PriceAmount, tt.wantFinal)
+			}
+			if nm.PriceDiscount != tt.wantDisc {
+				t.Errorf("PriceDiscount = %d, quer %d", nm.PriceDiscount, tt.wantDisc)
+			}
+		})
+	}
+}
+
+// --- Fase 2: Coupon ---
+
+func TestCouponExtraction(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		wantHas  bool
+		wantCode string
+	}{
+		{"Cupom com espaço", "Cupom VEMPRAMAZON", true, "VEMPRAMAZON"},
+		{"Cupom com dois-pontos", "Cupom: AEBR1", true, "AEBR1"},
+		{"cupom minúsculo", "cupom CORREPRAPROMO", true, "CORREPRAPROMO"},
+		{"Código", "Código: MEGABR08", true, "MEGABR08"},
+		{"code", "Code DESCONTO20", true, "DESCONTO20"},
+		{"sem cupom", "promoção sem código", false, ""},
+		{"cupom com newline", "Cupom:\nRESGATE", true, "RESGATE"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nm := &NormalizedMessage{}
+			extractCoupon(tt.text, nm)
+			if nm.HasCoupon != tt.wantHas {
+				t.Errorf("HasCoupon = %v, quer %v", nm.HasCoupon, tt.wantHas)
+			}
+			if nm.CouponCode != tt.wantCode {
+				t.Errorf("CouponCode = %q, quer %q", nm.CouponCode, tt.wantCode)
+			}
+		})
+	}
+}
+
+// --- Fase 2: Modifiers ---
+
+func TestModifiers(t *testing.T) {
+	tests := []struct {
+		name       string
+		text       string
+		wantPay    string
+		wantShip   string
+		wantInst   string
+		wantCash   bool
+		wantDiscPc int
+	}{
+		{
+			"Pix",
+			"R$ 99 no Pix",
+			"pix", "", "", false, 0,
+		},
+		{
+			"Frete grátis",
+			"Produto com frete grátis",
+			"", "frete_gratis", "", false, 0,
+		},
+		{
+			"Frete grátis Prime",
+			"Frete grátis Prime para membros",
+			"", "frete_gratis_prime", "", false, 0,
+		},
+		{
+			"Parcelamento",
+			"em até 12x sem juros",
+			"", "", "12x_sem_juros", false, 0,
+		},
+		{
+			"Cashback",
+			"Com cashback de 5%",
+			"", "", "", true, 0,
+		},
+		{
+			"Desconto percentual",
+			"20% OFF no produto",
+			"", "", "", false, 20,
+		},
+		{
+			"Combo Pix + frete",
+			"R$ 50 no Pix com frete grátis",
+			"pix", "frete_gratis", "", false, 0,
+		},
+		{
+			"Sem modifiers",
+			"Produto simples R$ 100",
+			"", "", "", false, 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nm := &NormalizedMessage{}
+			extractModifiers(tt.text, nm)
+			if nm.PaymentMethod != tt.wantPay {
+				t.Errorf("PaymentMethod = %q, quer %q", nm.PaymentMethod, tt.wantPay)
+			}
+			if nm.Shipping != tt.wantShip {
+				t.Errorf("Shipping = %q, quer %q", nm.Shipping, tt.wantShip)
+			}
+			if nm.Installments != tt.wantInst {
+				t.Errorf("Installments = %q, quer %q", nm.Installments, tt.wantInst)
+			}
+			if nm.IsCashback != tt.wantCash {
+				t.Errorf("IsCashback = %v, quer %v", nm.IsCashback, tt.wantCash)
+			}
+			if nm.DiscountPct != tt.wantDiscPc {
+				t.Errorf("DiscountPct = %d, quer %d", nm.DiscountPct, tt.wantDiscPc)
+			}
+		})
+	}
+}
+
+// --- Fase 2: Merchant Detection ---
+
+func TestDetectMerchant(t *testing.T) {
+	tests := []struct {
+		text string
+		want string
+	}{
+		{"https://meli.la/abc123", "mercadolivre"},
+		{"https://amzn.to/4kT8xyz", "amazon"},
+		{"https://s.shopee.com.br/produto", "shopee"},
+		{"https://a.aliexpress.com/item", "aliexpress"},
+		{"https://magazineluiza.onelink.me/abc", "magalu"},
+		{"https://onelink.shein.com/item", "shein"},
+		{"https://www.terabyteshop.com.br/produto", "terabyte"},
+		{"https://www.magazinevoce.com.br/prod", "magalu"},
+		{"https://unknown-site.com/prod", ""},
+		{"sem url aqui", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := detectMerchant(tt.text)
+			if got != tt.want {
+				t.Errorf("detectMerchant(%q) = %q, quer %q", tt.text, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- Fase 2: URL Hash ---
+
+func TestURLHash(t *testing.T) {
+	// Mesma URL normalizada → mesmo hash
+	h1 := computeURLHash("https://amzn.to/abc?tag=test")
+	h2 := computeURLHash("https://amzn.to/abc?ref=x")
+	if h1 == "" {
+		t.Fatal("hash vazio para URL válida")
+	}
+	// Com tracking params diferentes, o hash deve ser igual se a base URL é a mesma
+	// (tag e ref são removidos na normalização)
+	if h1 != h2 {
+		t.Errorf("hashes deveriam ser iguais para mesma URL base: %q vs %q", h1, h2)
+	}
+
+	// Sem URL → hash vazio
+	h3 := computeURLHash("sem url aqui")
+	if h3 != "" {
+		t.Errorf("hash deveria ser vazio para texto sem URL: %q", h3)
+	}
+}
+
+// --- Fase 2: parseBRL ---
+
+func TestParseBRL(t *testing.T) {
+	tests := []struct {
+		input string
+		want  int64
+	}{
+		{"1.234,56", 123456},
+		{"83", 8300},
+		{"99,90", 9990},
+		{"0,01", 1},
+		{"1.000", 100000},
+		{"", 0},
+		{"abc", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := parseBRL(tt.input)
+			if got != tt.want {
+				t.Errorf("parseBRL(%q) = %d, quer %d", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- Fase 2: Synthesize ---
+
+func TestSynthesize(t *testing.T) {
+	nm := &NormalizedMessage{
+		Text:          "🔥 Fone Bluetooth R$ 29,90 no Pix\nhttps://s.shopee.com.br/xyz\nCupom: FONE5",
+		PriceAmount:   2990,
+		PriceOriginal: 5990,
+		PriceDiscount: 50,
+		CouponCode:    "FONE5",
+		PaymentMethod: "pix",
+		URLHash:       "abc123",
+	}
+
+	syn := Synthesize(nm)
+
+	if syn.Merchant != "shopee" {
+		t.Errorf("Merchant = %q, quer shopee", syn.Merchant)
+	}
+	if syn.PriceFinal != 2990 {
+		t.Errorf("PriceFinal = %d, quer 2990", syn.PriceFinal)
+	}
+	if syn.PriceOriginal != 5990 {
+		t.Errorf("PriceOriginal = %d, quer 5990", syn.PriceOriginal)
+	}
+	if syn.CouponCode != "FONE5" {
+		t.Errorf("CouponCode = %q, quer FONE5", syn.CouponCode)
+	}
+	if syn.PaymentMethod != "pix" {
+		t.Errorf("PaymentMethod = %q, quer pix", syn.PaymentMethod)
+	}
+	if syn.URL != "https://s.shopee.com.br/xyz" {
+		t.Errorf("URL = %q, quer https://s.shopee.com.br/xyz", syn.URL)
 	}
 }
 

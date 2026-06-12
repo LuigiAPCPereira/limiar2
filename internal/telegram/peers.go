@@ -65,6 +65,7 @@ func (ps *PeerStore) LoadFromDB(ctx context.Context) error {
 
 // FlushToDB persiste todos os peers em cache. Ele tira um snapshot sob um read lock (bloqueio de leitura)
 // para que uma gravação demorada não bloqueie leitores concorrentes.
+// Usa SavePeersBatch para persistir todos em uma única transação (evita N+1).
 func (ps *PeerStore) FlushToDB(ctx context.Context) error {
 	ps.mu.RLock()
 	snapshot := make([]*storage.Peer, 0, len(ps.peers))
@@ -73,10 +74,8 @@ func (ps *PeerStore) FlushToDB(ctx context.Context) error {
 	}
 	ps.mu.RUnlock()
 
-	for _, p := range snapshot {
-		if err := ps.repo.SavePeer(ctx, p); err != nil {
-			return apperrors.Wrap("telegram", "peers_flush", err)
-		}
+	if err := ps.repo.SavePeersBatch(ctx, snapshot); err != nil {
+		return apperrors.Wrap("telegram", "peers_flush", err)
 	}
 	ps.log.Debug("💾 Peers salvos no banco", "total", len(snapshot))
 	return nil

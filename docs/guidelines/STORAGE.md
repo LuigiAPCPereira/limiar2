@@ -18,10 +18,8 @@ toca no `database/sql`. Siga estas regras ao estender esta camada.
    `apperrors.ErrChannelNotFound`).
 6. **Apenas o DBWriter escreve em tempo de execução.** Os métodos de escrita do Repository existem,
    mas no serviço `run` eles são chamados exclusivamente pelo `Collector.dbWriter`.
-7. **Alterações de schema vão em um novo arquivo de migração** em `migrations/`, mantidas
-   idempotentes (`CREATE ... IF NOT EXISTS`). Os arquivos são executados em ordem lexical.
-8. **As datas e horas (Datetimes) são texto em UTC** no formato `2006-01-02 15:04:05` (a constante
-   `dbTimeLayout`), correspondendo aos padrões `datetime('now')` do schema.
+7. **Alterações de schema vão em um novo arquivo de migração** em `migrations/`. O sistema executa as migrations em ordem lexical e registra cada execução na tabela `schema_migrations`, garantindo que cada arquivo seja executado apenas uma vez. As migrations são executadas dentro de uma transação.
+8. **As datas e horas (Datetimes) são texto em UTC** no formato `2006-01-02 15:04:05` (a constante `storage.DBTimeLayout`), correspondendo aos padrões `datetime('now')` do schema.
 
 ## Correto
 

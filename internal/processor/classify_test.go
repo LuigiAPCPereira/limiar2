@@ -97,6 +97,16 @@ func TestClassify(t *testing.T) {
 			},
 			want: TypeDealComplete,
 		},
+		{
+			name: "coupon_only: cupom genérico sem produto",
+			nm: &NormalizedMessage{
+				Text:      "Cupom Shopee\n\nR$10 OFF em R$40 - TORCIDAAFILIADAAF\n\nResgate aqui\nhttps://s.shopee.com.br/abc",
+				HasURL:    true,
+				HasPrice:  true,
+				HasCoupon: true,
+			},
+			want: TypeCouponOnly,
+		},
 	}
 
 	for _, tt := range tests {

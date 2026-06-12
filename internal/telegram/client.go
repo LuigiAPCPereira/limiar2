@@ -143,7 +143,7 @@ func NewClient(
 		peers:      peers,
 		dispatcher: dispatcher,
 		log:        log,
-		rng:        rand.New(rand.NewSource(time.Now().UnixNano())),
+		rng:        rand.New(rand.NewSource(time.Now().UnixNano())), // #nosec G404 — jitter, not crypto
 	}
 	return c
 }
@@ -213,7 +213,7 @@ func (c *Client) LoadPeers(ctx context.Context) error {
 
 // Auth executa o fluxo interativo se a sessão ainda não estiver autorizada.
 func (c *Client) Auth(ctx context.Context) error {
-	fmt.Fprintln(os.Stdout, "\n  📡 Conectando ao Telegram...")
+	_, _ = fmt.Fprintln(os.Stdout, "\n  📡 Conectando ao Telegram...")
 	return c.runOnce(ctx, func(ctx context.Context) error {
 		authn := newTerminalAuthenticator(os.Stdin, os.Stdout, c.log)
 		flow := auth.NewFlow(authn, auth.SendCodeOptions{})
@@ -416,7 +416,7 @@ func NormalizeUsername(u string) string {
 	hasInvalid := false
 	for i := 0; i < len(u); i++ {
 		c := u[i]
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '_' {
 			hasInvalid = true
 			break
 		}

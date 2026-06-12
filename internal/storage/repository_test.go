@@ -41,7 +41,7 @@ func openTempRepo() (*storage.Repository, func(), error) {
 		_ = os.RemoveAll(dir)
 		return nil, nil, err
 	}
-	repo, err := storage.NewRepository(db.Conn())
+	repo, err := storage.NewRepository(db.DB())
 	if err != nil {
 		_ = db.Close()
 		_ = os.RemoveAll(dir)
@@ -62,15 +62,60 @@ func TestOpenRunsMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
-	for _, table := range []string{"sessions", "peers", "channels", "raw_messages"} {
+	for _, table := range []string{"sessions", "peers", "channels", "raw_messages", "schema_migrations"} {
 		var name string
-		row := db.Conn().QueryRowContext(ctx,
+		row := db.DB().QueryRowContext(ctx,
 			"SELECT name FROM sqlite_master WHERE type='table' AND name=?", table)
 		if err := row.Scan(&name); err != nil {
 			t.Errorf("table %q missing after migrations: %v", table, err)
 		}
+	}
+
+	// Verifica que todas as migrações foram registradas em schema_migrations.
+	var count int
+	if err := db.DB().QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
+		t.Fatalf("count schema_migrations: %v", err)
+	}
+	if count == 0 {
+		t.Fatal("schema_migrations should have at least one entry")
+	}
+}
+
+// TestMigrationTrackingIdempotent garante que reabrir o banco não re-executa
+// migrações e não duplica registros em schema_migrations.
+func TestMigrationTrackingIdempotent(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "idem.db")
+
+	// Primeira abertura: aplica todas as migrações.
+	db1, err := storage.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("Open #1: %v", err)
+	}
+	var count1 int
+	if err := db1.DB().QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM schema_migrations").Scan(&count1); err != nil {
+		t.Fatalf("count #1: %v", err)
+	}
+	_ = db1.Close()
+
+	// Segunda abertura: não deve duplicar registros.
+	db2, err := storage.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("Open #2: %v", err)
+	}
+	defer func() { _ = db2.Close() }()
+
+	var count2 int
+	if err := db2.DB().QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM schema_migrations").Scan(&count2); err != nil {
+		t.Fatalf("count #2: %v", err)
+	}
+	if count2 != count1 {
+		t.Fatalf("schema_migrations count changed on reopen: %d → %d", count1, count2)
 	}
 }
 

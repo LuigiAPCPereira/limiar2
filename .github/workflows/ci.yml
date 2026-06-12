@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build, Test & Lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+        check-latest: true
+
+    - name: Verify Dependencies
+      run: go mod verify
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v9.2.1
+      with:
+        version: latest
+        args: --timeout=5m
+
+    - name: Run Gosec Security Scanner
+      uses: securego/gosec@v2.22.4
+      with:
+        args: -exclude-dir=.agents ./...
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Ensure Strict Dependencies (No ORMs/SQLite drivers)
+      run: |
+        echo "Validando regras da arquitetura fechada (AGENTS.md)..."
+        
+        # O build não deve importar mattn/go-sqlite3, modernc.org/sqlite, gorm, etc.
+        FORBIDDEN_IMPORTS=("github.com/mattn/go-sqlite3" "modernc.org/sqlite" "gorm.io/gorm")
+        
+        # Inspeciona o go.mod diretamente
+        for pkg in "${FORBIDDEN_IMPORTS[@]}"; do
+          if grep -q "$pkg" go.mod; then
+            echo "::error::Importação proibida detectada: $pkg. O uso de drivers SQLite não-Turso ou ORMs é estritamente proibido pela arquitetura."
+            exit 1
+          fi
+        done
+        echo "Validação de dependências concluída com sucesso."
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test (with Race Detector & Coverage)
+      run: go test -v -race -coverprofile=coverage.out -count=1 ./...
+
+    - name: Code Coverage Summary
+      run: go tool cover -func=coverage.out

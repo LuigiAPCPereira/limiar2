@@ -77,7 +77,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, indexHTML)
+	_, _ = fmt.Fprint(w, indexHTML)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +193,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, event.Data)
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, event.Data)
 			flusher.Flush()
 		case <-r.Context().Done():
 			return

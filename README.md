@@ -1,101 +1,95 @@
-# limiar-collector
+<div align="center">
+  <h1>🚀 Limiar</h1>
+  <p><strong>Pipeline de Monitoramento e Processamento de Promoções do Telegram</strong></p>
+  <p>
+    <a href="#o-que-é">O que é</a> •
+    <a href="#como-funciona">Como Funciona</a> •
+    <a href="#quickstart">Quickstart</a> •
+    <a href="#comandos-da-cli">CLI</a> •
+    <a href="#configuração">Configuração</a> •
+    <a href="#regras-do-projeto">⚠️ Regras do Projeto</a>
+  </p>
+</div>
 
-Fase 1 do **Limiar**, um pipeline que monitora canais promocionais brasileiros do Telegram através de um userbot MTProto e persiste as mensagens **brutas (raw)** como JSON para processamento posterior.
+---
 
-O `limiar-collector` faz apenas um trabalho: conectar-se ao Telegram, autenticar-se como um userbot, gerenciar a lista de canais monitorados e capturar os payloads brutos das mensagens em um banco de dados embutido. Há **zero** processamento nesta fase — sem normalização, classificação, enriquecimento ou desduplicação além da persistência segura. O objetivo da Fase 1 é descobrir o formato real dos dados do Telegram para que as fases posteriores (`limiar-processor`, `limiar-api`) possam ser construídas sobre ele.
+O **Limiar** transforma o ruído dos canais de ofertas do Telegram em dados estruturados. Canais promocionais são uma excelente fonte de ofertas, mas sofrem com duplicidade, formatos de texto bagunçados e falta de estruturação.
 
-## O que ele é
+O Limiar resolve isso através de um **Pipeline de Dados** construído em **Go** (Golang), que se conecta nativamente ao Telegram usando a tecnologia de _userbot_ (MTProto), monitora seus canais favoritos, extrai os links/preços/cupons e os disponibiliza em tempo real.
 
-- Um binário Go standalone (`cmd/limiar-collector`, módulo `github.com/limiar/collector`).
-- Um userbot MTProto construído diretamente sobre o [`gotd/td`](https://github.com/gotd/td) (sem wrappers de terceiros).
-- Um coletor de mensagens brutas que grava payloads JSON em um banco de dados embutido [Tursogo](https://turso.tech) (driver `turso` via `database/sql`, **sem CGO**).
+> [!NOTE]  
+> Atualmente estamos finalizando as Fases 1 (Coleta) e 2 (Processamento), que rodam num orquestrador unificado (`limiar run`) e utilizam um banco local SQLite embeddado (`Tursogo`).
 
-## O que ele NÃO é
+## 🛠 Como Funciona
 
-- Não é um bot do Telegram (ele não responde a mensagens nem interage com usuários).
-- Não é um scraper HTTP (ele fala nativamente o protocolo MTProto).
-- Não é um sistema de alertas (ele é uma etapa de um pipeline de dados).
-- Não é um processador ou API — normalização, classificação, desduplicação, chamadas de LLM, REST e SSE pertencem todos a fases futuras e estão explicitamente fora do escopo.
-
-## Não requer CGO
-
-O Tursogo utiliza `purego` para FFI, portanto o binário é compilado e executado sem uma toolchain C e sem `CGO_ENABLED=1`. Sem driver SQLite, sem GORM, sem ORM.
-
-## Instalação
-
-```sh
-go build ./...
-# ou compile apenas o binário:
-go build -o limiar-collector ./cmd/limiar-collector
+```mermaid
+flowchart LR
+    A[Telegram] -- "MTProto" --> B[Collector]
+    B -- "raw_messages" --> DB[(Tursogo .db)]
+    DB -- "polling" --> C[Processor]
+    C -- "Normalização\nClassificação" --> DB
+    DB -- "processed_messages" --> D[Limiar API/Dashboard]
 ```
 
-## Comandos
+1. **Collector:** Autentica como um usuário (não bot), faz download de mensagens antigas (backfill) e fica escutando em tempo real (livestream). Salva a versão bruta no banco de dados.
+2. **Processor:** Pega os payloads brutos, extrai URLs, detecta preços e cupons, categoriza se a promoção acabou, deduplica produtos iguais em canais diferentes, e gera os *processed_messages*.
+3. **API & Dashboard:** Entrega os dados formatados (REST) e atualizações ao vivo (Server-Sent Events) para que o *Limiar Frontend* mostre a mágica acontecendo.
 
-O binário expõe três subcomandos. `auth` e `channels` fazem logging no formato **texto** (interativo); `run` faz logging no formato **JSON** (serviço de produção).
+## ⚡ Quickstart
 
-### `auth` — autenticar uma vez e persistir a sessão
+O Limiar não requer instalações complexas. Apenas o Go (versão 1.22+) instalado na máquina.
 
-Interativo, idempotente. Solicita o número de telefone, depois o código de login e, em seguida, a senha de 2FA se a conta tiver a autenticação de dois fatores ativada. A sessão é persistida na tabela `sessions` (linha única). Executar `auth` novamente quando já existe uma sessão válida não tem efeito.
+```bash
+# 1. Compile o projeto
+go build -o limiar ./cmd/limiar-collector
 
-```sh
-LIMIAR_APP_ID=12345 LIMIAR_API_HASH=abcdef... ./limiar-collector auth
-# Número de telefone (formato internacional, ex: +5511999999999): +55...
-# Código de login: 12345
-# Senha 2FA: ****        (apenas se a autenticação de dois fatores estiver ativada)
+# 2. Defina suas credenciais do Telegram (AppID e APIHash)
+export LIMIAR_APP_ID="123456"
+export LIMIAR_API_HASH="sua_hash_secreta"
+
+# 3. Faça o login pela primeira vez (interativo)
+./limiar auth
+
+# 4. Adicione um canal para monitorar
+./limiar channels add "nome_do_canal"
+
+# 5. Rode o orquestrador! (Collector + Processor + Dashboard)
+./limiar run
 ```
 
-### `channels` — gerenciar a lista de canais monitorados
+## 💻 Comandos da CLI
 
-Requer uma sessão válida (caso contrário, retorna `ErrNotAuthenticated`).
+O executável possui uma suíte de comandos interativos para gerenciamento:
 
-```sh
-./limiar-collector channels list
-./limiar-collector channels add <username>      # resolve @username via MTProto, persiste o canal
-./limiar-collector channels remove <username>   # ErrChannelNotFound se ausente
-```
+- **`limiar auth`**: Realiza o login (pede telefone, código via SMS/App e senha 2FA). Só precisa rodar uma vez.
+- **`limiar channels list`**: Lista quais canais estão sendo observados.
+- **`limiar channels add <username>`**: Passa a escutar aquele canal.
+- **`limiar channels remove <username>`**: Deixa de observar.
+- **`limiar run`**: É onde a magia acontece. Inicia as goroutines do pipeline e expõe os endpoints HTTP e métricas.
 
-### `run` — iniciar o serviço coletor
+## ⚙️ Configuração
 
-Não interativo, pronto para produção. Requer uma sessão válida. Faz o backfill das 20 mensagens mais recentes na primeira execução de um canal, depois captura as mensagens ao vivo e persiste cada payload JSON bruto. Desliga de forma graciosa (graceful shutdown) ao receber `SIGTERM`/`SIGINT`, finalizando as gravações pendentes dentro de `LIMIAR_SHUTDOWN_TIMEOUT` segundos.
+Você pode usar variáveis de ambiente ou colocar um arquivo `.env` na raiz do projeto.
 
-```sh
-LIMIAR_APP_ID=12345 LIMIAR_API_HASH=abcdef... ./limiar-collector run
-```
+| Variável | Descrição | Padrão |
+|----------|-----------|---------|
+| `LIMIAR_APP_ID` | Telegram API ID (Obrigatório) | - |
+| `LIMIAR_API_HASH` | Telegram API Hash (Obrigatório) | - |
+| `LIMIAR_DB_PATH` | Caminho para o banco local | `./limiar.db` |
+| `LIMIAR_LOG_LEVEL` | Verbosiade do log (`debug`, `info`, `warn`, `error`) | `info` |
+| `LIMIAR_LOG_FORMAT` | Estilo do Log (`pretty`, `json`, `text`) | `pretty` |
 
-## Configuração (variáveis de ambiente)
+> [!TIP]  
+> Para desenvolvimento local, recomendamos usar `LIMIAR_LOG_FORMAT=pretty` para ver as mensagens chegarem coloridas no terminal com emojis indicativos!
 
-Toda a configuração é lida de variáveis de ambiente com o prefixo `LIMIAR_` usando o Viper. `Load()` preenche a estrutura e aplica os padrões; `Validate()` é chamado explicitamente antes de qualquer operação de E/S e reporta todos os campos inválidos de uma vez.
+## ⚠️ Regras do Projeto (Para Contribuidores e IAs)
 
-| Variável | Campo | Padrão | Intervalo válido / valores |
-|----------|-------|---------|----------------------|
-| `LIMIAR_APP_ID` | `AppID` | — (obrigatório) | inteiro diferente de zero |
-| `LIMIAR_API_HASH` | `APIHash` | — (obrigatório) | string não vazia (mascarada nos logs) |
-| `LIMIAR_DB_PATH` | `DBPath` | `./limiar.db` | qualquer caminho válido |
-| `LIMIAR_LOG_LEVEL` | `LogLevel` | `info` | `debug`, `info`, `warn`, `error` |
-| `LIMIAR_LOG_FORMAT` | `LogFormat` | `json` | `json`, `text` |
-| `LIMIAR_SHUTDOWN_TIMEOUT` | `ShutdownTimeout` | `15` | 1–300 (segundos) |
-| `LIMIAR_MAX_RETRIES` | `MaxRetries` | `10` | inteiro positivo |
-| `LIMIAR_IO_TIMEOUT` | `IOTimeout` | `30s` | Duração do Go |
-| `LIMIAR_DISPATCHER_BUFFER_SIZE` | `DispatcherBufferSize` | `256` | 64–4096 |
-| `LIMIAR_DB_WRITER_BUFFER_SIZE` | `DBWriterBufferSize` | `512` | 128–8192 |
+> [!CAUTION]  
+> Este repositório é governado por regras estritas documentadas no [AGENTS.md](file:///home/projetos/Projetos/Limiar2/AGENTS.md). **A LEITURA É OBRIGATÓRIA ANTES DE QUALQUER COMMIT.**
 
-`AppID` e `APIHash` são obrigatórios e nunca possuem valor padrão; um valor ausente para qualquer um deles produz um erro de validação. O valor de `APIHash` é mascarado por `Config.String()` e omitido de todas as saídas de log.
+**Alguns dos invariantes do sistema:**
+- **Nenhum ORM permitido:** Todo acesso a dados é via SQL explícito em `internal/storage`.
+- **Closed Stack:** Só dependemos do `gotd/td` para Telegram, `tursogo` para o DB e `cobra/viper` pra CLI. Não instale novos pacotes levianamente.
+- **Raw is the Truth:** O Collector nunca muta dados recebidos. A tarefa do Processor é criar cópias processadas.
 
-## Stack
-
-| Funcionalidade | Tecnologia |
-|---------|-----------|
-| MTProto | `gotd/td` (sem wrapper) |
-| Banco de dados | `turso.tech/database/tursogo` (driver `turso`, sem CGO) |
-| CLI / configuração | `cobra` + `viper` |
-| Logging | `log/slog` por trás de uma interface `Logger` |
-| Testes de propriedade | `pgregory.net/rapid` (apenas arquivos de teste) |
-
-## Documentação
-
-- `docs/CONTEXT.md` — visão geral do sistema, escopo, roadmap de fases
-- `docs/ARCHITECTURE.md` — diagrama do pipeline, modelo de concorrência, modelo de dados
-- `docs/specs/GOTD-TD.md`, `docs/specs/TURSOGO.md` — especificações de uso de bibliotecas
-- `docs/guidelines/` — diretrizes de extensão para armazenamento, telegram, collector
-- `docs/adr/` — registros de decisão de arquitetura (ADRs)
-- `AGENTS.md` — regras para agentes de IA e contribuidores
+Consulte a pasta `docs/` para mergulhar nos *Architecture Decision Records* (ADRs) e nas especificações de negócio (`docs/PRODUCT_BRIEF.md`, `docs/ARCHITECTURE.md`).

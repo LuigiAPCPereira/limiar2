@@ -7,13 +7,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/storage"
 )
-
-const dbTimeLayout = "2006-01-02 15:04:05"
 
 // Repository centraliza as queries do processor contra o banco Tursogo.
 // O processor lê raw_messages (read-only) e escreve em processed_messages.
@@ -30,8 +27,11 @@ func NewRepository(db *sql.DB) (*Repository, error) {
 			text_clean, text_length, media_type, photo_id,
 			views, forwards, reply_to_msg_id,
 			has_url, has_price, has_coupon, price_amount, price_currency,
-			urgency_signals, posted_at, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			urgency_signals, posted_at, processed_at,
+			price_original, price_discount, coupon_code,
+			payment_method, shipping, installments, discount_percent,
+			url_hash, merchant, product_name, synthesis, is_duplicate, feed_eligible
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(channel_id, message_id) DO NOTHING`)
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "prepare_insert_processed", err)
@@ -59,7 +59,7 @@ func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]*storag
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "fetch_unprocessed", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var msgs []*storage.RawMessage
 	for rows.Next() {
@@ -72,7 +72,7 @@ func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]*storag
 			return nil, apperrors.Wrap("processor", "scan_unprocessed", err)
 		}
 		msg.Payload = []byte(payload)
-		msg.ReceivedAt = parseDBTime(received)
+		msg.ReceivedAt = storage.ParseDBTime(received)
 		msgs = append(msgs, &msg)
 	}
 	if err := rows.Err(); err != nil {
@@ -123,19 +123,74 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		msg.Views,
 		msg.Forwards,
 		msg.ReplyToMsgID,
-		boolToInt(msg.HasURL),
-		boolToInt(msg.HasPrice),
-		boolToInt(msg.HasCoupon),
+		storage.BoolToInt(msg.HasURL),
+		storage.BoolToInt(msg.HasPrice),
+		storage.BoolToInt(msg.HasCoupon),
 		priceAmount,
 		"BRL",
 		string(urgencyJSON),
-		msg.PostedAt.UTC().Format(dbTimeLayout),
-		msg.ProcessedAt.UTC().Format(dbTimeLayout),
+		msg.PostedAt.UTC().Format(storage.DBTimeLayout),
+		msg.ProcessedAt.UTC().Format(storage.DBTimeLayout),
+		msg.PriceOriginal,
+		msg.PriceDiscount,
+		msg.CouponCode,
+		msg.PaymentMethod,
+		msg.Shipping,
+		msg.Installments,
+		msg.DiscountPct,
+		msg.URLHash,
+		msg.Merchant,
+		msg.ProductName,
+		msg.Synthesis,
+		storage.BoolToInt(msg.IsDuplicate),
+		storage.BoolToInt(msg.FeedEligible),
 	)
 	if err != nil {
 		return apperrors.Wrap("processor", "save_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
 	}
 	return nil
+}
+
+// CrossChannelDuplicates recebe pares (url_hash → channel_id) e retorna
+// apenas os hashes que já existem no banco em canais DIFERENTES.
+// Usa uma única query com OR conditions em vez de N queries individuais.
+func (r *Repository) CrossChannelDuplicates(ctx context.Context, pairs map[string]int64) (map[string]bool, error) {
+	if len(pairs) == 0 {
+		return nil, nil
+	}
+
+	// Constrói query: SELECT DISTINCT url_hash FROM processed_messages
+	//   WHERE (url_hash = ? AND channel_id != ?) OR (url_hash = ? AND channel_id != ?) ...
+	args := make([]interface{}, 0, len(pairs)*2)
+	query := "SELECT DISTINCT url_hash FROM processed_messages WHERE "
+	first := true
+	for hash, channelID := range pairs {
+		if !first {
+			query += " OR "
+		}
+		query += "(url_hash = ? AND channel_id != ?)"
+		args = append(args, hash, channelID)
+		first = false
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, apperrors.Wrap("processor", "cross_channel_duplicates", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
+			continue
+		}
+		result[hash] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, apperrors.Wrap("processor", "cross_channel_duplicates_iter", err)
+	}
+	return result, nil
 }
 
 // SaveProcessedBatch persiste múltiplas mensagens em uma única transação.
@@ -146,7 +201,7 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 	if err != nil {
 		return 0, len(msgs)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt := tx.StmtContext(ctx, r.stmtInsertProcessed)
 
@@ -170,14 +225,27 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			msg.Views,
 			msg.Forwards,
 			msg.ReplyToMsgID,
-			boolToInt(msg.HasURL),
-			boolToInt(msg.HasPrice),
-			boolToInt(msg.HasCoupon),
+			storage.BoolToInt(msg.HasURL),
+			storage.BoolToInt(msg.HasPrice),
+			storage.BoolToInt(msg.HasCoupon),
 			priceAmount,
 			"BRL",
 			string(urgencyJSON),
-			msg.PostedAt.UTC().Format(dbTimeLayout),
-			msg.ProcessedAt.UTC().Format(dbTimeLayout),
+			msg.PostedAt.UTC().Format(storage.DBTimeLayout),
+			msg.ProcessedAt.UTC().Format(storage.DBTimeLayout),
+			msg.PriceOriginal,
+			msg.PriceDiscount,
+			msg.CouponCode,
+			msg.PaymentMethod,
+			msg.Shipping,
+			msg.Installments,
+			msg.DiscountPct,
+			msg.URLHash,
+			msg.Merchant,
+			msg.ProductName,
+			msg.Synthesis,
+			storage.BoolToInt(msg.IsDuplicate),
+			storage.BoolToInt(msg.FeedEligible),
 		)
 		if err != nil {
 			failed++
@@ -192,23 +260,3 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 	return saved, failed
 }
 
-func parseDBTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(dbTimeLayout, s)
-	if err != nil {
-		if t2, err2 := time.Parse(time.RFC3339, s); err2 == nil {
-			return t2
-		}
-		return time.Time{}
-	}
-	return t
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}

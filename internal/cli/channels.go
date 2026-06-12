@@ -70,13 +70,13 @@ func newChannelsListCmd(p Provider) *cobra.Command {
 					return err
 				}
 				out := cmd.OutOrStdout()
-				fmt.Fprintln(out)
-				fmt.Fprintln(out, "  📋 Canais monitorados")
-				fmt.Fprintln(out, "  ──────────────────────────────────────")
+				_, _ = fmt.Fprintln(out)
+				_, _ = fmt.Fprintln(out, "  📋 Canais monitorados")
+				_, _ = fmt.Fprintln(out, "  ──────────────────────────────────────")
 				if len(channels) == 0 {
-					fmt.Fprintln(out, "  Nenhum canal configurado.")
-					fmt.Fprintln(out, "  Use 'channels add <username ou link>' para adicionar.")
-					fmt.Fprintln(out)
+					_, _ = fmt.Fprintln(out, "  Nenhum canal configurado.")
+					_, _ = fmt.Fprintln(out, "  Use 'channels add <username ou link>' para adicionar.")
+					_, _ = fmt.Fprintln(out)
 					return nil
 				}
 				for _, ch := range channels {
@@ -84,11 +84,11 @@ func newChannelsListCmd(p Provider) *cobra.Command {
 					if !ch.Active {
 						status = "⏸  pausado"
 					}
-					fmt.Fprintf(out, "  • @%-30s  id:%-12d  %s\n", ch.Username, ch.ID, status)
+					_, _ = fmt.Fprintf(out, "  • @%-30s  id:%-12d  %s\n", ch.Username, ch.ID, status)
 				}
-				fmt.Fprintln(out, "  ──────────────────────────────────────")
-				fmt.Fprintf(out, "  Total: %d canal(is)\n", len(channels))
-				fmt.Fprintln(out)
+				_, _ = fmt.Fprintln(out, "  ──────────────────────────────────────")
+				_, _ = fmt.Fprintf(out, "  Total: %d canal(is)\n", len(channels))
+				_, _ = fmt.Fprintln(out)
 				return nil
 			})
 		},

@@ -10,6 +10,7 @@ const (
 	TypeDealComplete   MessageType = "deal_complete"
 	TypeDealNoCoupon   MessageType = "deal_no_coupon"
 	TypeDealNoPrice    MessageType = "deal_no_price"
+	TypeCouponOnly     MessageType = "coupon_only"
 	TypeCategoryHeader MessageType = "category_header"
 	TypeCouponExpired  MessageType = "coupon_expired"
 	TypeCommentary     MessageType = "commentary"
@@ -19,7 +20,13 @@ const (
 	TypeAdminMeta      MessageType = "admin_meta"
 )
 
-var reAdminMeta = regexp.MustCompile(`(?i)(regras_grupo|cupons_hoje|grupos_whatsapp|canal_telegram)`)
+var (
+	reAdminMeta = regexp.MustCompile(`(?i)(regras_grupo|cupons_hoje|grupos_whatsapp|canal_telegram` +
+		`|entre\s+no\s+grupo|grupo\s+de\s+ofertas|grupo\s+do\s+whatsapp` +
+		`|canal\s+de\s+ofertas|salvando\s+o\s+bolso|quase\s+\d+\s*mil` +
+		`|pessoas\s+somando|noss[oa]\s+grupo|noss[oa]\s+canal)`)
+	reCouponHeader = regexp.MustCompile(`(?i)^(?:🎟️?\s*)?(?:cup[ao]m|cupons|c[oó]digo|code)\b`)
+)
 
 // Classify aplica a cascata de checks para determinar o MessageType.
 // A ordem importa: checks mais específicos primeiro, genéricos por último.
@@ -36,7 +43,12 @@ func Classify(nm *NormalizedMessage) MessageType {
 		return TypeCouponExpired
 	}
 
-	// 3. Deals (com URL de produto)
+	// 3. Cupom sem produto (distribuição de cupom genérico, ex: "Cupom Shopee R$10 OFF - CODE")
+	if nm.HasCoupon && nm.HasURL && reCouponHeader.MatchString(text) {
+		return TypeCouponOnly
+	}
+
+	// 4. Deals (com URL de produto)
 	if nm.HasURL {
 		switch {
 		case nm.HasPrice && nm.HasCoupon:

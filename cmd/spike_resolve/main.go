@@ -84,14 +84,14 @@ func extractURLsFromDB(dbPath string, limit int) []string {
 		fmt.Printf("❌ Erro ao abrir DB: %v\n", err)
 		return nil
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rows, err := db.QueryContext(ctx, `SELECT payload FROM raw_messages ORDER BY id DESC LIMIT 500`)
 	if err != nil {
 		fmt.Printf("❌ Erro na query: %v\n", err)
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	seen := make(map[string]struct{})
 	var urls []string
@@ -232,7 +232,7 @@ func resolve(rawURL string) result {
 			return result{original: rawURL, err: err, duration: time.Since(start)}
 		}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	finalURL := resp.Request.URL.String()
 	cleaned := stripTracking(finalURL)
