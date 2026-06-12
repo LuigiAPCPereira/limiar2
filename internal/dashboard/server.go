@@ -80,6 +80,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, indexHTML)
 }
 
+func (s *Server) sendError(w http.ResponseWriter, err error, code int) {
+	s.log.Error("❌ Erro interno no dashboard", "erro", err, "code", code)
+	http.Error(w, http.StatusText(code), code)
+}
+
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	count, err := s.repo.CountRawMessages(r.Context())
 	status := "ok"
@@ -88,7 +93,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		status = "degraded"
 		dbStatus = false
 	}
-	writeJSON(w, map[string]any{
+	s.writeJSON(w, map[string]any{
 		"status":         status,
 		"db":             dbStatus,
 		"raw_messages":   count,
@@ -99,10 +104,10 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleChannels(w http.ResponseWriter, r *http.Request) {
 	stats, err := s.repo.CountMessagesByChannel(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.sendError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, stats)
+	s.writeJSON(w, stats)
 }
 
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
@@ -118,26 +123,26 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 	msgs, err := s.repo.ListMessages(r.Context(), channelID, limit, offset)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.sendError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, msgs)
+	s.writeJSON(w, msgs)
 }
 
 func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Path[len("/api/message/"):]
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		s.sendError(w, err, http.StatusBadRequest)
 		return
 	}
 
 	msg, err := s.repo.GetMessageByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		s.sendError(w, err, http.StatusNotFound)
 		return
 	}
-	writeJSON(w, msg)
+	s.writeJSON(w, msg)
 }
 
 func (s *Server) handleProcessed(w http.ResponseWriter, r *http.Request) {
@@ -154,20 +159,20 @@ func (s *Server) handleProcessed(w http.ResponseWriter, r *http.Request) {
 
 	msgs, err := s.repo.ListProcessedMessages(r.Context(), channelID, msgType, limit, offset)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.sendError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, msgs)
+	s.writeJSON(w, msgs)
 }
 
 func (s *Server) handleProcessedStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := s.repo.CountProcessedByType(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.sendError(w, err, http.StatusInternalServerError)
 		return
 	}
 	total, _ := s.repo.CountProcessedMessages(r.Context())
-	writeJSON(w, map[string]any{
+	s.writeJSON(w, map[string]any{
 		"total":  total,
 		"by_type": stats,
 	})
@@ -176,7 +181,7 @@ func (s *Server) handleProcessedStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		s.sendError(w, fmt.Errorf("streaming not supported"), http.StatusInternalServerError)
 		return
 	}
 
@@ -201,12 +206,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func (s *Server) writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.sendError(w, err, http.StatusInternalServerError)
 	}
 }
 
