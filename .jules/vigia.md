@@ -12,3 +12,8 @@
 **Vulnerabilidade:** O panic recovery no `Dispatcher` (`internal/telegram/dispatcher.go`) estava logando o objeto bruto de panic (`r`) diretamente via `d.log.Error(..., "panic", r)`. Isso poderia vazar dados altamente sensíveis da memória, como o MTProto session token ou conteúdos de mensagens, caso um erro inesperado expusesse essa variável durante o processo na goroutine.
 **Aprendizado:** Logar o tipo (`%T`) perde informações de depuração essenciais. É mais apropriado envelopar a mensagem usando `fmt.Errorf("panic: %v", r)`. Assim, extrai-se a mensagem literal sem utilizar a reflexão sobre o objeto, o que previne dump de structs com segredos embutidos, ao mesmo tempo que mantém informações valiosas sobre o erro ocorrido.
 **Prevenção:** Nunca logue o objeto bruto do `recover()` (`interface{}`) como valor direto em chaves de log (que utilizam reflexão). Em vez disso, converta-o para um erro com `fmt.Errorf("panic: %v", r)`.
+
+## 2025-06-12 - [Information Leakage] Erros brutos expostos na API HTTP
+**Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
+**Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
+**Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
