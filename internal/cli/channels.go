@@ -70,7 +70,7 @@ func newChannelsListCmd(p Provider) *cobra.Command {
 					return err
 				}
 				out := cmd.OutOrStdout()
-				fmt.Fprintln(out)
+				_, _ = fmt.Fprintln(out)
 				fmt.Fprintln(out, "  📋 Canais monitorados")
 				fmt.Fprintln(out, "  ──────────────────────────────────────")
 				if len(channels) == 0 {

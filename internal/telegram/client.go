@@ -213,7 +213,7 @@ func (c *Client) LoadPeers(ctx context.Context) error {
 
 // Auth executa o fluxo interativo se a sessão ainda não estiver autorizada.
 func (c *Client) Auth(ctx context.Context) error {
-	fmt.Fprintln(os.Stdout, "\n  📡 Conectando ao Telegram...")
+	_, _ = fmt.Fprintln(os.Stdout, "\n  📡 Conectando ao Telegram...")
 	return c.runOnce(ctx, func(ctx context.Context) error {
 		authn := newTerminalAuthenticator(os.Stdin, os.Stdout, c.log)
 		flow := auth.NewFlow(authn, auth.SendCodeOptions{})

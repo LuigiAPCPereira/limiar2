@@ -77,8 +77,14 @@ func TestPrettyConcurrency(t *testing.T) {
 		if trimmed == "" {
 			continue
 		}
-		//nolint:staticcheck
-if !strings.HasPrefix(trimmed, "◆") && !strings.HasPrefix(trimmed, "├") && !strings.HasPrefix(trimmed, "└") {
+		hasPrefix := false
+		for _, prefix := range []string{"◆", "├", "└"} {
+			if strings.HasPrefix(trimmed, prefix) {
+				hasPrefix = true
+				break
+			}
+		}
+		if !hasPrefix {
 			// Could be a continuation — just check no garbled output
 			continue
 		}

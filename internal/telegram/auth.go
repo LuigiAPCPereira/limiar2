@@ -108,7 +108,7 @@ func (a *terminalAuthenticator) Password(_ context.Context) (string, error) {
 // Code solicita o código de login que o Telegram envia para a conta.
 func (a *terminalAuthenticator) Code(_ context.Context, _ *tg.AuthSentCode) (string, error) {
 	_, _ = fmt.Fprintln(a.out)
-	fmt.Fprintln(a.out, "  Telegram enviou um código para o seu aplicativo ou SMS.")
+	_, _ = fmt.Fprintln(a.out, "  Telegram enviou um código para o seu aplicativo ou SMS.")
 	return a.promptMasked("  🔢 Código › ")
 }
 
