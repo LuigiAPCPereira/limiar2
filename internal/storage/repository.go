@@ -145,7 +145,7 @@ func (r *Repository) SavePeersBatch(ctx context.Context, peers []*Peer) error {
 	if err != nil {
 		return apperrors.Wrap("storage", "save_peers_batch_begin", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt := tx.StmtContext(ctx, r.stmtSavePeer)
 	now := time.Now().UTC().Format(DBTimeLayout)
@@ -171,7 +171,7 @@ func (r *Repository) LoadPeers(ctx context.Context) ([]*Peer, error) {
 	if err != nil {
 		return nil, apperrors.Wrap("storage", "load_peers", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var peers []*Peer
 	for rows.Next() {
@@ -233,7 +233,7 @@ func (r *Repository) ListChannels(ctx context.Context) ([]*Channel, error) {
 	if err != nil {
 		return nil, apperrors.Wrap("storage", "list_channels", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var channels []*Channel
 	for rows.Next() {
@@ -324,7 +324,7 @@ func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, o
 	if err != nil {
 		return nil, apperrors.Wrap("storage", "list_messages", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var messages []*RawMessage
 	for rows.Next() {
@@ -358,7 +358,7 @@ func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]ChannelStats
 	if err != nil {
 		return nil, apperrors.Wrap("storage", "count_messages_by_channel", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var stats []ChannelStats
 	for rows.Next() {
@@ -460,7 +460,7 @@ func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64,
 	if err != nil {
 		return nil, apperrors.Wrap("storage", "list_processed_messages", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var msgs []*ProcessedMessage
 	for rows.Next() {
@@ -516,7 +516,7 @@ func (r *Repository) CountProcessedByType(ctx context.Context) ([]ProcessedTypeS
 	if err != nil {
 		return nil, apperrors.Wrap("storage", "count_processed_by_type", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var stats []ProcessedTypeStats
 	for rows.Next() {

@@ -201,7 +201,7 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 	if err != nil {
 		return 0, len(msgs)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt := tx.StmtContext(ctx, r.stmtInsertProcessed)
 

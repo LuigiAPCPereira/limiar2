@@ -37,7 +37,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Verifica quais tabelas existem
 	fmt.Printf("=== TABELAS NO BANCO DE DADOS ===\n")
@@ -45,17 +45,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	var tables []string
 	for tableRows.Next() {
 		var name string
 		err = tableRows.Scan(&name)
 		if err != nil {
 			log.Fatal(err)
 		}
-		tables = append(tables, name)
+		_ = name
 		fmt.Printf("  %s\n", name)
 	}
-	tableRows.Close()
+	_ = tableRows.Close()
 	fmt.Printf("\n")
 
 	// Obtém estatísticas básicas
@@ -88,7 +87,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var username, title string
@@ -107,7 +106,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer msgRows.Close()
+	defer func() { _ = msgRows.Close() }()
 
 	var messages []RawMessage
 	for msgRows.Next() {
@@ -133,7 +132,7 @@ func analyzePayloads(messages []RawMessage) {
 	invalidJSON := 0
 	emptyPayloads := 0
 
-	var fieldTypes map[string]map[string]bool = make(map[string]map[string]bool)
+	fieldTypes := make(map[string]map[string]bool)
 
 	for _, msg := range messages {
 		if msg.Payload == "" || msg.Payload == "null" {
@@ -266,7 +265,7 @@ func exportPayloads(messages []RawMessage) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	encoder := json.NewEncoder(f)
 	encoder.SetIndent("", "  ")

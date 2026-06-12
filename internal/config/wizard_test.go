@@ -43,8 +43,8 @@ func TestWizardAppIDValidation(t *testing.T) {
 			os.Stdin = r
 
 			go func() {
-				wFile.Write([]byte(tt.input + "\n"))
-				wFile.Close()
+				_, _ = wFile.Write([]byte(tt.input + "\n"))
+				_ = wFile.Close()
 			}()
 
 			wizard := NewWizard()
@@ -61,8 +61,8 @@ func TestWizardAppIDValidation(t *testing.T) {
 func TestSaveEnvFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	_ = os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(oldWd) }()
 
 	wizard := NewWizard()
 	err := wizard.saveEnvFile(31620060, "test_hash_abc123")

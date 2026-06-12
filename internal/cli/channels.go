@@ -84,10 +84,10 @@ func newChannelsListCmd(p Provider) *cobra.Command {
 					if !ch.Active {
 						status = "⏸  pausado"
 					}
-					fmt.Fprintf(out, "  • @%-30s  id:%-12d  %s\n", ch.Username, ch.ID, status)
+					_, _ = fmt.Fprintf(out, "  • @%-30s  id:%-12d  %s\n", ch.Username, ch.ID, status)
 				}
 				fmt.Fprintln(out, "  ──────────────────────────────────────")
-				fmt.Fprintf(out, "  Total: %d canal(is)\n", len(channels))
+				_, _ = fmt.Fprintf(out, "  Total: %d canal(is)\n", len(channels))
 				fmt.Fprintln(out)
 				return nil
 			})

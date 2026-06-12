@@ -45,9 +45,9 @@ func newTerminalAuthenticator(in io.Reader, out io.Writer, log logger.Logger) *t
 // printAuthSection imprime o cabeçalho da seção "Login da conta" que conecta visualmente
 // esta etapa ao assistente de configuração (wizard) que a precede.
 func printAuthSection(out io.Writer) {
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "  📱 Etapa 2/2 · Login da conta Telegram")
-	fmt.Fprintln(out, "  ──────────────────────────────────────")
+	_, _ = fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out, "  📱 Etapa 2/2 · Login da conta Telegram")
+	_, _ = fmt.Fprintln(out, "  ──────────────────────────────────────")
 }
 
 func (a *terminalAuthenticator) prompt(label string) (string, error) {

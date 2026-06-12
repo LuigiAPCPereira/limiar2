@@ -416,7 +416,7 @@ func NormalizeUsername(u string) string {
 	hasInvalid := false
 	for i := 0; i < len(u); i++ {
 		c := u[i]
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '_' {
 			hasInvalid = true
 			break
 		}

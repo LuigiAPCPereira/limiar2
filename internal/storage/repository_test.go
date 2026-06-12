@@ -62,7 +62,7 @@ func TestOpenRunsMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	for _, table := range []string{"sessions", "peers", "channels", "raw_messages", "schema_migrations"} {
 		var name string
@@ -107,7 +107,7 @@ func TestMigrationTrackingIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open #2: %v", err)
 	}
-	defer db2.Close()
+	defer func() { _ = db2.Close() }()
 
 	var count2 int
 	if err := db2.DB().QueryRowContext(ctx,
