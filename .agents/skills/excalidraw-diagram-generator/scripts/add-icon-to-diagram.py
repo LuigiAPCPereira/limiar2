@@ -393,11 +393,17 @@ def main():
         print(f"Error: Library path not found: {library_path}")
         sys.exit(1)
     
+    work_path, final_path = None, None
     try:
         work_path, final_path = prepare_edit_path(diagram_path, use_edit_suffix)
         add_icon_to_diagram(work_path, icon_name, x, y, library_path, label)
         finalize_edit_path(work_path, final_path)
     except Exception as e:
+        if final_path and work_path and work_path.exists():
+            try:
+                work_path.rename(final_path)
+            except:
+                pass
         print(f"Error: {e}")
         sys.exit(1)
 

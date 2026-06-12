@@ -35,7 +35,8 @@ def convert(pdf_path: str, output_path: str | None = None, dpi: int = 150, exter
         print(f"Error: {pdf_path} not found")
         sys.exit(1)
 
-    if subprocess.run(["which", "pdftoppm"], capture_output=True).returncode != 0:
+    import shutil
+    if not shutil.which("pdftoppm"):
         print("Error: pdftoppm not found. Install poppler-utils:")
         print("  apt install poppler-utils  # Debian/Ubuntu")
         print("  brew install poppler       # macOS")

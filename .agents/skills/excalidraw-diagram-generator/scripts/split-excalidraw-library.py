@@ -45,6 +45,10 @@ def sanitize_filename(name: str) -> str:
     # Remove leading/trailing hyphens
     filename = filename.strip('-')
 
+    if not filename:
+        import uuid
+        filename = f"icon-{uuid.uuid4().hex[:8]}"
+
     return filename
 
 

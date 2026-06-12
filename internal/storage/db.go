@@ -76,9 +76,9 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
-// Conn retorna a conexão *sql.DB subjacente. Apenas a goroutine DBWriter pode emitir
+// DB retorna a conexão *sql.DB subjacente. Apenas a goroutine DBWriter pode emitir
 // gravações através dela; gravações concorrentes de múltiplas goroutines são proibidas.
-func (db *DB) Conn() *sql.DB {
+func (db *DB) DB() *sql.DB {
 	return db.conn
 }
 

@@ -76,13 +76,13 @@ func run() error {
 	defer func() { _ = db.Close() }()
 
 	// --- Repositories ---
-	collectorRepo, err := storage.NewRepository(db.Conn())
+	collectorRepo, err := storage.NewRepository(db.DB())
 	if err != nil {
 		return fmt.Errorf("limiar: criar collector repository: %w", err)
 	}
 	defer func() { _ = collectorRepo.Close() }()
 
-	procRepo, err := processor.NewRepository(db.Conn())
+	procRepo, err := processor.NewRepository(db.DB())
 	if err != nil {
 		return fmt.Errorf("limiar: criar processor repository: %w", err)
 	}
@@ -108,7 +108,7 @@ func run() error {
 
 	// Dashboard (SSE broker para mensagens em tempo real do collector)
 	broker := dashboard.NewBroker()
-	dashRepo, err := storage.NewRepository(db.Conn())
+	dashRepo, err := storage.NewRepository(db.DB())
 	if err != nil {
 		return fmt.Errorf("limiar: criar dashboard repository: %w", err)
 	}

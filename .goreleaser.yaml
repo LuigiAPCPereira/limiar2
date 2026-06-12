@@ -6,8 +6,8 @@ before:
     - go mod tidy
 
 builds:
-  - id: limiar-collector
-    main: ./cmd/limiar-collector
+  - id: limiar
+    main: ./cmd/limiar
     binary: limiar
     env:
       - CGO_ENABLED=0

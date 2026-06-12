@@ -57,7 +57,7 @@ func run() error {
 		return fmt.Errorf("abrir banco: %w", err)
 	}
 
-	repo, err := processor.NewRepository(db.Conn())
+	repo, err := processor.NewRepository(db.DB())
 	if err != nil {
 		_ = db.Close()
 		return fmt.Errorf("criar repository: %w", err)
@@ -66,7 +66,7 @@ func run() error {
 	proc := processor.NewProcessor(repo, cfg, log.WithComponent("processor"))
 
 	if withDashboard {
-		dashRepo, err := storage.NewRepository(db.Conn())
+		dashRepo, err := storage.NewRepository(db.DB())
 		if err != nil {
 			_ = repo.Close()
 			_ = db.Close()

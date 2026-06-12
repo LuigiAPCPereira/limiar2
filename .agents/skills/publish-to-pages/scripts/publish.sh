@@ -35,6 +35,7 @@ if [ -d "$HTML_DIR/assets" ]; then
 fi
 
 cd "$TMPDIR"
+git checkout -b main 2>/dev/null || git branch -M main
 git add -A
 git commit -m "Publish content"
 git push origin main

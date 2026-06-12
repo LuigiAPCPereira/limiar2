@@ -25,7 +25,7 @@ def rgb_to_hex(rgb_color):
     if rgb_color is None:
         return None
     try:
-        return f"#{rgb_color}"
+        return f"#{rgb_color[0]:02x}{rgb_color[1]:02x}{rgb_color[2]:02x}"
     except:
         return None
 

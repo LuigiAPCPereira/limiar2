@@ -41,7 +41,7 @@ func openTempRepo() (*storage.Repository, func(), error) {
 		_ = os.RemoveAll(dir)
 		return nil, nil, err
 	}
-	repo, err := storage.NewRepository(db.Conn())
+	repo, err := storage.NewRepository(db.DB())
 	if err != nil {
 		_ = db.Close()
 		_ = os.RemoveAll(dir)
@@ -66,7 +66,7 @@ func TestOpenRunsMigrations(t *testing.T) {
 
 	for _, table := range []string{"sessions", "peers", "channels", "raw_messages", "schema_migrations"} {
 		var name string
-		row := db.Conn().QueryRowContext(ctx,
+		row := db.DB().QueryRowContext(ctx,
 			"SELECT name FROM sqlite_master WHERE type='table' AND name=?", table)
 		if err := row.Scan(&name); err != nil {
 			t.Errorf("table %q missing after migrations: %v", table, err)
@@ -75,7 +75,7 @@ func TestOpenRunsMigrations(t *testing.T) {
 
 	// Verifica que todas as migrações foram registradas em schema_migrations.
 	var count int
-	if err := db.Conn().QueryRowContext(ctx,
+	if err := db.DB().QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("count schema_migrations: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestMigrationTrackingIdempotent(t *testing.T) {
 		t.Fatalf("Open #1: %v", err)
 	}
 	var count1 int
-	if err := db1.Conn().QueryRowContext(ctx,
+	if err := db1.DB().QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM schema_migrations").Scan(&count1); err != nil {
 		t.Fatalf("count #1: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestMigrationTrackingIdempotent(t *testing.T) {
 	defer db2.Close()
 
 	var count2 int
-	if err := db2.Conn().QueryRowContext(ctx,
+	if err := db2.DB().QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM schema_migrations").Scan(&count2); err != nil {
 		t.Fatalf("count #2: %v", err)
 	}

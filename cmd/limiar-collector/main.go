@@ -49,7 +49,7 @@ func (p *provider) OpenStore(ctx context.Context) (*storage.Repository, func() e
 	if err != nil {
 		return nil, nil, err
 	}
-	repo, err := storage.NewRepository(db.Conn())
+	repo, err := storage.NewRepository(db.DB())
 	if err != nil {
 		_ = db.Close()
 		return nil, nil, err
