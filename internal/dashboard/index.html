@@ -201,9 +201,9 @@
       <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens processadas">
         <template x-if="filteredProcessed.length === 0">
           <div class="empty">
-            <template x-if="procLoading"><span>Carregando...</span></template>
-            <template x-if="!procLoading && channelStats.length > 0"><span>Nenhuma mensagem processada encontrada</span></template>
-            <template x-if="!procLoading && channelStats.length === 0">
+            <template x-if="loading || procLoading"><span>Carregando...</span></template>
+            <template x-if="!(loading || procLoading) && channelStats.length > 0"><span>Nenhuma mensagem processada encontrada</span></template>
+            <template x-if="!(loading || procLoading) && channelStats.length === 0">
               <span>
                 Nenhum canal monitorado.<br><br>
                 Use <code class="cli-cmd">limiar-collector channels add</code> no terminal para começar.
