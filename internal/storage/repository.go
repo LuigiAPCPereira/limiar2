@@ -12,9 +12,9 @@ import (
 // ErrNoSession indica que não há linha (row) de sessão presente no banco de dados.
 var ErrNoSession = stderrors.New("nenhuma sessão armazenada")
 
-// dbTimeLayout é o formato de data/hora textual usado pelos padrões (defaults)
-// datetime('now') do schema.
-const dbTimeLayout = "2006-01-02 15:04:05"
+// DBTimeLayout é o formato de data/hora textual usado pelos padrões (defaults)
+// datetime('now') do schema. Exportado para uso pelo processor.
+const DBTimeLayout = "2006-01-02 15:04:05"
 
 // RawMessage é um payload de mensagem capturada do Telegram aguardando processamento
 // posterior (downstream). Payload contém o update bruto do gotd/td serializado como JSON.
@@ -92,7 +92,7 @@ func (r *Repository) SaveSession(ctx context.Context, data []byte) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO sessions (id, data, updated_at) VALUES (1, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-		data, time.Now().UTC().Format(dbTimeLayout))
+		data, time.Now().UTC().Format(DBTimeLayout))
 	if err != nil {
 		return apperrors.Wrap("storage", "save_session", err)
 	}
@@ -127,9 +127,39 @@ func (r *Repository) CountSessions(ctx context.Context) (int64, error) {
 func (r *Repository) SavePeer(ctx context.Context, p *Peer) error {
 	_, err := r.stmtSavePeer.ExecContext(ctx,
 		p.ID, p.AccessHash, p.Type, nullString(p.Username),
-		time.Now().UTC().Format(dbTimeLayout))
+		time.Now().UTC().Format(DBTimeLayout))
 	if err != nil {
 		return apperrors.Wrap("storage", "save_peer", err)
+	}
+	return nil
+}
+
+// SavePeersBatch insere ou atualiza múltiplos peers em uma única transação.
+// Significativamente mais rápido que SavePeer individual no SQLite/Turso
+// (elimina N commits → 1 commit).
+func (r *Repository) SavePeersBatch(ctx context.Context, peers []*Peer) error {
+	if len(peers) == 0 {
+		return nil
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return apperrors.Wrap("storage", "save_peers_batch_begin", err)
+	}
+	defer tx.Rollback()
+
+	stmt := tx.StmtContext(ctx, r.stmtSavePeer)
+	now := time.Now().UTC().Format(DBTimeLayout)
+
+	for _, p := range peers {
+		_, err := stmt.ExecContext(ctx,
+			p.ID, p.AccessHash, p.Type, nullString(p.Username), now)
+		if err != nil {
+			return apperrors.Wrap("storage", "save_peers_batch_exec", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return apperrors.Wrap("storage", "save_peers_batch_commit", err)
 	}
 	return nil
 }
@@ -154,7 +184,7 @@ func (r *Repository) LoadPeers(ctx context.Context) ([]*Peer, error) {
 			return nil, apperrors.Wrap("storage", "scan_peer", err)
 		}
 		p.Username = username.String
-		p.UpdatedAt = parseDBTime(updated)
+		p.UpdatedAt = ParseDBTime(updated)
 		peers = append(peers, &p)
 	}
 	if err := rows.Err(); err != nil {
@@ -171,7 +201,7 @@ func (r *Repository) AddChannel(ctx context.Context, ch *Channel) error {
 		INSERT INTO channels (id, username, title, active)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(username) DO UPDATE SET title = excluded.title, active = excluded.active`,
-		ch.ID, ch.Username, ch.Title, boolToInt(ch.Active))
+		ch.ID, ch.Username, ch.Title, BoolToInt(ch.Active))
 	if err != nil {
 		return apperrors.Wrap("storage", "add_channel", err)
 	}
@@ -238,7 +268,7 @@ func (r *Repository) GetChannel(ctx context.Context, id int64) (*Channel, error)
 func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE channels SET last_message_id = ?, last_collected_at = ? WHERE id = ?`,
-		messageID, collectedAt.UTC().Format(dbTimeLayout), channelID)
+		messageID, collectedAt.UTC().Format(DBTimeLayout), channelID)
 	if err != nil {
 		return apperrors.Wrap("storage", "update_channel_last_message", err)
 	}
@@ -255,7 +285,7 @@ func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, me
 func (r *Repository) SaveRawMessage(ctx context.Context, msg *RawMessage) (inserted bool, err error) {
 	res, err := r.stmtSaveMessage.ExecContext(ctx,
 		msg.ChannelID, msg.MessageID, string(msg.Payload),
-		msg.ReceivedAt.UTC().Format(dbTimeLayout), msg.SchemaVersion)
+		msg.ReceivedAt.UTC().Format(DBTimeLayout), msg.SchemaVersion)
 	if err != nil {
 		return false, apperrors.Wrap("storage", "save_raw_message", err)
 	}
@@ -466,8 +496,8 @@ func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64,
 		if urgency.Valid {
 			m.UrgencySignals = urgency.String
 		}
-		m.PostedAt = parseDBTime(posted)
-		m.ProcessedAt = parseDBTime(procAt)
+		m.PostedAt = ParseDBTime(posted)
+		m.ProcessedAt = ParseDBTime(procAt)
 		msgs = append(msgs, &m)
 	}
 	if err := rows.Err(); err != nil {
@@ -533,9 +563,9 @@ func scanChannel(s scanner) (*Channel, error) {
 		return nil, apperrors.Wrap("storage", "scan_channel", err)
 	}
 	ch.Active = active != 0
-	ch.AddedAt = parseDBTime(addedAt)
+	ch.AddedAt = ParseDBTime(addedAt)
 	if lastColl.Valid {
-		ch.LastCollectedAt = parseDBTime(lastColl.String)
+		ch.LastCollectedAt = ParseDBTime(lastColl.String)
 	}
 	return &ch, nil
 }
@@ -553,15 +583,17 @@ func scanMessage(s scanner) (*RawMessage, error) {
 		return nil, apperrors.Wrap("storage", "scan_message", err)
 	}
 	msg.Payload = []byte(payload)
-	msg.ReceivedAt = parseDBTime(received)
+	msg.ReceivedAt = ParseDBTime(received)
 	return &msg, nil
 }
 
-func parseDBTime(s string) time.Time {
+// ParseDBTime converte uma string de data/hora do banco (formato "2006-01-02 15:04:05")
+// para time.Time. Tenta fallback para RFC3339 se o formato primário falhar.
+func ParseDBTime(s string) time.Time {
 	if s == "" {
 		return time.Time{}
 	}
-	t, err := time.Parse(dbTimeLayout, s)
+	t, err := time.Parse(DBTimeLayout, s)
 	if err != nil {
 		// Fallback para RFC3339 caso um chamador tenha armazenado dessa forma.
 		if t2, err2 := time.Parse(time.RFC3339, s); err2 == nil {
@@ -572,7 +604,8 @@ func parseDBTime(s string) time.Time {
 	return t
 }
 
-func boolToInt(b bool) int {
+// BoolToInt converte bool para int (1/0) para persistência no SQLite/Turso.
+func BoolToInt(b bool) int {
 	if b {
 		return 1
 	}

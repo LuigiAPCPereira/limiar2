@@ -1,0 +1,31 @@
+version: 2
+
+updates:
+  # Dependências Go (gomod)
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "go"
+    groups:
+      # Agrupar patches de segurança (se for habilitado Security Updates no painel)
+      security-patches:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
+      # Agrupar pacotes do Telegram/Gotd para manter em sync
+      gotd:
+        patterns: ["github.com/gotd/*"]
+        update-types: ["minor", "patch"]
+        
+  # Atualizações das GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "actions"

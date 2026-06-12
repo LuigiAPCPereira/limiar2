@@ -133,7 +133,7 @@ anteriormente.
 | 3 | `limiar-processor` | classificação semântica via API de LLM em lote, extração de ProductName | Futuro |
 | 4 | `limiar-api` | REST + SSE, integração com o frontend | Futuro |
 | 5 | `limiar-collector` | descoberta automática de canais | Futuro |
-| 6 | `limiar` | orquestrador que inicia todos os binários (`limiar run`) | Futuro |
+| **6** | `limiar` | Orquestrador (`limiar run`) roda todos os componentes no mesmo processo | ✅ Implementado |
 
 O design planta "costuras" (seams) para fases posteriores sem implementá-las: a
 interface Strategy `Classifier` (atualmente `NoopClassifier` no collector), o Observer

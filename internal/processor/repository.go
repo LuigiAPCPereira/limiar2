@@ -7,13 +7,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/storage"
 )
-
-const dbTimeLayout = "2006-01-02 15:04:05"
 
 // Repository centraliza as queries do processor contra o banco Tursogo.
 // O processor lê raw_messages (read-only) e escreve em processed_messages.
@@ -75,7 +72,7 @@ func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]*storag
 			return nil, apperrors.Wrap("processor", "scan_unprocessed", err)
 		}
 		msg.Payload = []byte(payload)
-		msg.ReceivedAt = parseDBTime(received)
+		msg.ReceivedAt = storage.ParseDBTime(received)
 		msgs = append(msgs, &msg)
 	}
 	if err := rows.Err(); err != nil {
@@ -126,14 +123,14 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		msg.Views,
 		msg.Forwards,
 		msg.ReplyToMsgID,
-		boolToInt(msg.HasURL),
-		boolToInt(msg.HasPrice),
-		boolToInt(msg.HasCoupon),
+		storage.BoolToInt(msg.HasURL),
+		storage.BoolToInt(msg.HasPrice),
+		storage.BoolToInt(msg.HasCoupon),
 		priceAmount,
 		"BRL",
 		string(urgencyJSON),
-		msg.PostedAt.UTC().Format(dbTimeLayout),
-		msg.ProcessedAt.UTC().Format(dbTimeLayout),
+		msg.PostedAt.UTC().Format(storage.DBTimeLayout),
+		msg.ProcessedAt.UTC().Format(storage.DBTimeLayout),
 		msg.PriceOriginal,
 		msg.PriceDiscount,
 		msg.CouponCode,
@@ -145,8 +142,8 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		msg.Merchant,
 		msg.ProductName,
 		msg.Synthesis,
-		boolToInt(msg.IsDuplicate),
-		boolToInt(msg.FeedEligible),
+		storage.BoolToInt(msg.IsDuplicate),
+		storage.BoolToInt(msg.FeedEligible),
 	)
 	if err != nil {
 		return apperrors.Wrap("processor", "save_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
@@ -156,22 +153,42 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 
 // CrossChannelDuplicates recebe pares (url_hash → channel_id) e retorna
 // apenas os hashes que já existem no banco em canais DIFERENTES.
+// Usa uma única query com OR conditions em vez de N queries individuais.
 func (r *Repository) CrossChannelDuplicates(ctx context.Context, pairs map[string]int64) (map[string]bool, error) {
 	if len(pairs) == 0 {
 		return nil, nil
 	}
-	result := make(map[string]bool)
+
+	// Constrói query: SELECT DISTINCT url_hash FROM processed_messages
+	//   WHERE (url_hash = ? AND channel_id != ?) OR (url_hash = ? AND channel_id != ?) ...
+	args := make([]interface{}, 0, len(pairs)*2)
+	query := "SELECT DISTINCT url_hash FROM processed_messages WHERE "
+	first := true
 	for hash, channelID := range pairs {
-		var count int
-		err := r.db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM processed_messages WHERE url_hash = ? AND channel_id != ?`,
-			hash, channelID).Scan(&count)
-		if err != nil {
+		if !first {
+			query += " OR "
+		}
+		query += "(url_hash = ? AND channel_id != ?)"
+		args = append(args, hash, channelID)
+		first = false
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, apperrors.Wrap("processor", "cross_channel_duplicates", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
 			continue
 		}
-		if count > 0 {
-			result[hash] = true
-		}
+		result[hash] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, apperrors.Wrap("processor", "cross_channel_duplicates_iter", err)
 	}
 	return result, nil
 }
@@ -208,14 +225,14 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			msg.Views,
 			msg.Forwards,
 			msg.ReplyToMsgID,
-			boolToInt(msg.HasURL),
-			boolToInt(msg.HasPrice),
-			boolToInt(msg.HasCoupon),
+			storage.BoolToInt(msg.HasURL),
+			storage.BoolToInt(msg.HasPrice),
+			storage.BoolToInt(msg.HasCoupon),
 			priceAmount,
 			"BRL",
 			string(urgencyJSON),
-			msg.PostedAt.UTC().Format(dbTimeLayout),
-			msg.ProcessedAt.UTC().Format(dbTimeLayout),
+			msg.PostedAt.UTC().Format(storage.DBTimeLayout),
+			msg.ProcessedAt.UTC().Format(storage.DBTimeLayout),
 			msg.PriceOriginal,
 			msg.PriceDiscount,
 			msg.CouponCode,
@@ -227,8 +244,8 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			msg.Merchant,
 			msg.ProductName,
 			msg.Synthesis,
-			boolToInt(msg.IsDuplicate),
-			boolToInt(msg.FeedEligible),
+			storage.BoolToInt(msg.IsDuplicate),
+			storage.BoolToInt(msg.FeedEligible),
 		)
 		if err != nil {
 			failed++
@@ -243,23 +260,3 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 	return saved, failed
 }
 
-func parseDBTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(dbTimeLayout, s)
-	if err != nil {
-		if t2, err2 := time.Parse(time.RFC3339, s); err2 == nil {
-			return t2
-		}
-		return time.Time{}
-	}
-	return t
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}

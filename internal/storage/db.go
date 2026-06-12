@@ -62,6 +62,12 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: busy_timeout: %w", err)
 	}
+	// foreign_keys habilita validação de chaves estrangeiras. Sem este PRAGMA,
+	// FKs são apenas decorativas (inserções com referências inválidas não falham).
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("storage: foreign_keys: %w", err)
+	}
 
 	if err := migrate(ctx, conn); err != nil {
 		_ = conn.Close()

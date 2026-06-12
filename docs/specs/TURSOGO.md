@@ -39,10 +39,12 @@ gravações através dele. `DB.Close()` fecha a conexão.
 ### Migrations (`migrations.go`)
 
 O schema reside em `internal/storage/migrations/*.sql`, embutido com
-`//go:embed migrations/*.sql` em um `embed.FS`. `migrate` lê o diretório,
-ordena os nomes dos arquivos de forma lexical e executa cada arquivo com `db.ExecContext`.
-O SQL é idempotente (`CREATE TABLE IF NOT EXISTS`), de modo que reexecutar é seguro —
-não há uma tabela de versão separada na Fase 1.
+`//go:embed migrations/*.sql` em um `embed.FS`. O sistema de migração garante
+execução *exactly-once* através da tabela `schema_migrations`.
+`migrate` lê o diretório, ordena os arquivos lexicalmente, filtra os que já estão
+na `schema_migrations`, e executa as migrações pendentes. Cada arquivo `.sql` é executado
+dentro de uma transação (`BeginTx`), o que garante que migrações falhas não deixem o banco
+em estado inconsistente.
 
 ### Consultas (`repository.go`)
 

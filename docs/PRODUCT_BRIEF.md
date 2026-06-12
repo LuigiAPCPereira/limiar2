@@ -37,7 +37,7 @@ Cada componente é um binário Go independente com lifecycle próprio. Um orques
 | `limiar-collector` | MTProto userbot: autentica, monitora canais, persiste mensagens brutas | ✅ Implementado |
 | `limiar-processor` | Lê do banco, normaliza, deduplica, classifica, sintetiza | ✅ Implementado |
 | `limiar-api` | Expõe REST + SSE para o frontend | Futuro |
-| `limiar` (futuro) | Orquestrador: sobe os binários com `limiar run` | Futuro |
+| `limiar` | Orquestrador: sobe os binários com `limiar run` | ✅ Implementado |
 
 ---
 

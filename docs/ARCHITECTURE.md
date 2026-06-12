@@ -1,9 +1,8 @@
 # ARCHITECTURE — Limiar Pipeline
 
-O repositório contém dois binários de produção (`limiar-collector` e `limiar-processor`)
-e uma ferramenta de desenvolvimento (`spike_resolve`). Ambos os binários compartilham o mesmo
-banco de dados Tursogo (`limiar.db`) e reutilizam infraestrutura transversal (`logger`,
-`errors`, `storage`).
+O repositório contém o orquestrador unificado (`cmd/limiar`), além de binários independentes legado para os componentes (`limiar-collector` e `limiar-processor`)
+e uma ferramenta de desenvolvimento (`spike_resolve`). Todos os serviços (coleta, processamento, dashboard) rodam dentro do mesmo processo sob o orquestrador `limiar run` e compartilham a mesma conexão com o
+banco de dados Tursogo (`limiar.db`), reutilizando infraestrutura transversal (`logger`, `errors`, `storage`).
 
 A base de código é dividida horizontalmente em camadas com fronteiras rígidas:
 - **`internal/cli`** — ciclo de vida dos comandos Cobra (collector)
