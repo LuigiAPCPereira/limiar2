@@ -15,3 +15,7 @@
 ## 2025-06-11 - Estilos globais para foco acessível em Vanilla HTML
 **Aprendizado:** Em dashboards vanilla (sem uso de frameworks utilitários que provêm reset consistente como Tailwind), desenvolvedores frequentemente esquecem de adicionar estados de foco customizados para interações criadas com `<div>`, `<span>`, ou `<a>`.
 **Ação:** Em projetos desse tipo, adicionar uma regra global de CSS como `:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }` é a forma mais eficaz e segura de garantir suporte visual universal à navegação por teclado sem afetar a usabilidade normal de clique de mouse, preenchendo as lacunas esquecidas em componentes individuais.
+## 2025-03-09 - Empty state acionável
+
+**Aprendizado:** Telas vazias geradas por falta de configuração frustram os usuários e quebram o onboarding. Um dashboard listando 'Nenhum canal monitorado' pode fazer o usuário sentir que a aplicação não está funcionando ou que está estagnada.
+**Ação:** Implementamos os empty states (na tela Raw e Processed), sempre utilizando o \`channelStats.length === 0\` e não um genérico "nenhuma mensagem". Demos prioridade para criar links e/ou referências cruzadas que orientem o usuário para o terminal \`limiar-collector channels add <@username>\` mantendo o padrão da classe \`.empty\`.
