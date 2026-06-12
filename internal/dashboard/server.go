@@ -136,7 +136,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 	msg, err := s.repo.GetMessageByID(r.Context(), id)
 	if err != nil {
-		s.log.Error("Mensagem não encontrada", "erro", err)
+		s.log.Error("Erro ao buscar mensagem por ID", "erro", err)
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
