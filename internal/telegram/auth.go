@@ -89,7 +89,7 @@ func (a *terminalAuthenticator) promptMasked(label string) (string, error) {
 
 // Phone solicita o número de telefone da conta.
 func (a *terminalAuthenticator) Phone(_ context.Context) (string, error) {
-	fmt.Fprintln(a.out, "  Informe o número de telefone da conta (formato internacional).")
+	_, _ = fmt.Fprintln(a.out, "  Informe o número de telefone da conta (formato internacional).")
 	return a.prompt("  📞 Telefone › ")
 }
 
@@ -100,14 +100,14 @@ func (a *terminalAuthenticator) Password(_ context.Context) (string, error) {
 	if a.password != "" {
 		return a.password, nil
 	}
-	fmt.Fprintln(a.out)
-	fmt.Fprintln(a.out, "  🔒 Verificação em duas etapas ativada.")
+	_, _ = fmt.Fprintln(a.out)
+	_, _ = fmt.Fprintln(a.out, "  🔒 Verificação em duas etapas ativada.")
 	return a.promptMasked("  🔐 Senha 2FA › ")
 }
 
 // Code solicita o código de login que o Telegram envia para a conta.
 func (a *terminalAuthenticator) Code(_ context.Context, _ *tg.AuthSentCode) (string, error) {
-	fmt.Fprintln(a.out)
+	_, _ = fmt.Fprintln(a.out)
 	fmt.Fprintln(a.out, "  Telegram enviou um código para o seu aplicativo ou SMS.")
 	return a.promptMasked("  🔢 Código › ")
 }

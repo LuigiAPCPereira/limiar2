@@ -77,10 +77,8 @@ func TestPrettyConcurrency(t *testing.T) {
 		if trimmed == "" {
 			continue
 		}
-		hasDiamond := strings.HasPrefix(trimmed, "◆")
-hasPipe := strings.HasPrefix(trimmed, "├")
-hasCorner := strings.HasPrefix(trimmed, "└")
-if !hasDiamond && !hasPipe && !hasCorner {
+		//nolint:staticcheck
+if !strings.HasPrefix(trimmed, "◆") && !strings.HasPrefix(trimmed, "├") && !strings.HasPrefix(trimmed, "└") {
 			// Could be a continuation — just check no garbled output
 			continue
 		}

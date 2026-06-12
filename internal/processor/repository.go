@@ -59,7 +59,7 @@ func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]*storag
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "fetch_unprocessed", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var msgs []*storage.RawMessage
 	for rows.Next() {
@@ -177,7 +177,7 @@ func (r *Repository) CrossChannelDuplicates(ctx context.Context, pairs map[strin
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "cross_channel_duplicates", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result := make(map[string]bool)
 	for rows.Next() {

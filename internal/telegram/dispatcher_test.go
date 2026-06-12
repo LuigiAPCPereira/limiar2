@@ -33,9 +33,10 @@ func (panicHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
 }
 
 // errHandler retorna um erro, para verificar se o dispatcher faz log sem falhar.
-// errHandler is intentionally unused for now
+//nolint:unused
 type errHandler struct{ called atomic.Bool }
 
+//nolint:unused
 func (h *errHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
 	h.called.Store(true)
 	return stderrors.New("handler failed")
