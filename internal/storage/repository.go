@@ -450,7 +450,7 @@ func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64,
 	if len(conditions) > 0 {
 		query += " WHERE " + conditions[0]
 		for _, c := range conditions[1:] {
-			query += " AND " + c
+			query += " AND " + c // #nosec G202 — conditions are hardcoded column names, values use ?
 		}
 	}
 	query += " ORDER BY posted_at DESC LIMIT ? OFFSET ?"

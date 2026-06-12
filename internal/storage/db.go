@@ -29,7 +29,7 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 	// Garante que o arquivo do banco seja criado/mantido com
 	// permissões restritas (0600) para proteger a sessão do Telegram e as mensagens.
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0600)
+		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0600) // #nosec G304 — path from validated config
 		if err != nil {
 			return nil, fmt.Errorf("storage: create db %q: %w", dbPath, err)
 		}
