@@ -22,8 +22,18 @@ const historyPageSize = 100
 type Repository interface {
 	ListChannels(ctx context.Context) ([]*storage.Channel, error)
 	SaveRawMessage(ctx context.Context, msg *storage.RawMessage) (inserted bool, err error)
+	// SaveRawMessageBatch persiste múltiplas mensagens em uma única transação.
+	// inserted[i] indica se msgs[i] foi efetivamente inserida (true) ou era duplicata (false).
+	// totalInserted é a soma dos true. Em falha, inserted é nil e err não é nil.
+	SaveRawMessageBatch(ctx context.Context, msgs []*storage.RawMessage) (inserted []bool, totalInserted int, err error)
 	UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error
 }
+
+// defaultFlushInterval é a janela padrão de acúmulo de jobs no dbWriter antes do
+// flush em transação única. 10ms é o ponto de equilíbrio empírico entre latência
+// (o dashboard vê mensagens em até ~10ms) e throughput (rajadas de backfill
+// colapsam centenas de fsyncs em 1 fsync só).
+const defaultFlushInterval = 10 * time.Millisecond
 
 // Collector orquestra a captura: ele faz o backfill do histórico, registra o handler
 // de mensagens, executa o client do Telegram e serializa todas as gravações através de uma
@@ -37,6 +47,7 @@ type Collector struct {
 	maxWriteRetry  int
 	historyMax     int
 	historyMaxDays int
+	flushInterval  time.Duration
 	onMessage      func(*storage.RawMessage)
 
 	writeCh chan WriteJob
@@ -45,8 +56,8 @@ type Collector struct {
 	// Observabilidade: contadores atômicos atualizados pelo dbWriter em cada gravação
 	// bem-sucedida. Leia com atomic.LoadInt64 para uma inspeção segura entre goroutines
 	// (ex: logs periódicos de estatísticas).
-	statsNew        int64
-	statsDuplicate  int64
+	statsNew       int64
+	statsDuplicate int64
 }
 
 // SetOnMessage registra um callback invocado após cada gravação bem-sucedida no
@@ -88,6 +99,7 @@ func NewCollector(
 		maxWriteRetry:  maxWriteRetry,
 		historyMax:     historyMax,
 		historyMaxDays: historyMaxDays,
+		flushInterval:  defaultFlushInterval,
 	}
 }
 
@@ -209,13 +221,25 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 	ceiling := int64(c.historyMax)
 	cutoff := time.Now().AddDate(0, 0, -c.historyMaxDays)
 	var totalFetched int64
-	var globalMaxID int64
+	// scannedMaxID é o maior MessageID entre mensagens varridas que NÃO são
+	// duplicatas abaixo do cursor (ou seja, mensagens acima do cursor ou
+	// descartadas pelo cutoff temporal). É o valor seguro para avançar o
+	// cursor:
+	//  - mensagens acima do cursor: varridas e enfileiradas → cursor avança
+	//  - mensagens filtradas pelo cutoff: vistas mas descartadas → cursor avança
+	//    (não serão úteis na próxima execução, pois continuarão antigas)
+	//  - mensagens abaixo do cursor (duplicatas reais): NÃO fazem scannedMaxID
+	//    crescer, então o cursor não avança em cenários de reprocessamento
+	//    onde todo o lote é duplicata.
+	// scannedMaxID == 0 significa "nenhuma mensagem acima do cursor foi vista"
+	// (tudo duplicata), e o orquestrador preserva o cursor armazenado.
+	var scannedMaxID int64
 	offsetID := int64(0)
 	firstPage := true
 
 	for {
 		if ctx.Err() != nil {
-			return totalFetched, globalMaxID, ctx.Err()
+			return totalFetched, scannedMaxID, ctx.Err()
 		}
 
 		remaining := ceiling - totalFetched
@@ -237,7 +261,7 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 			msgs, fetchErr = c.client.FetchHistoryWithOffset(ctx, ch.ID, offsetID, pageSize)
 		}
 		if fetchErr != nil {
-			return totalFetched, globalMaxID, fetchErr
+			return totalFetched, scannedMaxID, fetchErr
 		}
 		firstPage = false
 		if len(msgs) == 0 {
@@ -245,14 +269,10 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 		}
 
 		pageMinID := msgs[0].MessageID
-		pageMaxID := msgs[0].MessageID
 		pageMinDate := msgs[0].Date
 		for _, m := range msgs {
 			if m.MessageID < pageMinID {
 				pageMinID = m.MessageID
-			}
-			if m.MessageID > pageMaxID {
-				pageMaxID = m.MessageID
 			}
 			if m.Date.Before(pageMinDate) {
 				pageMinDate = m.Date
@@ -261,9 +281,15 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 
 		for _, m := range msgs {
 			// Pula mensagens iguais ou abaixo do cursor armazenado (já persistidas
-			// em uma execução anterior).
+			// em uma execução anterior). Estas são duplicatas REAIS — não entram
+			// no cálculo de scannedMaxID, evitando regressão do cursor em
+			// cenários de reprocessamento.
 			if cursor > 0 && m.MessageID <= cursor {
 				continue
+			}
+			// Mensagem acima do cursor: entra em scannedMaxID (foi varrida).
+			if m.MessageID > scannedMaxID {
+				scannedMaxID = m.MessageID
 			}
 			// Pula mensagens mais antigas que o limite temporal (cutoff).
 			if !m.Date.IsZero() && m.Date.Before(cutoff) {
@@ -282,13 +308,9 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 			select {
 			case c.writeCh <- job:
 			case <-ctx.Done():
-				return totalFetched, globalMaxID, ctx.Err()
+				return totalFetched, scannedMaxID, ctx.Err()
 			}
 			totalFetched++
-		}
-
-		if pageMaxID > globalMaxID {
-			globalMaxID = pageMaxID
 		}
 
 		// Se a mensagem mais antiga nesta página estiver no cursor armazenado ou abaixo dele,
@@ -307,16 +329,153 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 		offsetID = pageMinID
 	}
 
-	return totalFetched, globalMaxID, nil
+	return totalFetched, scannedMaxID, nil
 }
 
 // dbWriter é a única goroutine que escreve no banco de dados (fan-in). Ele
-// drena o writeCh até ser fechado, repetindo cada escrita até maxWriteRetry vezes.
+// drena o writeCh até ser fechado, acumulando jobs em micro-lotes dentro de
+// uma janela de tempo (flushInterval) para disparar uma única transação por
+// lote em vez de uma transação por mensagem. Isso colapsa N fsyncs em 1 fsync,
+// reduzindo a latência de escrita em ordens de magnitude durante backfill
+// (milhares de mensagens) sem prejudicar a latência percebida pelo dashboard
+// (~flushInterval de atraso adicional).
 func (c *Collector) dbWriter(ctx context.Context) {
 	defer c.wg.Done()
-	for job := range c.writeCh {
+
+	// Limite de acúmulo do lote. Usa a capacidade do canal como teto, mas com
+	// floor de 100: quando writeCh é não-bufferizado (cap == 0), o batching
+	// permaneceria efetivo em vez de disparar flush a cada mensagem.
+	limit := cap(c.writeCh)
+	if limit == 0 {
+		limit = 100
+	}
+	batch := make([]WriteJob, 0, limit)
+	var timer *time.Timer
+	var timerC <-chan time.Time
+
+	for {
+		select {
+		case job, ok := <-c.writeCh:
+			if !ok {
+				// Canal fechado: drena o lote pendente e sai.
+				if len(batch) > 0 {
+					c.flush(ctx, batch)
+				}
+				return
+			}
+			// Primeiro job do lote: arma o timer de flush.
+			if len(batch) == 0 && timerC == nil {
+				if timer == nil {
+					timer = time.NewTimer(c.flushInterval)
+				} else {
+					timer.Reset(c.flushInterval)
+				}
+				timerC = timer.C
+			}
+			batch = append(batch, job)
+			// Lote cheio: flush imediato sem esperar o timer.
+			if len(batch) >= limit {
+				c.flush(ctx, batch)
+				batch = batch[:0]
+				if timer != nil && !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timerC = nil
+			}
+		case <-timerC:
+			c.flush(ctx, batch)
+			batch = batch[:0]
+			timerC = nil
+		}
+	}
+}
+
+// flush persiste um lote acumulado de WriteJobs em uma única transação e
+// dispara callbacks (onMessage) para cada mensagem persistida. Jobs marcados
+// como Backfill não avançam o cursor — o orquestrador do backfill é dono
+// disso (evita a corrida da ordem descendente). Falhas de lote caem para
+// escrita individual com retry (writeWithRetry) para maximizar recuperação.
+func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
+	if len(batch) == 0 {
+		return
+	}
+
+	// Separa mensagens para o commit em lote.
+	msgs := make([]*storage.RawMessage, len(batch))
+	for i, job := range batch {
+		msgs[i] = job.Message
+	}
+
+	inserted, err := c.writeBatchWithRetry(ctx, msgs)
+
+	// Caminho feliz: lote commitado. Atualiza stats e dispara callbacks
+	// para cada mensagem persistida. Cursores de canal são consolidados
+	// (1 UPDATE por canal com o maior MessageID do lote) para evitar N
+	// fsyncs de cursor que anulariam o ganho do batch transacional.
+	if err == nil {
+		type cursorInfo struct {
+			msgID int64
+			recAt time.Time
+		}
+		latestCursors := make(map[int64]cursorInfo)
+
+		for i, job := range batch {
+			if inserted[i] {
+				atomic.AddInt64(&c.statsNew, 1)
+				// Cursor só avança para mensagens efetivamente inseridas.
+				// Duplicatas (ON CONFLICT DO NOTHING) não representam progresso
+				// de coleta e podem carregar MessageID menor que o máximo já
+				// persistido no lote — avançar nelas poderia regredir o cursor.
+				if !job.Backfill && job.Message.ChannelID != 0 {
+					if existing, ok := latestCursors[job.Message.ChannelID]; !ok || job.Message.MessageID > existing.msgID {
+						latestCursors[job.Message.ChannelID] = cursorInfo{
+							msgID: job.Message.MessageID,
+							recAt: job.Message.ReceivedAt,
+						}
+					}
+				}
+			} else {
+				atomic.AddInt64(&c.statsDuplicate, 1)
+			}
+			if c.onMessage != nil {
+				c.onMessage(job.Message)
+			}
+		}
+
+		for chID, info := range latestCursors {
+			if updErr := c.repo.UpdateChannelLastMessage(ctx, chID, info.msgID, info.recAt); updErr != nil {
+				c.log.Warn("⚠️  Cursor não atualizado", "canal_id", chID, "erro", updErr)
+			}
+		}
+		return
+	}
+
+	// Falha persistente do lote: cai para escrita individual (writeWithRetry),
+	// que tem seu próprio loop de retry. Menor throughput, mas maximiza
+	// recuperação de mensagens sob falha transitória do DB.
+	c.log.Warn("⚠️  Lote falhou, caindo para escrita individual",
+		"tamanho_lote", len(batch), "erro", err)
+	for _, job := range batch {
 		c.writeWithRetry(ctx, job)
 	}
+}
+
+// writeBatchWithRetry tenta commitar um lote em transação única até maxWriteRetry+1
+// vezes. Idempotente graças ao ON CONFLICT DO NOTHING — retries não criam
+// duplicatas. Retorna nil no sucesso, o último erro após retries esgotados.
+func (c *Collector) writeBatchWithRetry(ctx context.Context, msgs []*storage.RawMessage) ([]bool, error) {
+	var lastErr error
+	for attempt := 0; attempt <= c.maxWriteRetry; attempt++ {
+		inserted, _, err := c.repo.SaveRawMessageBatch(ctx, msgs)
+		if err == nil {
+			return inserted, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 // writeWithRetry persiste um job, com retentativa (retry) em caso de falha. Uma falha persistente
@@ -334,13 +493,16 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 		}
 		if inserted {
 			atomic.AddInt64(&c.statsNew, 1)
+			// Cursor só avança para mensagens efetivamente inseridas.
+			// Duplicatas (ON CONFLICT DO NOTHING) não representam progresso
+			// de coleta.
+			if !job.Backfill && job.Message.ChannelID != 0 {
+				if err := c.repo.UpdateChannelLastMessage(ctx, job.Message.ChannelID, job.Message.MessageID, job.Message.ReceivedAt); err != nil {
+					c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", err)
+				}
+			}
 		} else {
 			atomic.AddInt64(&c.statsDuplicate, 1)
-		}
-		if !job.Backfill && job.Message.ChannelID != 0 {
-			if err := c.repo.UpdateChannelLastMessage(ctx, job.Message.ChannelID, job.Message.MessageID, job.Message.ReceivedAt); err != nil {
-				c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", err)
-			}
 		}
 		if c.onMessage != nil {
 			c.onMessage(job.Message)
