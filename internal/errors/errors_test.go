@@ -18,6 +18,8 @@ var sentinels = []error{
 	apperrors.ErrSessionCorrupted,
 	apperrors.ErrDBWriteFailed,
 	apperrors.ErrMaxRetriesExceeded,
+	apperrors.ErrNoPhoto,
+	apperrors.ErrFileReferenceExpired,
 }
 
 func TestWrapFormatsLayerAndOp(t *testing.T) {

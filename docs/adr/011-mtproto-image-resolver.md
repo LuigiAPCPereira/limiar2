@@ -51,7 +51,7 @@ Imagens NÃO são salvas em disco. Motivação:
 Dois usuários pedindo a mesma imagem simultaneamente NÃO podem disparar dois `upload.GetFile`
 MTProto independentes. `singleflight.Group` garante que a segunda request bloqueia e reutiliza
 o resultado da primeira. Isso é **corretude**, não apenas otimização — evita flood no MTProto
-e浪费 de banda.
+e desperdício de banda.
 
 ### Renovação automática de file_reference em 3 níveis
 
@@ -68,7 +68,7 @@ O processor extrai e persiste os campos MTProto (`photo_access_hash`, `photo_fil
 
 ## Schema
 
-Novas colunas em `processed_messages` (migration 007):
+Novas colunas em `processed_messages` (migration 006):
 
 ```sql
 ALTER TABLE processed_messages ADD COLUMN photo_access_hash INTEGER DEFAULT 0;

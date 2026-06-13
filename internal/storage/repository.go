@@ -670,6 +670,7 @@ func nullString(s string) any {
 // PhotoMetadata contém os campos MTProto necessários para download de imagem
 // sob demanda via upload.GetFile (ADR 011).
 type PhotoMetadata struct {
+	ID            int64 // processed_messages.id (PK); 0 em metadados vindos de MTProto (renew/refetch)
 	MsgID         int64
 	ChannelID     int64
 	PhotoID       int64
@@ -683,9 +684,9 @@ type PhotoMetadata struct {
 func (r *Repository) GetPhotoMetadata(ctx context.Context, processedMsgID int64) (*PhotoMetadata, error) {
 	var m PhotoMetadata
 	err := r.db.QueryRowContext(ctx, `
-		SELECT message_id, channel_id, photo_id, photo_access_hash, photo_file_ref, photo_dcid
+		SELECT id, message_id, channel_id, photo_id, photo_access_hash, photo_file_ref, photo_dcid
 		FROM processed_messages WHERE id = ?`, processedMsgID).Scan(
-		&m.MsgID, &m.ChannelID, &m.PhotoID, &m.AccessHash, &m.FileReference, &m.DCID)
+		&m.ID, &m.MsgID, &m.ChannelID, &m.PhotoID, &m.AccessHash, &m.FileReference, &m.DCID)
 	if err != nil {
 		return nil, apperrors.Wrap("storage", "get_photo_metadata", err)
 	}
@@ -714,4 +715,33 @@ func (r *Repository) UpdatePhotoMetadata(ctx context.Context, processedMsgID int
 		return apperrors.Wrap("storage", "update_photo_metadata", err)
 	}
 	return nil
+}
+
+// PhotoStats resume a cobertura de metadados MTProto em processed_messages para
+// diagnóstico do subsistema de mídia (smoke test, ADR 011). Permite validar, em
+// produção, se o backfill da Fase A produziu metadados utilizáveis pelo
+// MediaResolver na Wave 4.
+type PhotoStats struct {
+	TotalProcessed  int64 // total de mensagens processadas
+	WithPhoto       int64 // mensagens com photo_id > 0
+	CompleteMTProto int64 // com foto E todos os campos MTProto (access_hash, file_ref, dcid)
+}
+
+// PhotoMetadataStats agrega a cobertura de metadados de foto. Usado pelo
+// subcomando `media` (smoke test) para validar a fundação de mídia em produção.
+func (r *Repository) PhotoMetadataStats(ctx context.Context) (PhotoStats, error) {
+	var s PhotoStats
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(CASE WHEN photo_id > 0 THEN 1 END),
+			COUNT(CASE WHEN photo_id > 0
+				AND photo_access_hash != 0
+				AND photo_file_ref != ''
+				AND photo_dcid != 0 THEN 1 END)
+		FROM processed_messages`).Scan(&s.TotalProcessed, &s.WithPhoto, &s.CompleteMTProto)
+	if err != nil {
+		return PhotoStats{}, apperrors.Wrap("storage", "photo_metadata_stats", err)
+	}
+	return s, nil
 }

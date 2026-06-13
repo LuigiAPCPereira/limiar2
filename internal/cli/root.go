@@ -12,6 +12,7 @@ import (
 	"github.com/limiar/collector/internal/collector"
 	"github.com/limiar/collector/internal/config"
 	"github.com/limiar/collector/internal/logger"
+	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/telegram"
 )
@@ -32,6 +33,8 @@ type Provider interface {
 	NewClient(log logger.Logger, repo *storage.Repository) telegram.TelegramClient
 	// NewCollector constrói o coletor vinculado ao cliente, repositório e logger fornecidos.
 	NewCollector(client telegram.TelegramClient, repo *storage.Repository, log logger.Logger) *collector.Collector
+	// NewMediaClient constrói o MediaClient concreto (gotd/td) usado por `media resolve`.
+	NewMediaClient(log logger.Logger, repo *storage.Repository) media.MediaClient
 }
 
 // NewRootCmd constrói o comando raiz e anexa os subcomandos auth, channels e run,
@@ -48,6 +51,7 @@ func NewRootCmd(p Provider) *cobra.Command {
 		newChannelsCmd(p),
 		newRunCmd(p),
 		newDashboardCmd(p),
+		newMediaCmd(p),
 	)
 	return root
 }

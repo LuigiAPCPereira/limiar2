@@ -16,6 +16,7 @@ import (
 	"github.com/limiar/collector/internal/collector"
 	"github.com/limiar/collector/internal/config"
 	"github.com/limiar/collector/internal/logger"
+	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/telegram"
 )
@@ -65,9 +66,9 @@ func (p *provider) OpenStore(ctx context.Context) (*storage.Repository, func() e
 	return repo, closeFn, nil
 }
 
-// NewClient monta a fachada do Telegram: armazenamento de sessão, armazenamento de peers e
-// dispatcher, todos apoiados pelo repositório (repo) e pelo logger (log).
-func (p *provider) NewClient(log logger.Logger, repo *storage.Repository) telegram.TelegramClient {
+// newTelegramClient monta a facade *telegram.Client (construção concreta num único
+// lugar — AGENTS.md §14.5). Compartilhado por NewClient e NewMediaClient.
+func (p *provider) newTelegramClient(log logger.Logger, repo *storage.Repository) *telegram.Client {
 	session := telegram.NewTursoSessionStorage(repo, log)
 	peers := telegram.NewPeerStore(repo, log)
 	dispatcher := telegram.NewDispatcher(p.cfg.DispatcherBufferSize, log.WithComponent("dispatcher"))
@@ -76,6 +77,18 @@ func (p *provider) NewClient(log logger.Logger, repo *storage.Repository) telegr
 		p.cfg.AppID, p.cfg.APIHash, p.cfg.IOTimeout, backoff,
 		session, peers, dispatcher, log.WithComponent("telegram"),
 	)
+}
+
+// NewClient monta a fachada do Telegram: armazenamento de sessão, armazenamento de peers e
+// dispatcher, todos apoiados pelo repositório (repo) e pelo logger (log).
+func (p *provider) NewClient(log logger.Logger, repo *storage.Repository) telegram.TelegramClient {
+	return p.newTelegramClient(log, repo)
+}
+
+// NewMediaClient envolve a facade telegram.Client em telegram.MediaClient (que
+// implementa media.MediaClient) para o comando `media resolve`.
+func (p *provider) NewMediaClient(log logger.Logger, repo *storage.Repository) media.MediaClient {
+	return telegram.NewMediaClient(p.newTelegramClient(log, repo), log.WithComponent("media-client"))
 }
 
 // NewCollector monta o coletor com um NoopClassifier (Fase 1).

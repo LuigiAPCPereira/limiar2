@@ -360,6 +360,10 @@ func extractMediaType(msg map[string]any) string {
 // extractPhotoMetadata extrai os campos MTProto necessários para download
 // sob demanda via upload.GetFile (ADR 011). Retorna (0, 0, "", 0) se a
 // mensagem não contém Media.Photo.
+//
+// NOTA: internal/telegram/media.go possui uma cópia independente desta função
+// (photoMetaFromPayload) porque telegram não pode importar processor (dep. reversa).
+// Se o schema do payload mudar, atualize AMBAS.
 func extractPhotoMetadata(msg map[string]any) (int64, int64, string, int) {
 	media, ok := msg["Media"].(map[string]any)
 	if !ok {

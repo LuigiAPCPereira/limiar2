@@ -268,10 +268,10 @@ func (s *Server) handleMediaPhoto(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-## 6. Schema — Migration 007
+## 6. Schema — Migration 006
 
 ```sql
--- migrations/007_media_metadata.sql
+-- migrations/006_media_metadata.sql
 -- Metadados MTProto para resolução de imagens sob demanda.
 -- Ver ADR 011.
 
@@ -328,7 +328,7 @@ func extractPhotoMetadata(msg map[string]any) (int64, int64, string, int) {
 
 ### Fase A — Metadados (processor, sem MTProto)
 
-1. Migration 007
+1. Migration 006
 2. `extractPhotoMetadata` no normalizer
 3. Repository: INSERT com novas colunas + `GetPhotoMetadata` + `UpdateFileReference` + `UpdatePhotoMetadata`
 4. Reprocessar (backfill dos 10.000+ payloads)
