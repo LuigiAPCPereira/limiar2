@@ -40,6 +40,11 @@ type MediaClient interface {
 	// RefetchFromChannel re-coleta a mensagem do canal para renovar todos os
 	// campos MTProto (L3 hard).
 	RefetchFromChannel(ctx context.Context, channelID, msgID int64) (*storage.PhotoMetadata, error)
+	// RefetchAndDownload re-coleta a mensagem e baixa a imagem na MESMA sessão
+	// MTProto. O file_reference do MTProto é vinculado à sessão — fetch e download
+	// em sessões diferentes resulta em FILE_REFERENCE_EXPIRED. Este método resolve
+	// isso fazendo ambas as operações num único runOnce (L3 hard com download).
+	RefetchAndDownload(ctx context.Context, channelID, msgID int64) ([]byte, *storage.PhotoMetadata, error)
 }
 
 // MediaRepository abstrai o acesso ao banco para metadados de foto. É satisfeita

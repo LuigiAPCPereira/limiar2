@@ -18,9 +18,10 @@ import (
 // --- fakes ---
 
 type fakeClient struct {
-	downloadFn func(ctx context.Context, req PhotoDownloadRequest) ([]byte, error)
-	renewFn    func(ctx context.Context, channelID, msgID int64) (*storage.PhotoMetadata, error)
-	refetchFn  func(ctx context.Context, channelID, msgID int64) (*storage.PhotoMetadata, error)
+	downloadFn          func(ctx context.Context, req PhotoDownloadRequest) ([]byte, error)
+	renewFn             func(ctx context.Context, channelID, msgID int64) (*storage.PhotoMetadata, error)
+	refetchFn           func(ctx context.Context, channelID, msgID int64) (*storage.PhotoMetadata, error)
+	refetchAndDownloadFn func(ctx context.Context, channelID, msgID int64) ([]byte, *storage.PhotoMetadata, error)
 }
 
 func (f *fakeClient) DownloadPhoto(ctx context.Context, req PhotoDownloadRequest) ([]byte, error) {
@@ -31,6 +32,12 @@ func (f *fakeClient) RenewFileReference(ctx context.Context, ch, msg int64) (*st
 }
 func (f *fakeClient) RefetchFromChannel(ctx context.Context, ch, msg int64) (*storage.PhotoMetadata, error) {
 	return f.refetchFn(ctx, ch, msg)
+}
+func (f *fakeClient) RefetchAndDownload(ctx context.Context, ch, msg int64) ([]byte, *storage.PhotoMetadata, error) {
+	if f.refetchAndDownloadFn != nil {
+		return f.refetchAndDownloadFn(ctx, ch, msg)
+	}
+	return nil, nil, errors.New("RefetchAndDownload not configured")
 }
 
 type fakeRepo struct {
@@ -179,14 +186,18 @@ func TestResolveImage_L3HardRenew(t *testing.T) {
 			case 2:
 				return nil, errors.New("download falhou após soft renew") // soft retry falha
 			default:
-				return []byte("jpeg-hard"), nil // hard retry OK
+				return []byte("unexpected"), nil
 			}
 		},
 		renewFn: func(context.Context, int64, int64) (*storage.PhotoMetadata, error) {
 			return renewed, nil
 		},
 		refetchFn: func(context.Context, int64, int64) (*storage.PhotoMetadata, error) {
-			return renewed, nil
+			t.Fatal("RefetchFromChannel não deveria ser chamado — L3 hard usa RefetchAndDownload")
+			return nil, nil
+		},
+		refetchAndDownloadFn: func(context.Context, int64, int64) ([]byte, *storage.PhotoMetadata, error) {
+			return []byte("jpeg-hard"), renewed, nil // hard: fetch+download na mesma sessão
 		},
 	}
 	r := newResolver(cli, repo)
@@ -198,8 +209,8 @@ func TestResolveImage_L3HardRenew(t *testing.T) {
 	if string(got) != "jpeg-hard" {
 		t.Errorf("got %q, quer jpeg-hard", got)
 	}
-	if downloads != 3 {
-		t.Errorf("downloads = %d, quer 3 (expirado + soft-falha + hard-ok)", downloads)
+	if downloads != 2 {
+		t.Errorf("downloads = %d, quer 2 (expirado + soft-falha; hard usa RefetchAndDownload)", downloads)
 	}
 	if !repo.upMetaCalled {
 		t.Error("UpdatePhotoMetadata não chamado na renovação hard")
@@ -212,8 +223,12 @@ func TestResolveImage_AllRenewFails(t *testing.T) {
 		downloadFn: func(context.Context, PhotoDownloadRequest) ([]byte, error) {
 			return nil, apperrors.ErrFileReferenceExpired
 		},
-		renewFn:   func(context.Context, int64, int64) (*storage.PhotoMetadata, error) { return nil, errors.New("soft fail") },
-		refetchFn: func(context.Context, int64, int64) (*storage.PhotoMetadata, error) { return nil, errors.New("hard fail") },
+		renewFn: func(context.Context, int64, int64) (*storage.PhotoMetadata, error) {
+			return nil, errors.New("soft fail")
+		},
+		refetchAndDownloadFn: func(context.Context, int64, int64) ([]byte, *storage.PhotoMetadata, error) {
+			return nil, nil, errors.New("hard fail")
+		},
 	}
 	r := newResolver(cli, repo)
 

@@ -116,9 +116,12 @@ func (r *MediaResolver) renewAndRetry(ctx context.Context, meta *storage.PhotoMe
 	}
 
 	// L3 hard — log do motivo do soft ter falhado para debugging em produção.
+	// Usa RefetchAndDownload: fetch + download na MESMA sessão MTProto.
+	// O file_reference é vinculado à sessão — sessões separadas causam
+	// FILE_REFERENCE_EXPIRED (bug descoberto em produção).
 	r.log.Debug("L3 soft falhou, escalando para hard",
 		"msg_id", meta.MsgID, "canal_id", meta.ChannelID, "erro_soft", softErr)
-	refetched, err := r.client.RefetchFromChannel(ctx, meta.ChannelID, meta.MsgID)
+	data, refetched, err := r.client.RefetchAndDownload(ctx, meta.ChannelID, meta.MsgID)
 	if err != nil {
 		return nil, apperrors.Wrap("media", "hard_renew", err)
 	}
@@ -126,10 +129,7 @@ func (r *MediaResolver) renewAndRetry(ctx context.Context, meta *storage.PhotoMe
 		r.log.Warn("falha ao persistir metadados renovados (não fatal)",
 			"msg_id", meta.MsgID, "erro", perr)
 	}
-	data, err := r.tryDownload(ctx, refetched)
-	if err != nil {
-		return nil, apperrors.Wrap("media", "retry_download", err)
-	}
+	r.cache.Put(refetched.PhotoID, data)
 	return data, nil
 }
 

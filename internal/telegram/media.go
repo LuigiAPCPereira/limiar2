@@ -3,6 +3,7 @@ package telegram
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -123,6 +124,83 @@ func (m *MediaClient) RefetchFromChannel(ctx context.Context, channelID, msgID i
 			fmt.Errorf("mensagem %d não encontrada no canal %d", msgID, channelID))
 	}
 	return photoMetaFromPayload(msgs[0].Payload, channelID, msgID)
+}
+
+// RefetchAndDownload re-coleta a mensagem e baixa a imagem na MESMA sessão
+// MTProto (runOnce). O file_reference é vinculado à sessão — fazer fetch e
+// download em sessões separadas resulta em FILE_REFERENCE_EXPIRED. Este método
+// resolve isso combinando MessagesGetHistory + upload.GetFile num único ciclo.
+func (m *MediaClient) RefetchAndDownload(ctx context.Context, channelID, msgID int64) ([]byte, *storage.PhotoMetadata, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if err := m.c.LoadPeers(ctx); err != nil {
+		return nil, nil, apperrors.Wrap("telegram", "load_peers", err)
+	}
+	peer, ok := m.c.peers.Get(channelID)
+	if !ok {
+		return nil, nil, apperrors.Wrap("telegram", "refetch_download",
+			fmt.Errorf("peer not found for channel %d", channelID))
+	}
+
+	var data []byte
+	var meta *storage.PhotoMetadata
+
+	err := m.c.runOnce(ctx, func(ctx context.Context) error {
+		// Step 1: getHistory para obter a mensagem com file_reference fresco.
+		res, err := m.c.tg.API().MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+			Peer:     &tg.InputPeerChannel{ChannelID: channelID, AccessHash: peer.AccessHash},
+			OffsetID: int(msgID),
+			Limit:    1,
+		})
+		if err != nil {
+			return apperrors.Wrap("telegram", "get_history", err)
+		}
+		msgs, err := extractMessages(res)
+		if err != nil {
+			return apperrors.Wrap("telegram", "extract_history", err)
+		}
+		if len(msgs) == 0 {
+			return apperrors.Wrap("telegram", "refetch_download",
+				fmt.Errorf("mensagem %d não encontrada no canal %d", msgID, channelID))
+		}
+
+		// Step 2: extrair metadados da foto do payload.
+		meta, err = photoMetaFromPayload(msgs[0].Payload, channelID, msgID)
+		if err != nil {
+			return err
+		}
+
+		// Step 3: download usando o file_reference fresco (mesma sessão).
+		ref, derr := decodeFileRef(meta.FileReference)
+		if derr != nil {
+			return apperrors.Wrap("telegram", "decode_fileref", derr)
+		}
+		loc := &tg.InputPhotoFileLocation{
+			ID:            meta.PhotoID,
+			AccessHash:    meta.AccessHash,
+			FileReference: ref,
+			ThumbSize:     defaultThumbSize,
+		}
+		var buf bytes.Buffer
+		if _, derr := downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf); derr != nil {
+			return wrapFileErr(derr)
+		}
+		data = buf.Bytes()
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return data, meta, nil
+}
+
+// decodeFileRef decodifica o file_reference base64 para bytes.
+func decodeFileRef(s string) ([]byte, error) {
+	if s == "" {
+		return nil, nil
+	}
+	return base64.StdEncoding.DecodeString(s)
 }
 
 // photoMetaFromPayload extrai os campos MTProto da foto do payload JSON de uma
