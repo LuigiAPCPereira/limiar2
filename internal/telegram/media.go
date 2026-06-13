@@ -6,6 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"regexp"
+	"strconv"
 	"sync"
 
 	"github.com/gotd/td/telegram/downloader"
@@ -194,39 +198,50 @@ func (m *MediaClient) RefetchAndDownload(ctx context.Context, channelID, msgID i
 			"photo_id", meta.PhotoID, "access_hash", meta.AccessHash,
 			"file_ref_len", len(meta.FileReference), "dcid", meta.DCID)
 
-		// Step 3: download usando o file_reference fresco (mesma sessão).
+		// Step 3: download direto via upload.GetFile (mesma sessão, sem wrapper).
+		// Tenta tamanho "m" (320px) primeiro — menor chance de problemas de DC.
 		ref, derr := decodeFileRef(meta.FileReference)
 		if derr != nil {
 			return apperrors.Wrap("telegram", "decode_fileref", derr)
 		}
-		loc := &tg.InputPhotoFileLocation{
-			ID:            meta.PhotoID,
-			AccessHash:    meta.AccessHash,
-			FileReference: ref,
-			ThumbSize:     defaultThumbSize,
-		}
+
+		// Tenta com ambos os tamanhos: "m" (320px), "x" (800px), "y" (1280px).
 		var buf bytes.Buffer
-		_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
-		if derr != nil {
-			m.log.Debug("RefetchAndDownload: download falhou",
-				"tgerr", fmt.Sprintf("%v", derr),
-				"is_file_ref_expired", tgerr.Is(derr, "FILE_REFERENCE_EXPIRED"))
-			if tgerr.Is(derr, "FILE_REFERENCE_EXPIRED") {
-				// Retry sem file_reference — opcional com access_hash válido.
-				buf.Reset()
-				loc.FileReference = nil
-				_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
-				if derr != nil {
-					m.log.Debug("RefetchAndDownload: retry sem file_ref também falhou",
-						"tgerr", fmt.Sprintf("%v", derr))
-				}
+		for _, thumbSize := range []string{"m", "x", "y"} {
+			loc := &tg.InputPhotoFileLocation{
+				ID:            meta.PhotoID,
+				AccessHash:    meta.AccessHash,
+				FileReference: ref,
+				ThumbSize:     thumbSize,
+			}
+			m.log.Debug("RefetchAndDownload: tentando download",
+				"thumb_size", thumbSize, "photo_id", meta.PhotoID)
+
+			file, ferr := m.c.tg.API().UploadGetFile(ctx, &tg.UploadGetFileRequest{
+				Location: loc,
+				Offset:   0,
+				Limit:    1024 * 1024,
+			})
+			if ferr != nil {
+				m.log.Debug("RefetchAndDownload: falhou",
+					"thumb_size", thumbSize, "err", fmt.Sprintf("%v", ferr))
+				continue // tenta próximo tamanho
+			}
+
+			switch f := file.(type) {
+			case *tg.UploadFile:
+				buf.Write(f.Bytes)
+				m.log.Debug("RefetchAndDownload: sucesso",
+					"thumb_size", thumbSize, "bytes", len(f.Bytes))
+				data = buf.Bytes()
+				return nil
+			default:
+				m.log.Debug("RefetchAndDownload: tipo inesperado", "type", fmt.Sprintf("%T", file))
+				continue
 			}
 		}
-		if derr != nil {
-			return wrapFileErr(derr)
-		}
-		data = buf.Bytes()
-		return nil
+		return apperrors.Wrap("telegram", "download_all_sizes",
+			fmt.Errorf("todos os tamanhos falharam para photo_id %d", meta.PhotoID))
 	})
 	if err != nil {
 		return nil, nil, err
@@ -302,4 +317,72 @@ func payloadString(v any) string {
 		return s
 	}
 	return ""
+}
+
+// rePhotoMsg faz match em widgets de mensagem do Telegram web com fotos.
+// Captura data-post="channel/MSGID" e depois procura por background-image ou img src
+// com URL do CDN telesco.pe dentro dos próximos 3000 caracteres.
+var rePhotoMsg = regexp.MustCompile(
+	`data-post="[^"]+/(\d+)"`,
+)
+
+// reTelescopeURL extrai URLs do CDN do Telegram (telesco.pe) de um trecho de HTML.
+var reTelescopeURL = regexp.MustCompile(
+	`(?:background-image:\s*url\('|<img[^>]+src=")(https://cdn\d*\.telesco\.pe/file/[^"')]+)`,
+)
+
+// ScrapePhotoURL faz scraping da página web pública do canal (t.me/s/username)
+// para encontrar a URL CDN da foto da mensagem com o msgID informado.
+// Abordagem alternativa ao MTProto upload.GetFile que evita FILE_REFERENCE_EXPIRED.
+func (m *MediaClient) ScrapePhotoURL(ctx context.Context, username string, msgID int64) (string, error) {
+	url := fmt.Sprintf("https://t.me/s/%s", username)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", apperrors.Wrap("telegram", "scrape_request", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Limiar/1.0)")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", apperrors.Wrap("telegram", "scrape_fetch", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", apperrors.Wrap("telegram", "scrape_fetch",
+			fmt.Errorf("HTTP %d para @%s", resp.StatusCode, username))
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024)) // max 5MB
+	if err != nil {
+		return "", apperrors.Wrap("telegram", "scrape_read", err)
+	}
+
+	targetID := strconv.FormatInt(msgID, 10)
+	matches := rePhotoMsg.FindAllStringSubmatchIndex(string(body), -1)
+	for _, match := range matches {
+		if len(match) < 4 {
+			continue
+		}
+		// match[2]:match[3] é a posição do grupo capturado (msg ID)
+		foundID := string(body[match[2]:match[3]])
+		if foundID != targetID {
+			continue
+		}
+		// Procura URL do CDN nos próximos 3000 chars após o data-post
+		end := match[1] + 3000
+		if end > len(body) {
+			end = len(body)
+		}
+		chunk := string(body[match[1]:end])
+		urlMatch := reTelescopeURL.FindStringSubmatch(chunk)
+		if len(urlMatch) >= 2 {
+			photoURL := urlMatch[1]
+			m.log.Debug("ScrapePhotoURL: foto encontrada",
+				"username", username, "msg_id", msgID, "url_len", len(photoURL))
+			return photoURL, nil
+		}
+	}
+	return "", apperrors.Wrap("telegram", "scrape_photo",
+		fmt.Errorf("msg %d não encontrada na página de @%s", msgID, username))
 }

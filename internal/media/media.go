@@ -45,6 +45,11 @@ type MediaClient interface {
 	// em sessões diferentes resulta em FILE_REFERENCE_EXPIRED. Este método resolve
 	// isso fazendo ambas as operações num único runOnce (L3 hard com download).
 	RefetchAndDownload(ctx context.Context, channelID, msgID int64) ([]byte, *storage.PhotoMetadata, error)
+	// ScrapePhotoURL faz scraping da página web pública do canal (t.me/s/username)
+	// para encontrar a URL CDN da foto de uma mensagem específica. Retorna a URL
+	// HTTP que pode ser baixada sem file_reference MTProto. Retorna erro se o
+	// canal não for público ou a mensagem não for encontrada na página.
+	ScrapePhotoURL(ctx context.Context, username string, msgID int64) (string, error)
 }
 
 // MediaRepository abstrai o acesso ao banco para metadados de foto. É satisfeita

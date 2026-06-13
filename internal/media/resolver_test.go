@@ -39,6 +39,9 @@ func (f *fakeClient) RefetchAndDownload(ctx context.Context, ch, msg int64) ([]b
 	}
 	return nil, nil, errors.New("RefetchAndDownload not configured")
 }
+func (f *fakeClient) ScrapePhotoURL(ctx context.Context, username string, msgID int64) (string, error) {
+	return "", errors.New("ScrapePhotoURL not configured")
+}
 
 type fakeRepo struct {
 	mu           sync.Mutex

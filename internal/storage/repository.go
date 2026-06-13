@@ -264,6 +264,18 @@ func (r *Repository) GetChannel(ctx context.Context, id int64) (*Channel, error)
 	return ch, nil
 }
 
+// GetChannelUsername retorna o username de um canal pelo ID.
+// Usado pelo subsistema de mídia para scraping da página pública.
+func (r *Repository) GetChannelUsername(ctx context.Context, id int64) (string, error) {
+	var username string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT username FROM channels WHERE id = ?`, id).Scan(&username)
+	if err != nil {
+		return "", apperrors.Wrap("storage", "get_channel_username", err)
+	}
+	return username, nil
+}
+
 // UpdateChannelLastMessage avança o cursor de coleta de um canal.
 func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `
