@@ -18,3 +18,7 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+
+## 2025-06-13 - Acessibilidade de Abas e Atualizações em Background
+**Aprendizado:** Abas em Vanilla HTML muitas vezes perdem acessibilidade semântica. O uso de `role="tablist"`, `role="tab"` e `role="tabpanel"` atrelados aos controles corretos garantem suporte por leitores de tela. Além disso, dashboards costumam ser deixados em background, portanto, atualizar a tag `<title>` dinamicamente é excelente UX, permitindo visualizar novas atividades na barra do navegador. Por fim, adicionar atributos `title` aos componentes de pré-visualização truncados melhoram muito o uso sem necessidade de abrir detalhes da mensagem constantemente.
+**Ação:** Sempre garanta as proper roles de WAI-ARIA para componentes customizados como Tabs, e procure oportunidades de exibir métricas cruciais no title da página. Use title/tooltips do browser para complementar truncamento de texto via CSS.
