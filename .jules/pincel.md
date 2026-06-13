@@ -15,3 +15,6 @@
 ## 2025-06-11 - Estilos globais para foco acessível em Vanilla HTML
 **Aprendizado:** Em dashboards vanilla (sem uso de frameworks utilitários que provêm reset consistente como Tailwind), desenvolvedores frequentemente esquecem de adicionar estados de foco customizados para interações criadas com `<div>`, `<span>`, ou `<a>`.
 **Ação:** Em projetos desse tipo, adicionar uma regra global de CSS como `:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }` é a forma mais eficaz e segura de garantir suporte visual universal à navegação por teclado sem afetar a usabilidade normal de clique de mouse, preenchendo as lacunas esquecidas em componentes individuais.
+## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
+**Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
+**Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.

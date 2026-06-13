@@ -85,6 +85,7 @@
   .type-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem 0.75rem; text-align: center; min-width: 100px; }
   .type-stat .t-count { font-size: 1.25rem; font-weight: 700; }
   .type-stat .t-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
+  .cli-cmd { font-family: monospace; background: var(--surface); color: var(--accent); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.8rem; }
 </style>
 </head>
 <body x-data="dashboard()">
@@ -150,7 +151,16 @@
       </h2>
       <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens raw">
         <template x-if="filteredMessages.length === 0">
-          <div class="empty" x-text="loading ? 'Carregando...' : 'Nenhuma mensagem encontrada'"></div>
+          <div class="empty">
+            <template x-if="loading"><span>Carregando...</span></template>
+            <template x-if="!loading && channelStats.length > 0"><span>Nenhuma mensagem encontrada</span></template>
+            <template x-if="!loading && channelStats.length === 0">
+              <span>
+                Nenhum canal monitorado.<br><br>
+                Use <code class="cli-cmd">limiar-collector channels add</code> no terminal para começar.
+              </span>
+            </template>
+          </div>
         </template>
         <template x-for="m in filteredMessages" :key="m.ID">
           <div class="msg-item" @click="showRawDetail(m.ID)" role="button" tabindex="0" @keydown.enter.prevent="showRawDetail(m.ID)" @keydown.space.prevent="showRawDetail(m.ID)">
@@ -190,7 +200,16 @@
       </h2>
       <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens processadas">
         <template x-if="filteredProcessed.length === 0">
-          <div class="empty" x-text="procLoading ? 'Carregando...' : 'Nenhuma mensagem processada encontrada'"></div>
+          <div class="empty">
+            <template x-if="loading || procLoading"><span>Carregando...</span></template>
+            <template x-if="!(loading || procLoading) && channelStats.length > 0"><span>Nenhuma mensagem processada encontrada</span></template>
+            <template x-if="!(loading || procLoading) && channelStats.length === 0">
+              <span>
+                Nenhum canal monitorado.<br><br>
+                Use <code class="cli-cmd">limiar-collector channels add</code> no terminal para começar.
+              </span>
+            </template>
+          </div>
         </template>
         <template x-for="m in filteredProcessed" :key="m.id">
           <div class="msg-item" @click="showProcDetail(m)" role="button" tabindex="0" @keydown.enter.prevent="showProcDetail(m)" @keydown.space.prevent="showProcDetail(m)">
