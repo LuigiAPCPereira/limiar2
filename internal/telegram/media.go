@@ -50,20 +50,29 @@ var _ media.MediaClient = (*MediaClient)(nil)
 
 // DownloadPhoto baixa a variante defaultThumbSize da foto via upload.GetFile.
 // O downloader do gotd cuida da transferência de DC automaticamente.
+// Se o file_reference estiver expirado, retenta sem ele — em MTProto o campo é
+// opcional quando photo_id + access_hash são válidos na sessão autenticada.
 func (m *MediaClient) DownloadPhoto(ctx context.Context, req media.PhotoDownloadRequest) ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	var data []byte
 	err := m.c.runOnce(ctx, func(ctx context.Context) error {
+		var buf bytes.Buffer
 		loc := &tg.InputPhotoFileLocation{
 			ID:            req.PhotoID,
 			AccessHash:    req.AccessHash,
 			FileReference: req.FileReference,
 			ThumbSize:     defaultThumbSize,
 		}
-		var buf bytes.Buffer
-		if _, derr := downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf); derr != nil {
+		_, derr := downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
+		if derr != nil && tgerr.Is(derr, "FILE_REFERENCE_EXPIRED") {
+			// Retry sem file_reference — opcional em MTProto com access_hash válido.
+			buf.Reset()
+			loc.FileReference = nil
+			_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
+		}
+		if derr != nil {
 			return wrapFileErr(derr)
 		}
 		data = buf.Bytes()
