@@ -190,6 +190,9 @@ func (m *MediaClient) RefetchAndDownload(ctx context.Context, channelID, msgID i
 		if err != nil {
 			return err
 		}
+		m.log.Debug("RefetchAndDownload: metadados obtidos",
+			"photo_id", meta.PhotoID, "access_hash", meta.AccessHash,
+			"file_ref_len", len(meta.FileReference), "dcid", meta.DCID)
 
 		// Step 3: download usando o file_reference fresco (mesma sessão).
 		ref, derr := decodeFileRef(meta.FileReference)
@@ -204,11 +207,20 @@ func (m *MediaClient) RefetchAndDownload(ctx context.Context, channelID, msgID i
 		}
 		var buf bytes.Buffer
 		_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
-		if derr != nil && tgerr.Is(derr, "FILE_REFERENCE_EXPIRED") {
-			// Retry sem file_reference — opcional com access_hash válido.
-			buf.Reset()
-			loc.FileReference = nil
-			_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
+		if derr != nil {
+			m.log.Debug("RefetchAndDownload: download falhou",
+				"tgerr", fmt.Sprintf("%v", derr),
+				"is_file_ref_expired", tgerr.Is(derr, "FILE_REFERENCE_EXPIRED"))
+			if tgerr.Is(derr, "FILE_REFERENCE_EXPIRED") {
+				// Retry sem file_reference — opcional com access_hash válido.
+				buf.Reset()
+				loc.FileReference = nil
+				_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
+				if derr != nil {
+					m.log.Debug("RefetchAndDownload: retry sem file_ref também falhou",
+						"tgerr", fmt.Sprintf("%v", derr))
+				}
+			}
 		}
 		if derr != nil {
 			return wrapFileErr(derr)
