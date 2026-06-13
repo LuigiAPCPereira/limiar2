@@ -666,3 +666,52 @@ func nullString(s string) any {
 	}
 	return s
 }
+
+// PhotoMetadata contém os campos MTProto necessários para download de imagem
+// sob demanda via upload.GetFile (ADR 011).
+type PhotoMetadata struct {
+	MsgID         int64
+	ChannelID     int64
+	PhotoID       int64
+	AccessHash    int64
+	FileReference string // base64
+	DCID          int
+}
+
+// GetPhotoMetadata retorna os campos MTProto de imagem para uma mensagem processada.
+// Usado pelo MediaResolver para montar InputPhotoFileLocation.
+func (r *Repository) GetPhotoMetadata(ctx context.Context, processedMsgID int64) (*PhotoMetadata, error) {
+	var m PhotoMetadata
+	err := r.db.QueryRowContext(ctx, `
+		SELECT message_id, channel_id, photo_id, photo_access_hash, photo_file_ref, photo_dcid
+		FROM processed_messages WHERE id = ?`, processedMsgID).Scan(
+		&m.MsgID, &m.ChannelID, &m.PhotoID, &m.AccessHash, &m.FileReference, &m.DCID)
+	if err != nil {
+		return nil, apperrors.Wrap("storage", "get_photo_metadata", err)
+	}
+	return &m, nil
+}
+
+// UpdateFileReference atualiza o file_reference de uma mensagem após renovação L3 soft.
+func (r *Repository) UpdateFileReference(ctx context.Context, processedMsgID int64, fileRef string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE processed_messages SET photo_file_ref = ? WHERE id = ?`,
+		fileRef, processedMsgID)
+	if err != nil {
+		return apperrors.Wrap("storage", "update_file_reference", err)
+	}
+	return nil
+}
+
+// UpdatePhotoMetadata atualiza todos os campos MTProto de imagem após renovação L3 hard.
+func (r *Repository) UpdatePhotoMetadata(ctx context.Context, processedMsgID int64, meta *PhotoMetadata) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE processed_messages
+		SET photo_id = ?, photo_access_hash = ?, photo_file_ref = ?, photo_dcid = ?
+		WHERE id = ?`,
+		meta.PhotoID, meta.AccessHash, meta.FileReference, meta.DCID, processedMsgID)
+	if err != nil {
+		return apperrors.Wrap("storage", "update_photo_metadata", err)
+	}
+	return nil
+}

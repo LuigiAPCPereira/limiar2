@@ -29,7 +29,10 @@ type NormalizedMessage struct {
 	Text           string
 	TextLength     int
 	MediaType      string // "photo"|"video"|"document"|"poll"|"webpage"|"none"
-	PhotoID        int64
+	PhotoID         int64
+	PhotoAccessHash int64  // MTProto access_hash para download sob demanda
+	PhotoFileRef    string // MTProto file_reference (base64, renovável)
+	PhotoDCID       int    // MTProto data center ID
 	Views          int
 	Forwards       int
 	ReplyToMsgID   int64
@@ -130,7 +133,7 @@ func Normalize(raw *storage.RawMessage) (*NormalizedMessage, error) {
 	nm.Text = cleanText(toString(msg["Message"]))
 	nm.TextLength = utf8.RuneCountInString(nm.Text)
 	nm.MediaType = extractMediaType(msg)
-	nm.PhotoID = extractPhotoID(msg)
+	nm.PhotoID, nm.PhotoAccessHash, nm.PhotoFileRef, nm.PhotoDCID = extractPhotoMetadata(msg)
 	nm.Views = toInt(msg["Views"])
 	nm.Forwards = toInt(msg["Forwards"])
 	nm.ReplyToMsgID = extractReplyTo(msg)
@@ -354,16 +357,23 @@ func extractMediaType(msg map[string]any) string {
 	return "none"
 }
 
-func extractPhotoID(msg map[string]any) int64 {
+// extractPhotoMetadata extrai os campos MTProto necessários para download
+// sob demanda via upload.GetFile (ADR 011). Retorna (0, 0, "", 0) se a
+// mensagem não contém Media.Photo.
+func extractPhotoMetadata(msg map[string]any) (int64, int64, string, int) {
 	media, ok := msg["Media"].(map[string]any)
 	if !ok {
-		return 0
+		return 0, 0, "", 0
 	}
 	photo, ok := media["Photo"].(map[string]any)
 	if !ok {
-		return 0
+		return 0, 0, "", 0
 	}
-	return toInt64(photo["ID"])
+	photoID := toInt64(photo["ID"])
+	accessHash := toInt64(photo["AccessHash"])
+	fileRef, _ := photo["FileReference"].(string)
+	dcid := toInt(photo["DCID"])
+	return photoID, accessHash, fileRef, dcid
 }
 
 func extractReplyTo(msg map[string]any) int64 {

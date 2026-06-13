@@ -530,3 +530,78 @@ func makeRaw(t *testing.T, id, channelID, messageID int64, payload map[string]an
 		SchemaVersion: 1,
 	}
 }
+
+func TestExtractPhotoMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      map[string]any
+		wantID   int64
+		wantHash int64
+		wantRef  string
+		wantDC   int
+	}{
+		{
+			name:     "sem media",
+			msg:      map[string]any{"ID": float64(1)},
+			wantID:   0,
+			wantHash: 0,
+			wantRef:  "",
+			wantDC:   0,
+		},
+		{
+			name: "media sem photo",
+			msg: map[string]any{
+				"Media": map[string]any{"Webpage": map[string]any{"URL": "https://x.com"}},
+			},
+			wantID: 0, wantHash: 0, wantRef: "", wantDC: 0,
+		},
+		{
+			name: "photo completo",
+			msg: map[string]any{
+				"Media": map[string]any{
+					"Photo": map[string]any{
+						"ID":            float64(4985843018),
+						"AccessHash":    float64(-7524180780),
+						"FileReference": "AlCZaRIAAXQAaiW+TljSnSegJJ4ybQVsJymwX1s=",
+						"DCID":          float64(2),
+					},
+				},
+			},
+			wantID:   4985843018,
+			wantHash: -7524180780,
+			wantRef:  "AlCZaRIAAXQAaiW+TljSnSegJJ4ybQVsJymwX1s=",
+			wantDC:   2,
+		},
+		{
+			name: "photo sem file_reference",
+			msg: map[string]any{
+				"Media": map[string]any{
+					"Photo": map[string]any{
+						"ID":         float64(123),
+						"AccessHash": float64(456),
+						"DCID":       float64(4),
+					},
+				},
+			},
+			wantID: 123, wantHash: 456, wantRef: "", wantDC: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, hash, ref, dc := extractPhotoMetadata(tt.msg)
+			if id != tt.wantID {
+				t.Errorf("PhotoID = %d, want %d", id, tt.wantID)
+			}
+			if hash != tt.wantHash {
+				t.Errorf("AccessHash = %d, want %d", hash, tt.wantHash)
+			}
+			if ref != tt.wantRef {
+				t.Errorf("FileRef = %q, want %q", ref, tt.wantRef)
+			}
+			if dc != tt.wantDC {
+				t.Errorf("DCID = %d, want %d", dc, tt.wantDC)
+			}
+		})
+	}
+}
