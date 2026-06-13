@@ -84,29 +84,21 @@ func BenchmarkSaveRawMessage_Single(b *testing.B) {
 // BenchmarkSaveRawMessageBatch_100 mede o throughput com lote de 100
 // mensagens por transação. Espera-se redução de ~100 fsyncs para 1 fsync
 // por lote, traduzindo em ganho de 10x–100x em disco rotacional/SSD.
+// Mensagens são pré-alocadas fora do loop para que o B/op reflita apenas
+// a operação de DB (mesma metodologia do benchmark Single).
 func BenchmarkSaveRawMessageBatch_100(b *testing.B) {
 	const batchSize = 100
 	_, repo, cleanup := openBenchRepo(b)
 	defer cleanup()
 
-	// b.N controla o número de LOTES (não mensagens individuais),
-	// para que a comparação com Single seja pelo mesmo total de mensagens.
+	msgs := makeBenchMessages(b.N*batchSize, 1)
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	msgCounter := int64(0)
 	for i := 0; i < b.N; i++ {
-		batch := make([]*storage.RawMessage, batchSize)
-		for j := 0; j < batchSize; j++ {
-			msgCounter++
-			batch[j] = &storage.RawMessage{
-				ChannelID:     1,
-				MessageID:     msgCounter,
-				Payload:       []byte(`{"_":"updateNewMessage","message":{"_":"message","id":0,"peer_id":{"_":"peerChannel","channel_id":1},"message":"oferta relâmpago","date":1700000000}}`),
-				ReceivedAt:    time.Now().UTC(),
-				SchemaVersion: 1,
-			}
-		}
-		if _, _, err := repo.SaveRawMessageBatch(context.Background(), batch); err != nil {
+		start := i * batchSize
+		end := start + batchSize
+		if _, _, err := repo.SaveRawMessageBatch(context.Background(), msgs[start:end]); err != nil {
 			b.Fatalf("SaveRawMessageBatch: %v", err)
 		}
 	}

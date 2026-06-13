@@ -332,7 +332,14 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 func (c *Collector) dbWriter(ctx context.Context) {
 	defer c.wg.Done()
 
-	batch := make([]WriteJob, 0, cap(c.writeCh))
+	// Limite de acúmulo do lote. Usa a capacidade do canal como teto, mas com
+	// floor de 100: quando writeCh é não-bufferizado (cap == 0), o batching
+	// permaneceria efetivo em vez de disparar flush a cada mensagem.
+	limit := cap(c.writeCh)
+	if limit == 0 {
+		limit = 100
+	}
+	batch := make([]WriteJob, 0, limit)
 	var timer *time.Timer
 	var timerC <-chan time.Time
 
@@ -357,7 +364,7 @@ func (c *Collector) dbWriter(ctx context.Context) {
 			}
 			batch = append(batch, job)
 			// Lote cheio: flush imediato sem esperar o timer.
-			if len(batch) >= cap(c.writeCh) {
+			if len(batch) >= limit {
 				c.flush(ctx, batch)
 				batch = batch[:0]
 				if timer != nil && !timer.Stop() {
@@ -394,21 +401,39 @@ func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
 
 	inserted, err := c.writeBatchWithRetry(ctx, msgs)
 
-	// Caminho feliz: lote commitado. Avança cursores, atualiza stats, dispara callbacks.
+	// Caminho feliz: lote commitado. Atualiza stats e dispara callbacks
+	// para cada mensagem persistida. Cursores de canal são consolidados
+	// (1 UPDATE por canal com o maior MessageID do lote) para evitar N
+	// fsyncs de cursor que anulariam o ganho do batch transacional.
 	if err == nil {
+		type cursorInfo struct {
+			msgID int64
+			recAt time.Time
+		}
+		latestCursors := make(map[int64]cursorInfo)
+
 		for i, job := range batch {
 			if inserted[i] {
 				atomic.AddInt64(&c.statsNew, 1)
 			} else {
 				atomic.AddInt64(&c.statsDuplicate, 1)
 			}
-			if !job.Backfill && job.Message.ChannelID != 0 {
-				if updErr := c.repo.UpdateChannelLastMessage(ctx, job.Message.ChannelID, job.Message.MessageID, job.Message.ReceivedAt); updErr != nil {
-					c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", updErr)
-				}
-			}
 			if c.onMessage != nil {
 				c.onMessage(job.Message)
+			}
+			if !job.Backfill && job.Message.ChannelID != 0 {
+				if existing, ok := latestCursors[job.Message.ChannelID]; !ok || job.Message.MessageID > existing.msgID {
+					latestCursors[job.Message.ChannelID] = cursorInfo{
+						msgID: job.Message.MessageID,
+						recAt: job.Message.ReceivedAt,
+					}
+				}
+			}
+		}
+
+		for chID, info := range latestCursors {
+			if updErr := c.repo.UpdateChannelLastMessage(ctx, chID, info.msgID, info.recAt); updErr != nil {
+				c.log.Warn("⚠️  Cursor não atualizado", "canal_id", chID, "erro", updErr)
 			}
 		}
 		return
