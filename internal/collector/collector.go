@@ -221,13 +221,25 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 	ceiling := int64(c.historyMax)
 	cutoff := time.Now().AddDate(0, 0, -c.historyMaxDays)
 	var totalFetched int64
-	var globalMaxID int64
+	// scannedMaxID é o maior MessageID entre mensagens varridas que NÃO são
+	// duplicatas abaixo do cursor (ou seja, mensagens acima do cursor ou
+	// descartadas pelo cutoff temporal). É o valor seguro para avançar o
+	// cursor:
+	//  - mensagens acima do cursor: varridas e enfileiradas → cursor avança
+	//  - mensagens filtradas pelo cutoff: vistas mas descartadas → cursor avança
+	//    (não serão úteis na próxima execução, pois continuarão antigas)
+	//  - mensagens abaixo do cursor (duplicatas reais): NÃO fazem scannedMaxID
+	//    crescer, então o cursor não avança em cenários de reprocessamento
+	//    onde todo o lote é duplicata.
+	// scannedMaxID == 0 significa "nenhuma mensagem acima do cursor foi vista"
+	// (tudo duplicata), e o orquestrador preserva o cursor armazenado.
+	var scannedMaxID int64
 	offsetID := int64(0)
 	firstPage := true
 
 	for {
 		if ctx.Err() != nil {
-			return totalFetched, globalMaxID, ctx.Err()
+			return totalFetched, scannedMaxID, ctx.Err()
 		}
 
 		remaining := ceiling - totalFetched
@@ -249,7 +261,7 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 			msgs, fetchErr = c.client.FetchHistoryWithOffset(ctx, ch.ID, offsetID, pageSize)
 		}
 		if fetchErr != nil {
-			return totalFetched, globalMaxID, fetchErr
+			return totalFetched, scannedMaxID, fetchErr
 		}
 		firstPage = false
 		if len(msgs) == 0 {
@@ -257,14 +269,10 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 		}
 
 		pageMinID := msgs[0].MessageID
-		pageMaxID := msgs[0].MessageID
 		pageMinDate := msgs[0].Date
 		for _, m := range msgs {
 			if m.MessageID < pageMinID {
 				pageMinID = m.MessageID
-			}
-			if m.MessageID > pageMaxID {
-				pageMaxID = m.MessageID
 			}
 			if m.Date.Before(pageMinDate) {
 				pageMinDate = m.Date
@@ -273,9 +281,15 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 
 		for _, m := range msgs {
 			// Pula mensagens iguais ou abaixo do cursor armazenado (já persistidas
-			// em uma execução anterior).
+			// em uma execução anterior). Estas são duplicatas REAIS — não entram
+			// no cálculo de scannedMaxID, evitando regressão do cursor em
+			// cenários de reprocessamento.
 			if cursor > 0 && m.MessageID <= cursor {
 				continue
+			}
+			// Mensagem acima do cursor: entra em scannedMaxID (foi varrida).
+			if m.MessageID > scannedMaxID {
+				scannedMaxID = m.MessageID
 			}
 			// Pula mensagens mais antigas que o limite temporal (cutoff).
 			if !m.Date.IsZero() && m.Date.Before(cutoff) {
@@ -294,13 +308,9 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 			select {
 			case c.writeCh <- job:
 			case <-ctx.Done():
-				return totalFetched, globalMaxID, ctx.Err()
+				return totalFetched, scannedMaxID, ctx.Err()
 			}
 			totalFetched++
-		}
-
-		if pageMaxID > globalMaxID {
-			globalMaxID = pageMaxID
 		}
 
 		// Se a mensagem mais antiga nesta página estiver no cursor armazenado ou abaixo dele,
@@ -319,7 +329,7 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 		offsetID = pageMinID
 	}
 
-	return totalFetched, globalMaxID, nil
+	return totalFetched, scannedMaxID, nil
 }
 
 // dbWriter é a única goroutine que escreve no banco de dados (fan-in). Ele
@@ -415,19 +425,23 @@ func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
 		for i, job := range batch {
 			if inserted[i] {
 				atomic.AddInt64(&c.statsNew, 1)
+				// Cursor só avança para mensagens efetivamente inseridas.
+				// Duplicatas (ON CONFLICT DO NOTHING) não representam progresso
+				// de coleta e podem carregar MessageID menor que o máximo já
+				// persistido no lote — avançar nelas poderia regredir o cursor.
+				if !job.Backfill && job.Message.ChannelID != 0 {
+					if existing, ok := latestCursors[job.Message.ChannelID]; !ok || job.Message.MessageID > existing.msgID {
+						latestCursors[job.Message.ChannelID] = cursorInfo{
+							msgID: job.Message.MessageID,
+							recAt: job.Message.ReceivedAt,
+						}
+					}
+				}
 			} else {
 				atomic.AddInt64(&c.statsDuplicate, 1)
 			}
 			if c.onMessage != nil {
 				c.onMessage(job.Message)
-			}
-			if !job.Backfill && job.Message.ChannelID != 0 {
-				if existing, ok := latestCursors[job.Message.ChannelID]; !ok || job.Message.MessageID > existing.msgID {
-					latestCursors[job.Message.ChannelID] = cursorInfo{
-						msgID: job.Message.MessageID,
-						recAt: job.Message.ReceivedAt,
-					}
-				}
 			}
 		}
 
@@ -479,13 +493,16 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 		}
 		if inserted {
 			atomic.AddInt64(&c.statsNew, 1)
+			// Cursor só avança para mensagens efetivamente inseridas.
+			// Duplicatas (ON CONFLICT DO NOTHING) não representam progresso
+			// de coleta.
+			if !job.Backfill && job.Message.ChannelID != 0 {
+				if err := c.repo.UpdateChannelLastMessage(ctx, job.Message.ChannelID, job.Message.MessageID, job.Message.ReceivedAt); err != nil {
+					c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", err)
+				}
+			}
 		} else {
 			atomic.AddInt64(&c.statsDuplicate, 1)
-		}
-		if !job.Backfill && job.Message.ChannelID != 0 {
-			if err := c.repo.UpdateChannelLastMessage(ctx, job.Message.ChannelID, job.Message.MessageID, job.Message.ReceivedAt); err != nil {
-				c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", err)
-			}
 		}
 		if c.onMessage != nil {
 			c.onMessage(job.Message)

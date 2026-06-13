@@ -46,10 +46,11 @@ type fakeRepo struct {
 	channels []*storage.Channel
 	saved    []*storage.RawMessage
 	cursors  map[int64]int64
+	seen     map[[2]int64]struct{} // (channel_id, message_id) já "persistidos" — simula ON CONFLICT DO NOTHING real
 }
 
 func newFakeRepo(channels ...*storage.Channel) *fakeRepo {
-	return &fakeRepo{channels: channels, cursors: make(map[int64]int64)}
+	return &fakeRepo{channels: channels, cursors: make(map[int64]int64), seen: make(map[[2]int64]struct{})}
 }
 
 func (f *fakeRepo) ListChannels(_ context.Context) ([]*storage.Channel, error) {
@@ -59,6 +60,11 @@ func (f *fakeRepo) ListChannels(_ context.Context) ([]*storage.Channel, error) {
 func (f *fakeRepo) SaveRawMessage(_ context.Context, msg *storage.RawMessage) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	key := [2]int64{msg.ChannelID, msg.MessageID}
+	if _, dup := f.seen[key]; dup {
+		return false, nil
+	}
+	f.seen[key] = struct{}{}
 	f.saved = append(f.saved, msg)
 	return true, nil
 }
@@ -67,11 +73,18 @@ func (f *fakeRepo) SaveRawMessageBatch(_ context.Context, msgs []*storage.RawMes
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	inserted := make([]bool, len(msgs))
+	total := 0
 	for i, msg := range msgs {
+		key := [2]int64{msg.ChannelID, msg.MessageID}
+		if _, dup := f.seen[key]; dup {
+			continue
+		}
+		f.seen[key] = struct{}{}
 		f.saved = append(f.saved, msg)
 		inserted[i] = true
+		total++
 	}
-	return inserted, len(msgs), nil
+	return inserted, total, nil
 }
 
 func (f *fakeRepo) UpdateChannelLastMessage(_ context.Context, channelID, messageID int64, _ time.Time) error {
@@ -114,6 +127,8 @@ func (c *fakeClient) FetchHistory(_ context.Context, _ int64, minID int64, limit
 			out = append(out, m)
 		}
 	}
+	// Ordenação descendente (as mais novas primeiro) como na API real.
+	sort.Slice(out, func(i, j int) bool { return out[i].MessageID > out[j].MessageID })
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}
@@ -259,5 +274,56 @@ func TestBackfillRespectsTemporalCutoff(t *testing.T) {
 	// limite temporal, mas não faz sentido repassar por elas na próxima execução.
 	if repo.cursors[1] != 40 {
 		t.Fatalf("expected cursor advanced to 40 (newest seen), got %d", repo.cursors[1])
+	}
+}
+
+// Regressão (Kilo-bot review): duplicatas não devem avançar o cursor.
+// Cenário: canal começa com cursor=105; histórico contém mensagens 1-105 já
+// persistidas (por uma execução anterior). O backfill encontra apenas duplicatas
+// (tudo abaixo ou igual ao cursor). Antes do fix, o dbWriter avançava o cursor
+// para max(1..105)=105 mesmo sem nenhuma inserção real — semanticamente incorreto
+// e potencialmente perigoso em reprocessamentos. Após o fix, scannedMaxID
+// permanece 0 e o orquestrador preserva o cursor em 105.
+func TestBackfillDoesNotAdvanceCursorOnDuplicates(t *testing.T) {
+	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 105}
+	repo := newFakeRepo(ch)
+
+	// Simula cursor previamente persistido em execução anterior (o valor que
+	// UpdateChannelLastMessage gravou no DB). O teste verifica que esse valor
+	// é PRESERVADO, não sobrescrito com 0.
+	repo.cursors[1] = 105
+
+	// Semeia o "DB" com as mensagens 1-105 já persistidas. O fakeRepo agora
+	// deduplica por (channel_id, message_id) simulando ON CONFLICT DO NOTHING.
+	for id := int64(1); id <= 105; id++ {
+		repo.saved = append(repo.saved, &storage.RawMessage{ChannelID: 1, MessageID: id})
+		repo.seen[[2]int64{1, id}] = struct{}{}
+	}
+
+	// Histórico completo (1..105).
+	history := make([]telegram.HistoryMessage, 105)
+	for i := range history {
+		history[i] = telegram.HistoryMessage{MessageID: int64(i + 1), Payload: []byte(`{}`)}
+	}
+	started := make(chan struct{})
+	client := &fakeClient{history: history, runStarted: started}
+	col := collector.NewCollector(client, repo, collector.NoopClassifier{}, nil, 256, 3, 5000, 30)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- col.Run(ctx) }()
+	<-started
+	cancel()
+	<-done
+
+	// Nenhuma mensagem nova inserida — todas eram duplicatas.
+	if repo.savedCount() != 105 {
+		t.Fatalf("expected no new inserts (saved stays at 105), got %d", repo.savedCount())
+	}
+	// Cursor NÃO deve ter sido sobrescrito — duplicatas não representam
+	// progresso. UpdateChannelLastMessage não é chamada quando scannedMaxID=0,
+	// então repo.cursors[1] permanece no valor semeado (105).
+	if repo.cursors[1] != 105 {
+		t.Fatalf("cursor must NOT be overwritten on duplicates: expected 105, got %d", repo.cursors[1])
 	}
 }
