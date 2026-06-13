@@ -108,7 +108,12 @@ func (m *MediaClient) RenewFileReference(ctx context.Context, channelID, msgID i
 // RefetchFromChannel re-coleta a mensagem do canal via messages.getHistory
 // (L3 hard) e extrai os metadados atualizados. FetchHistoryWithOffset já abre sua
 // própria conexão (runOnce interno) — não a envolvemos em outra.
+// Carrega os peers do banco primeiro — necessário para o caso CLI one-shot onde
+// o Client é criado sem LoadPeers (o collector faz isso em Run, mas aqui não).
 func (m *MediaClient) RefetchFromChannel(ctx context.Context, channelID, msgID int64) (*storage.PhotoMetadata, error) {
+	if err := m.c.LoadPeers(ctx); err != nil {
+		return nil, apperrors.Wrap("telegram", "load_peers", err)
+	}
 	msgs, err := m.c.FetchHistoryWithOffset(ctx, channelID, msgID, 1)
 	if err != nil {
 		return nil, apperrors.Wrap("telegram", "refetch", err)
