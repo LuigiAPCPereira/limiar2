@@ -85,17 +85,27 @@ func (m *MediaClient) DownloadPhoto(ctx context.Context, req media.PhotoDownload
 }
 
 // RenewFileReference re-busca a mensagem via messages.getMessages (L3 soft) e extrai
-// os metadados MTProto atualizados. Para mensagens de canal o getMessages pode não
-// retornar; o resolver então cai para RefetchFromChannel (L3 hard), que usa o
-// histórico do canal — caminho confiável para canais.
+// os metadados MTProto atualizados. Usa InputMessageChannelMessageID (com channel_id
+// + access_hash) porque InputMessageID não funciona para mensagens de canal.
 func (m *MediaClient) RenewFileReference(ctx context.Context, channelID, msgID int64) (*storage.PhotoMetadata, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if err := m.c.LoadPeers(ctx); err != nil {
+		return nil, apperrors.Wrap("telegram", "load_peers", err)
+	}
+	peer, ok := m.c.peers.Get(channelID)
+	if !ok {
+		return nil, apperrors.Wrap("telegram", "renew",
+			fmt.Errorf("peer not found for channel %d", channelID))
+	}
+
 	var meta *storage.PhotoMetadata
 	err := m.c.runOnce(ctx, func(ctx context.Context) error {
-		resp, err := m.c.tg.API().MessagesGetMessages(ctx,
-			[]tg.InputMessageClass{&tg.InputMessageID{ID: int(msgID)}})
+		resp, err := m.c.tg.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+			Channel: &tg.InputChannel{ChannelID: channelID, AccessHash: peer.AccessHash},
+			ID:      []tg.InputMessageClass{&tg.InputMessageID{ID: int(msgID)}},
+		})
 		if err != nil {
 			return wrapFileErr(err)
 		}
@@ -136,9 +146,10 @@ func (m *MediaClient) RefetchFromChannel(ctx context.Context, channelID, msgID i
 }
 
 // RefetchAndDownload re-coleta a mensagem e baixa a imagem na MESMA sessão
-// MTProto (runOnce). O file_reference é vinculado à sessão — fazer fetch e
-// download em sessões separadas resulta em FILE_REFERENCE_EXPIRED. Este método
-// resolve isso combinando MessagesGetHistory + upload.GetFile num único ciclo.
+// MTProto (runOnce). Usa MessagesGetMessages com InputMessageChannelMessageID
+// para buscar a mensagem exata (não MessagesGetHistory que retorna mensagens
+// ANTERIORES ao OffsetID). O file_reference fresco é usado imediatamente para
+// download na mesma sessão, evitando FILE_REFERENCE_EXPIRED.
 func (m *MediaClient) RefetchAndDownload(ctx context.Context, channelID, msgID int64) ([]byte, *storage.PhotoMetadata, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -156,18 +167,18 @@ func (m *MediaClient) RefetchAndDownload(ctx context.Context, channelID, msgID i
 	var meta *storage.PhotoMetadata
 
 	err := m.c.runOnce(ctx, func(ctx context.Context) error {
-		// Step 1: getHistory para obter a mensagem com file_reference fresco.
-		res, err := m.c.tg.API().MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
-			Peer:     &tg.InputPeerChannel{ChannelID: channelID, AccessHash: peer.AccessHash},
-			OffsetID: int(msgID),
-			Limit:    1,
+		// Step 1: channels.getMessages com InputChannel + InputMessageID para
+		// buscar a mensagem EXATA com file_reference fresco.
+		resp, err := m.c.tg.API().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+			Channel: &tg.InputChannel{ChannelID: channelID, AccessHash: peer.AccessHash},
+			ID:      []tg.InputMessageClass{&tg.InputMessageID{ID: int(msgID)}},
 		})
 		if err != nil {
-			return apperrors.Wrap("telegram", "get_history", err)
+			return apperrors.Wrap("telegram", "get_messages", err)
 		}
-		msgs, err := extractMessages(res)
+		msgs, err := extractMessages(resp)
 		if err != nil {
-			return apperrors.Wrap("telegram", "extract_history", err)
+			return apperrors.Wrap("telegram", "extract_messages", err)
 		}
 		if len(msgs) == 0 {
 			return apperrors.Wrap("telegram", "refetch_download",
@@ -192,7 +203,14 @@ func (m *MediaClient) RefetchAndDownload(ctx context.Context, channelID, msgID i
 			ThumbSize:     defaultThumbSize,
 		}
 		var buf bytes.Buffer
-		if _, derr := downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf); derr != nil {
+		_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
+		if derr != nil && tgerr.Is(derr, "FILE_REFERENCE_EXPIRED") {
+			// Retry sem file_reference — opcional com access_hash válido.
+			buf.Reset()
+			loc.FileReference = nil
+			_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
+		}
+		if derr != nil {
 			return wrapFileErr(derr)
 		}
 		data = buf.Bytes()
