@@ -298,6 +298,54 @@ func (r *Repository) SaveRawMessage(ctx context.Context, msg *RawMessage) (inser
 	return affected > 0, nil
 }
 
+// SaveRawMessageBatch persiste múltiplas mensagens capturadas em uma única transação.
+// Otimização de throughput: colapsa N operações BEGIN/COMMIT (cada uma com seu fsync)
+// em apenas 1 fsync, reduzindo a latência de escrita em ordens de magnitude durante
+// backfill ou rajadas (bursts) de captura ao vivo. O ON CONFLICT DO NOTHING mantém a
+// idempotência por (channel_id, message_id). Em caso de falha, nenhuma linha é persistida
+// (rollback atômico) e inserted é retornado nil com o erro.
+//
+// inserted[i] indica se msgs[i] foi uma nova inserção (true) ou duplicata (false).
+// totalInserted é o número de linhas efetivamente adicionadas (soma dos true).
+func (r *Repository) SaveRawMessageBatch(ctx context.Context, msgs []*RawMessage) (inserted []bool, totalInserted int, err error) {
+	if len(msgs) == 0 {
+		return nil, 0, nil
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, 0, apperrors.Wrap("storage", "save_raw_message_batch_begin", err)
+	}
+	// Rollback é no-op após Commit bem-sucedido; garante limpeza em falhas.
+	defer func() { _ = tx.Rollback() }()
+
+	stmt := tx.StmtContext(ctx, r.stmtSaveMessage)
+	inserted = make([]bool, len(msgs))
+	for i, msg := range msgs {
+		res, execErr := stmt.ExecContext(ctx,
+			msg.ChannelID, msg.MessageID, string(msg.Payload),
+			msg.ReceivedAt.UTC().Format(DBTimeLayout), msg.SchemaVersion)
+		if execErr != nil {
+			return nil, 0, apperrors.Wrap("storage", "save_raw_message_batch_exec", execErr)
+		}
+		affected, rowsErr := res.RowsAffected()
+		if rowsErr != nil {
+			// Mesma postura de SaveRawMessage: tratamos como "inserido" pois a
+			// statement foi executada com sucesso; apenas a contagem é incerta.
+			inserted[i] = true
+			totalInserted++
+			continue
+		}
+		if affected > 0 {
+			inserted[i] = true
+			totalInserted++
+		}
+	}
+	if commitErr := tx.Commit(); commitErr != nil {
+		return nil, 0, apperrors.Wrap("storage", "save_raw_message_batch_commit", commitErr)
+	}
+	return inserted, totalInserted, nil
+}
+
 // CountRawMessages retorna o número total de mensagens brutas (raw messages) armazenadas.
 func (r *Repository) CountRawMessages(ctx context.Context) (int64, error) {
 	var n int64
@@ -406,7 +454,7 @@ type ProcessedMessage struct {
 	HasCoupon      bool      `json:"has_coupon"`
 	PriceAmount    int64     `json:"price_amount"`
 	PriceCurrency  string    `json:"price_currency"`
-	UrgencySignals string   `json:"urgency_signals"`
+	UrgencySignals string    `json:"urgency_signals"`
 	PostedAt       time.Time `json:"posted_at"`
 	ProcessedAt    time.Time `json:"processed_at"`
 	PriceOriginal  int64     `json:"price_original"`
