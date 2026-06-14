@@ -31,8 +31,8 @@ func NewRepository(db *sql.DB) (*Repository, error) {
 			price_original, price_discount, coupon_code,
 			payment_method, shipping, installments, discount_percent,
 			url_hash, merchant, product_name, synthesis, is_duplicate, feed_eligible,
-			photo_access_hash, photo_file_ref, photo_dcid
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			photo_access_hash, photo_file_ref, photo_dcid, inline_thumb
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(channel_id, message_id) DO NOTHING`)
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "prepare_insert_processed", err)
@@ -148,6 +148,7 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		msg.PhotoAccessHash,
 		msg.PhotoFileRef,
 		msg.PhotoDCID,
+		msg.InlineThumb,
 	)
 	if err != nil {
 		return apperrors.Wrap("processor", "save_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
@@ -253,6 +254,7 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			msg.PhotoAccessHash,
 			msg.PhotoFileRef,
 			msg.PhotoDCID,
+			msg.InlineThumb,
 		)
 		if err != nil {
 			failed++
@@ -266,4 +268,3 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 	}
 	return saved, failed
 }
-

@@ -8,6 +8,7 @@ import (
 
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
+	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/telegram"
 )
@@ -49,6 +50,8 @@ type Collector struct {
 	historyMaxDays int
 	flushInterval  time.Duration
 	onMessage      func(*storage.RawMessage)
+	mediaClient    mediaClient
+	imageCache     imageCache
 
 	writeCh chan WriteJob
 	wg      sync.WaitGroup
@@ -64,6 +67,25 @@ type Collector struct {
 // banco de dados. É seguro chamar antes de Run. Passe nil para desabilitar.
 func (c *Collector) SetOnMessage(fn func(*storage.RawMessage)) {
 	c.onMessage = fn
+}
+
+// mediaClient abstrai o download de imagens via MTProto (satisfeito por
+// telegram.MediaClient que implementa media.MediaClient).
+type mediaClient interface {
+	DownloadPhoto(ctx context.Context, req media.PhotoDownloadRequest) ([]byte, error)
+}
+
+// imageCache abstrai o cache in-memory de imagens (satisfeito por media.ImageCache).
+type imageCache interface {
+	Put(photoID int64, data []byte)
+}
+
+// SetMediaDownload configura o download proativo de imagens. Quando uma mensagem
+// com foto é salva, o collector baixa a imagem full-res (janela onde file_reference
+// é válido) e armazena no cache compartilhado.
+func (c *Collector) SetMediaDownload(client mediaClient, cache imageCache) {
+	c.mediaClient = client
+	c.imageCache = cache
 }
 
 // NewCollector constrói um collector. writeBuffer define o tamanho do canal de fan-in;
@@ -507,6 +529,11 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 		if c.onMessage != nil {
 			c.onMessage(job.Message)
 		}
+		// Download proativo de imagem full-res (assíncrono).
+		// O file_reference MTProto é válido apenas na janela de chegada da mensagem.
+		if c.mediaClient != nil && c.imageCache != nil {
+			c.proactiveDownload(ctx, job.Message)
+		}
 		return
 	}
 
@@ -547,4 +574,26 @@ func (c *Collector) statsLoop(ctx context.Context) {
 func (c *Collector) shutdown() {
 	close(c.writeCh)
 	c.wg.Wait()
+}
+
+// proactiveDownload baixa a imagem full-res de uma mensagem e armazena no cache
+// compartilhado. Executa em goroutine para não bloquear o dbWriter.
+// O file_reference MTProto é válido apenas na janela de chegada da mensagem —
+// este é o único momento confiável para download full-res.
+func (c *Collector) proactiveDownload(ctx context.Context, msg *storage.RawMessage) {
+	req, err := telegram.ExtractPhotoRequest(msg.Payload)
+	if err != nil || req == nil {
+		return // sem foto ou erro de parse — silencioso
+	}
+	go func() {
+		data, err := c.mediaClient.DownloadPhoto(ctx, *req)
+		if err != nil {
+			c.log.Debug("download proativo falhou",
+				"photo_id", req.PhotoID, "erro", err)
+			return
+		}
+		c.imageCache.Put(req.PhotoID, data)
+		c.log.Debug("📷 download proativo OK",
+			"photo_id", req.PhotoID, "bytes", len(data))
+	}()
 }

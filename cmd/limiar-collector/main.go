@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -91,12 +92,24 @@ func (p *provider) NewMediaClient(log logger.Logger, repo *storage.Repository) m
 	return telegram.NewMediaClient(p.newTelegramClient(log, repo), log.WithComponent("media-client"))
 }
 
+// NewImageCache constrói o cache in-memory compartilhado entre Collector e API.
+// 500 entradas, TTL 30min (ADR 011 v2).
+func (p *provider) NewImageCache() *media.ImageCache {
+	return media.NewImageCache(500, 30*time.Minute)
+}
+
 // NewCollector monta o coletor com um NoopClassifier (Fase 1).
 func (p *provider) NewCollector(client telegram.TelegramClient, repo *storage.Repository, log logger.Logger) *collector.Collector {
-	return collector.NewCollector(
+	c := collector.NewCollector(
 		client, repo, collector.NoopClassifier{}, log.WithComponent("collector"),
 		p.cfg.DBWriterBufferSize, p.cfg.MaxRetries, p.cfg.HistoryMax, p.cfg.HistoryMaxDays,
 	)
+	// Wire up proactive download: full-res images are downloaded at arrival time
+	// (when file_reference is still valid) and stored in the shared cache.
+	mediaClient := p.NewMediaClient(log, repo)
+	cache := p.NewImageCache()
+	c.SetMediaDownload(mediaClient, cache)
+	return c
 }
 
 func main() {

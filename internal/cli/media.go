@@ -144,7 +144,7 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			resolver := media.NewMediaResolver(mediaClient, repo, cache, log)
 
 			presenter.Info(fmt.Sprintf("🔎 Resolvendo imagem (msg-id %d)...", msgID))
-			data, err := resolver.ResolveImage(ctx, msgID)
+			data, source, err := resolver.ResolveImage(ctx, msgID)
 			if err != nil {
 				if errors.Is(err, apperrors.ErrNoPhoto) {
 					return fmt.Errorf("mensagem %d não possui foto", msgID)
@@ -155,8 +155,8 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			if err := os.WriteFile(outPath, data, 0o644); err != nil {
 				return apperrors.Wrap("cli", "write_file", err)
 			}
-			presenter.Success(fmt.Sprintf("✅ %d bytes salvos em %s", len(data), outPath))
-			log.Info("📷 media resolve OK", "msg_id", msgID, "bytes", len(data), "out", outPath)
+			presenter.Success(fmt.Sprintf("✅ %d bytes salvos em %s (source: %s)", len(data), outPath, source))
+			log.Info("📷 media resolve OK", "msg_id", msgID, "bytes", len(data), "source", source)
 			return nil
 		},
 	}

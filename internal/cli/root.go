@@ -35,6 +35,8 @@ type Provider interface {
 	NewCollector(client telegram.TelegramClient, repo *storage.Repository, log logger.Logger) *collector.Collector
 	// NewMediaClient constrói o MediaClient concreto (gotd/td) usado por `media resolve`.
 	NewMediaClient(log logger.Logger, repo *storage.Repository) media.MediaClient
+	// NewImageCache constrói o cache in-memory compartilhado entre Collector e API.
+	NewImageCache() *media.ImageCache
 }
 
 // NewRootCmd constrói o comando raiz e anexa os subcomandos auth, channels e run,

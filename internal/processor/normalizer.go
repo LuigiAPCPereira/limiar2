@@ -2,6 +2,7 @@ package processor
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -53,6 +54,7 @@ type NormalizedMessage struct {
 	ProductName    string // nome do produto (heurística)
 	IsDuplicate    bool   // mesma URL já processada em outro canal
 	FeedEligible   bool   // elegível para o feed (deal_complete ou deal_no_coupon)
+	InlineThumb    []byte // thumbnail inline do Telegram (Type "i", ~230 bytes, sempre disponível)
 	UrgencySignals []string
 	MessageType    string // preenchido por Classify
 	Synthesis      string // JSON serializado de SynthesizedPromotion
@@ -134,6 +136,7 @@ func Normalize(raw *storage.RawMessage) (*NormalizedMessage, error) {
 	nm.TextLength = utf8.RuneCountInString(nm.Text)
 	nm.MediaType = extractMediaType(msg)
 	nm.PhotoID, nm.PhotoAccessHash, nm.PhotoFileRef, nm.PhotoDCID = extractPhotoMetadata(msg)
+	nm.InlineThumb = extractInlineThumb(msg)
 	nm.Views = toInt(msg["Views"])
 	nm.Forwards = toInt(msg["Forwards"])
 	nm.ReplyToMsgID = extractReplyTo(msg)
@@ -378,6 +381,40 @@ func extractPhotoMetadata(msg map[string]any) (int64, int64, string, int) {
 	fileRef, _ := photo["FileReference"].(string)
 	dcid := toInt(photo["DCID"])
 	return photoID, accessHash, fileRef, dcid
+}
+
+// extractInlineThumb extrai o thumbnail inline (Type "i") de Media.Photo.Sizes.
+// O Telegram inclui um thumbnail compacto (~230 bytes, base64) em cada mensagem
+// com foto. Este thumbnail é sempre disponível (não depende de file_reference
+// MTProto) e serve como fallback universal para o frontend (ADR 011 v2).
+func extractInlineThumb(msg map[string]any) []byte {
+	media, ok := msg["Media"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	photo, ok := media["Photo"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	sizes, ok := photo["Sizes"].([]any)
+	if !ok {
+		return nil
+	}
+	for _, s := range sizes {
+		size, ok := s.(map[string]any)
+		if !ok {
+			continue
+		}
+		if size["Type"] == "i" {
+			if b64, ok := size["Bytes"].(string); ok && b64 != "" {
+				decoded, err := base64.StdEncoding.DecodeString(b64)
+				if err == nil {
+					return decoded
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func extractReplyTo(msg map[string]any) int64 {

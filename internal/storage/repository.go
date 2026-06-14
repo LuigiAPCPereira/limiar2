@@ -729,6 +729,42 @@ func (r *Repository) UpdatePhotoMetadata(ctx context.Context, processedMsgID int
 	return nil
 }
 
+// GetPhotoID retorna o photo_id (Telegram) de uma mensagem processada.
+// Retorna (0, nil) se a mensagem não existe ou não tem foto.
+func (r *Repository) GetPhotoID(ctx context.Context, processedMsgID int64) (int64, error) {
+	var photoID sql.NullInt64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT photo_id FROM processed_messages WHERE id = ?`, processedMsgID).Scan(&photoID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, apperrors.Wrap("storage", "get_photo_id", err)
+	}
+	if !photoID.Valid {
+		return 0, nil
+	}
+	return photoID.Int64, nil
+}
+
+// GetInlineThumb retorna o thumbnail inline (Type "i") de uma mensagem pelo photo_id.
+// Usado pelo MediaResolver como fallback quando o cache não tem a imagem full-res.
+// Retorna (nil, nil) se a mensagem não tem inline thumb ou não existe.
+func (r *Repository) GetInlineThumb(ctx context.Context, photoID int64) ([]byte, error) {
+	var thumb []byte
+	err := r.db.QueryRowContext(ctx, `
+		SELECT inline_thumb FROM processed_messages
+		WHERE photo_id = ? AND inline_thumb IS NOT NULL
+		LIMIT 1`, photoID).Scan(&thumb)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, apperrors.Wrap("storage", "get_inline_thumb", err)
+	}
+	return thumb, nil
+}
+
 // PhotoStats resume a cobertura de metadados MTProto em processed_messages para
 // diagnóstico do subsistema de mídia (smoke test, ADR 011). Permite validar, em
 // produção, se o backfill da Fase A produziu metadados utilizáveis pelo

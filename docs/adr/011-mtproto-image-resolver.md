@@ -1,106 +1,95 @@
-# ADR 011 — Subsistema de Resolução de Imagens via MTProto Proxy
+# ADR 011 — Subsistema de Resolução de Imagens (v2)
 
 ## Status
 
-Aceito
+**Supercedido** (v1 supercedida por v2)
 
-## Contexto
+## Contexto (v1 — supercedida)
 
-As URLs HTTP de mídia do Telegram (`cdn1.telesco.pe/file/...`, `cdn4.telegram-cdn.org/file/...`)
-**não são persistentes** — expiram em ~48 horas retornando HTTP 404. Armazená-las no banco
-é inútil para consumo futuro pelo frontend.
+A abordagem original (proxy MTProto sob demanda com L1→L2→L3→L4) falhou porque
+`FILE_REFERENCE_EXPIRED` é **irrecuperável** para mensagens antigas via MTProto.
+O `file_reference` do Telegram expira em horas/dias e não pode ser renovado para
+mensagens que não aparecem em updates recentes da sessão.
 
-O RSShub resolveu esse problema na PR #13255 trocando de abordagem: ao invés de depender
-das URLs HTTP efêmeras, passou a usar conexão client-level via MTProto para buscar a mídia
-sob demanda e servi-la via proxy HTTP.
+## Decisão (v2 — Inline Thumbnail + Download Proativo)
 
-O Limiar já possui essa infraestrutura — `gotd/td` com sessão MTProto ativa no collector,
-e o orquestrador `limiar run` (ADR 009) que roda todos os componentes no mesmo processo.
+### Inline Thumbnail — Source of Truth Universal
 
-Os payloads brutos já coletados (`raw_messages.payload`) contêm os três campos MTProto
-necessários para download sob demanda:
+O Telegram inclui um thumbnail inline compacto (~230 bytes, base64) no payload de
+**cada mensagem com foto** (campo `Media.Photo.Sizes[]` onde `Type == "i"`). Este
+thumbnail é **sempre disponível** — não depende de `file_reference` MTProto.
 
-- `Photo.ID` — identificador permanente do arquivo (int64)
-- `Photo.AccessHash` — hash de acesso (int64)
-- `Photo.FileReference` — referência de sessão (base64, renovável)
-- `Photo.DCID` — data center ID (int, necessário para routing)
+- Extraído pelo Processor do `raw_messages.payload`
+- Persistido em `processed_messages.inline_thumb` (BLOB)
+- Cobertura: **100%** das mensagens com foto
+- Latência: sub-ms (query indexada)
+- Zero download necessário
 
-## Decisão
+### Download Proativo — Full-res Opcional
 
-### Abordagem: proxy MTProto sob demanda com cache in-memory
+O Collector baixa a imagem full-res (size "x", 800px) **no momento da chegada**
+da mensagem — a única janela onde `file_reference` MTProto é válido.
 
-O frontend nunca acessa URLs do Telegram diretamente. O `limiar-api` expõe um endpoint
-`GET /api/media/{msg_id}/photo` que faz stream dos bytes via MTProto. Um cache in-memory
-com LRU (max 200 entradas) + TTL (30 min) absorve requests repetidos sem storage permanente.
+- Executado em goroutine assíncrona (não bloqueia dbWriter)
+- Resultado armazenado no cache in-memory compartilhado
+- Disponível para o frontend via `MediaResolver.ResolveImage()`
+- **Opcional**: se falhar, o inline thumb serve como fallback universal
 
-### Onde vive: MediaResolver no orquestrador
+### Cache In-Memory — hashicorp/golang-lru
 
-O `MediaResolver` é um componente que vive dentro do orquestrador `limiar run`, compartilhando
-o processo com o collector. Isso dá ao resolver acesso direto à conexão MTProto do collector
-sem necessidade de IPC, gRPC, ou segunda sessão.
+```go
+expirable.NewLRU[int64, []byte](500, nil, 30*time.Minute)
+```
 
-### Sem storage permanente de imagens
+- LRU bounded (500 entradas, ~25MB a 50KB/imagem)
+- TTL 30 minutos
+- Compartilhado entre Collector, Processor e API (mesmo processo)
+- Thread-safe (sync.Mutex interno)
 
-Imagens NÃO são salvas em disco. Motivação:
-- Imagens podem ser re-baixadas via MTProto a qualquer momento (com renovação de `file_reference`)
-- Elimina complexidade de gestão de arquivos, limpeza, e espaço em disco
-- O cache in-memory com TTL é suficiente para a experiência de scroll infinito do frontend
+### API de Mídia — Fallback em Cadeia
 
-### Singleflight para corretude em produção
+```
+GET /api/v1/media/{photo_id}?size=full
+1. cache.Get(photoID)    → 200 image/jpeg + X-Source: collector-cache
+2. DB inline_thumb       → 200 image/jpeg + X-Source: inline-thumb
+3. 404
+```
 
-Dois usuários pedindo a mesma imagem simultaneamente NÃO podem disparar dois `upload.GetFile`
-MTProto independentes. `singleflight.Group` garante que a segunda request bloqueia e reutiliza
-o resultado da primeira. Isso é **corretude**, não apenas otimização — evita flood no MTProto
-e desperdício de banda.
-
-### Renovação automática de file_reference em 3 níveis
-
-| Nível | Trigger | Ação |
-|-------|---------|------|
-| L1 | Cache hit (LRU+TTL) | Retorna `[]byte` do cache. Zero chamadas MTProto |
-| L2 | Cache miss | `upload.GetFile(photo_id, access_hash, file_reference, dcid)`. Se sucesso → cache → retorna. Se `FILE_REFERENCE_EXPIRED` → L3 |
-| L3 | File reference expirado | **Soft:** `messages.getMessages(msg_id)` → atualiza `file_reference` no DB → retry. **Hard:** `FetchHistory(channel, msg_id, 1)` → atualiza todos os campos → retry |
-
-### Processor: apenas metadados, sem download
-
-O processor extrai e persiste os campos MTProto (`photo_access_hash`, `photo_file_ref`,
-`photo_dcid`) mas NÃO baixa imagens. O download é responsabilidade exclusiva do MediaResolver.
+O frontend mostra o inline thumb instantaneamente; faz upgrade lazy para full-res
+no clique/hover (se disponível no cache).
 
 ## Schema
 
-Novas colunas em `processed_messages` (migration 006):
-
 ```sql
-ALTER TABLE processed_messages ADD COLUMN photo_access_hash INTEGER DEFAULT 0;
-ALTER TABLE processed_messages ADD COLUMN photo_file_ref TEXT DEFAULT '';
-ALTER TABLE processed_messages ADD COLUMN photo_dcid INTEGER DEFAULT 0;
-
-CREATE INDEX IF NOT EXISTS idx_processed_media
-    ON processed_messages(photo_id) WHERE photo_id > 0;
+-- Migration 007
+ALTER TABLE processed_messages ADD COLUMN inline_thumb BLOB;
+CREATE INDEX IF NOT EXISTS idx_processed_inline_thumb
+    ON processed_messages(photo_id) WHERE inline_thumb IS NOT NULL;
 ```
 
 ## Consequências
 
 ### Positivas
-- Frontend com experiência completa: `<img src="/api/media/{id}/photo">` sempre funciona
-- Zero gestão de arquivos em disco
-- Cache bounded (10MB max com 200 entradas × 50KB)
-- Renovação transparente para o usuário
-- Singleflight previne flood MTProto
+- **100% de cobertura**: inline thumb sempre disponível para qualquer mensagem com foto
+- **Latência sub-ms**: query indexada, zero download
+- **Zero gestão de disco**: tudo in-memory
+- **Simplicidade radical**: cadeia cache → DB → 404 (vs L1→L2→L3→L4 anterior)
+- **Sem dependência de sessão MTProto ativa**: inline thumb funciona mesmo sem collector
 
 ### Negativas
-- Primeira request após cache miss tem latência MTProto (~200-500ms)
-- Restart do processo esvazia o cache (cold start)
-- Dependência da sessão MTProto ativa (se collector não está rodando, sem imagens)
+- Inline thumb é ~230 bytes (thumbnail compacto, não full-res)
+- Full-res depende de download proativo no momento da chegada (janela finita)
+- Restart do processo esvazia o cache (cold start: inline thumb como fallback)
 
-### Riscos mitigados
-- **Canal deletado**: L3 hard falha → imagem marcada como `unavailable` no log, endpoint retorna 404
-- **Forward de outro canal**: `photo_id` + `access_hash` são globais, funcionam cross-canal
-- **Imagem muito grande**: download limitado ao Size "x" (800px, ~50KB), não full resolution
+## Dependências
 
-## Alternativas consideradas
+- `github.com/hashicorp/golang-lru/v2/expirable` — única dependência externa nova
+- Zero escrita em disco para imagens (constraint não-negociável)
 
-1. **Collector baixa tudo na coleta** — rejeitado: baixa fotos de mensagens inúteis (~10% de waste)
-2. **Processor com acesso MTProto** — rejeitado: viola fronteira do processor (sem telegram)
-3. **Cache em disco com TTL** — rejeitado: complexidade desnecessária, in-memory é suficiente
-4. **URLs HTTP do Telegram** — rejeitado: expiram em 48h, inutilizável
+## O que foi removido (v1 → v2)
+
+- L2: Download MTProto sob demanda (`upload.GetFile`)
+- L3: Renovação de `file_reference` (soft + hard)
+- L4: Scraping da página pública do canal
+- `ScrapePhotoURL`, `DownloadHTTP`, `RefetchAndDownload`, `RenewFileReference`
+- `singleflight.Group` (desnecessário com download proativo)
