@@ -168,7 +168,7 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 					presenter.Step(fmt.Sprintf("📥 Baixando %d bytes via HTTP...", len(photoURL)))
 					data, dlErr := downloadHTTP(ctx, photoURL)
 					if dlErr == nil {
-						if wErr := os.WriteFile(outPath, data, 0o644); wErr != nil {
+						if wErr := os.WriteFile(outPath, data, 0o600); wErr != nil {
 							return apperrors.Wrap("cli", "write_file", wErr)
 						}
 						presenter.Success(fmt.Sprintf("✅ %d bytes salvos em %s (via scraping)", len(data), outPath))
@@ -194,7 +194,7 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 				return apperrors.Wrap("cli", "media_resolve", err)
 			}
 
-			if err := os.WriteFile(outPath, data, 0o644); err != nil {
+			if err := os.WriteFile(outPath, data, 0o600); err != nil {
 				return apperrors.Wrap("cli", "write_file", err)
 			}
 			presenter.Success(fmt.Sprintf("✅ %d bytes salvos em %s (via MTProto)", len(data), outPath))
