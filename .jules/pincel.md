@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2025-10-18 - Padrão WAI-ARIA para Tabs em Dashboards Vanilla
+**Aprendizado:** Abas (tabs) construídas apenas com `<div>` e `<button>` e controladas por JavaScript (como Alpine.js) sem roles explícitas tornam impossível para leitores de tela identificar a navegação e a estrutura da interface, pois não sabem que os botões controlam conteúdos específicos.
+**Ação:** Sempre implementar o padrão WAI-ARIA para tabs usando `role="tablist"` no container das abas, `role="tab"` com `aria-controls` e `aria-selected` nos botões acionadores, e `role="tabpanel"` com `aria-labelledby` e `tabindex="0"` no container do conteúdo para garantir navegação acessível e previsível.
