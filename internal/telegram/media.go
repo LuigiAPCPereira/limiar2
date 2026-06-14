@@ -346,7 +346,7 @@ func (m *MediaClient) ScrapePhotoURL(ctx context.Context, username string, msgID
 	if err != nil {
 		return "", apperrors.Wrap("telegram", "scrape_fetch", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", apperrors.Wrap("telegram", "scrape_fetch",
