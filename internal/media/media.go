@@ -50,6 +50,9 @@ type MediaClient interface {
 	// HTTP que pode ser baixada sem file_reference MTProto. Retorna erro se o
 	// canal não for público ou a mensagem não for encontrada na página.
 	ScrapePhotoURL(ctx context.Context, username string, msgID int64) (string, error)
+	// DownloadHTTP baixa bytes de uma URL via HTTP GET. Usado para baixar
+	// imagens do CDN do Telegram após scraping (sem MTProto).
+	DownloadHTTP(ctx context.Context, url string) ([]byte, error)
 }
 
 // MediaRepository abstrai o acesso ao banco para metadados de foto. É satisfeita
@@ -59,6 +62,7 @@ type MediaRepository interface {
 	GetPhotoMetadata(ctx context.Context, processedMsgID int64) (*storage.PhotoMetadata, error)
 	UpdateFileReference(ctx context.Context, processedMsgID int64, fileRef string) error
 	UpdatePhotoMetadata(ctx context.Context, processedMsgID int64, meta *storage.PhotoMetadata) error
+	GetChannelUsername(ctx context.Context, channelID int64) (string, error)
 }
 
 // downloadRequestFromMeta monta a requisição de download a partir dos metadados

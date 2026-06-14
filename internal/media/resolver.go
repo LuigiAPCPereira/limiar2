@@ -117,19 +117,44 @@ func (r *MediaResolver) renewAndRetry(ctx context.Context, meta *storage.PhotoMe
 
 	// L3 hard — log do motivo do soft ter falhado para debugging em produção.
 	// Usa RefetchAndDownload: fetch + download na MESMA sessão MTProto.
-	// O file_reference é vinculado à sessão — sessões separadas causam
-	// FILE_REFERENCE_EXPIRED (bug descoberto em produção).
 	r.log.Debug("L3 soft falhou, escalando para hard",
 		"msg_id", meta.MsgID, "canal_id", meta.ChannelID, "erro_soft", softErr)
 	data, refetched, err := r.client.RefetchAndDownload(ctx, meta.ChannelID, meta.MsgID)
+	if err == nil {
+		if perr := r.repo.UpdatePhotoMetadata(ctx, meta.ID, refetched); perr != nil {
+			r.log.Warn("falha ao persistir metadados renovados (não fatal)",
+				"msg_id", meta.MsgID, "erro", perr)
+		}
+		r.cache.Put(refetched.PhotoID, data)
+		return data, nil
+	}
+
+	// L4: scraping fallback — quando MTProto falha persistentemente
+	// (FILE_REFERENCE_EXPIRED para mensagens antigas), tenta scraping da
+	// página pública do canal + download HTTP. Apenas canais públicos.
+	r.log.Debug("L3 hard falhou, tentando scraping",
+		"msg_id", meta.MsgID, "canal_id", meta.ChannelID, "erro_hard", err)
+	return r.tryScrape(ctx, meta)
+}
+
+// tryScrape busca o username do canal, faz scraping da página pública e baixa
+// a imagem via HTTP. Resultado é cacheado no LRU. Fallback final quando MTProto
+// não consegue baixar (FILE_REFERENCE_EXPIRED para mensagens antigas).
+func (r *MediaResolver) tryScrape(ctx context.Context, meta *storage.PhotoMetadata) ([]byte, error) {
+	username, err := r.repo.GetChannelUsername(ctx, meta.ChannelID)
 	if err != nil {
-		return nil, apperrors.Wrap("media", "hard_renew", err)
+		return nil, apperrors.Wrap("media", "scrape_username", err)
 	}
-	if perr := r.repo.UpdatePhotoMetadata(ctx, meta.ID, refetched); perr != nil {
-		r.log.Warn("falha ao persistir metadados renovados (não fatal)",
-			"msg_id", meta.MsgID, "erro", perr)
+	photoURL, err := r.client.ScrapePhotoURL(ctx, username, meta.MsgID)
+	if err != nil {
+		return nil, apperrors.Wrap("media", "scrape_url", err)
 	}
-	r.cache.Put(refetched.PhotoID, data)
+	data, err := r.client.DownloadHTTP(ctx, photoURL)
+	if err != nil {
+		return nil, apperrors.Wrap("media", "scrape_download", err)
+	}
+	r.cache.Put(meta.PhotoID, data)
+	r.log.Debug("scrape OK", "msg_id", meta.MsgID, "bytes", len(data))
 	return data, nil
 }
 

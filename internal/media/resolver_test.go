@@ -42,6 +42,9 @@ func (f *fakeClient) RefetchAndDownload(ctx context.Context, ch, msg int64) ([]b
 func (f *fakeClient) ScrapePhotoURL(ctx context.Context, username string, msgID int64) (string, error) {
 	return "", errors.New("ScrapePhotoURL not configured")
 }
+func (f *fakeClient) DownloadHTTP(ctx context.Context, url string) ([]byte, error) {
+	return nil, errors.New("DownloadHTTP not configured")
+}
 
 type fakeRepo struct {
 	mu           sync.Mutex
@@ -51,6 +54,7 @@ type fakeRepo struct {
 	upMetaCalled bool
 	updatedRef   string
 	updatedMeta  *storage.PhotoMetadata
+	username     string
 }
 
 func (r *fakeRepo) GetPhotoMetadata(context.Context, int64) (*storage.PhotoMetadata, error) {
@@ -69,6 +73,12 @@ func (r *fakeRepo) UpdatePhotoMetadata(_ context.Context, _ int64, meta *storage
 	r.upMetaCalled = true
 	r.updatedMeta = meta
 	return nil
+}
+func (r *fakeRepo) GetChannelUsername(_ context.Context, _ int64) (string, error) {
+	if r.username == "" {
+		return "", errors.New("channel not found")
+	}
+	return r.username, nil
 }
 
 func newResolver(c MediaClient, repo MediaRepository) *MediaResolver {
@@ -239,9 +249,51 @@ func TestResolveImage_AllRenewFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("esperava erro quando toda renovação falha")
 	}
-	if !strings.Contains(err.Error(), "media: hard_renew") {
-		t.Errorf("err = %q, quer prefixo 'media: hard_renew'", err.Error())
+	if !strings.Contains(err.Error(), "media: scrape_") {
+		t.Errorf("err = %q, quer prefixo 'media: scrape_'", err.Error())
 	}
+}
+
+// TestResolveImage_L4ScrapeFallback valida que quando MTProto falha (L2+L3),
+// o resolver tenta scraping (L4) e retorna a imagem baixada via HTTP.
+func TestResolveImage_L4ScrapeFallback(t *testing.T) {
+	repo := &fakeRepo{meta: photoMeta(50), username: "testchannel"}
+	cli := &fakeClient{
+		downloadFn: func(context.Context, PhotoDownloadRequest) ([]byte, error) {
+			return nil, apperrors.ErrFileReferenceExpired
+		},
+		renewFn: func(context.Context, int64, int64) (*storage.PhotoMetadata, error) {
+			return nil, errors.New("soft fail")
+		},
+		refetchAndDownloadFn: func(context.Context, int64, int64) ([]byte, *storage.PhotoMetadata, error) {
+			return nil, nil, errors.New("hard fail")
+		},
+	}
+	// Override scraping para retornar sucesso
+	cli2 := &scrapeableClient{fakeClient: cli, scrapeURL: "https://cdn.telesco.pe/test.jpg", httpData: []byte("jpeg-scraped")}
+	r := newResolver(cli2, repo)
+
+	got, err := r.ResolveImage(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("ResolveImage: %v", err)
+	}
+	if string(got) != "jpeg-scraped" {
+		t.Errorf("got %q, quer jpeg-scraped", got)
+	}
+}
+
+// scrapeableClient envolve fakeClient com scraping funcional.
+type scrapeableClient struct {
+	*fakeClient
+	scrapeURL string
+	httpData  []byte
+}
+
+func (s *scrapeableClient) ScrapePhotoURL(_ context.Context, _ string, _ int64) (string, error) {
+	return s.scrapeURL, nil
+}
+func (s *scrapeableClient) DownloadHTTP(_ context.Context, _ string) ([]byte, error) {
+	return s.httpData, nil
 }
 
 // TestResolveImage_SingleflightDedup valida que N requests concorrentes para a

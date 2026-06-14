@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 
@@ -52,10 +51,9 @@ func NewMediaClient(c *Client, log logger.Logger) *MediaClient {
 // Compile-time: MediaClient satisfaz media.MediaClient.
 var _ media.MediaClient = (*MediaClient)(nil)
 
-// DownloadPhoto baixa a variante defaultThumbSize da foto via upload.GetFile.
-// O downloader do gotd cuida da transferência de DC automaticamente.
-// Se o file_reference estiver expirado, retenta sem ele — em MTProto o campo é
-// opcional quando photo_id + access_hash são válidos na sessão autenticada.
+// DownloadPhoto baixa a variante defaultThumbSize da foto via Client.Download().
+// Usa a infraestrutura completa de download do gotd (DC transfers, CDN).
+// Se o file_reference estiver expirado, retenta sem ele.
 func (m *MediaClient) DownloadPhoto(ctx context.Context, req media.PhotoDownloadRequest) ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -69,12 +67,11 @@ func (m *MediaClient) DownloadPhoto(ctx context.Context, req media.PhotoDownload
 			FileReference: req.FileReference,
 			ThumbSize:     defaultThumbSize,
 		}
-		_, derr := downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
+		_, derr := m.c.tg.Download(loc).Stream(ctx, &buf)
 		if derr != nil && tgerr.Is(derr, "FILE_REFERENCE_EXPIRED") {
-			// Retry sem file_reference — opcional em MTProto com access_hash válido.
 			buf.Reset()
 			loc.FileReference = nil
-			_, derr = downloader.NewDownloader().Download(m.c.tg.API(), loc).Stream(ctx, &buf)
+			_, derr = m.c.tg.Download(loc).Stream(ctx, &buf)
 		}
 		if derr != nil {
 			return wrapFileErr(derr)
@@ -198,46 +195,38 @@ func (m *MediaClient) RefetchAndDownload(ctx context.Context, channelID, msgID i
 			"photo_id", meta.PhotoID, "access_hash", meta.AccessHash,
 			"file_ref_len", len(meta.FileReference), "dcid", meta.DCID)
 
-		// Step 3: download direto via upload.GetFile (mesma sessão, sem wrapper).
-		// Tenta tamanho "m" (320px) primeiro — menor chance de problemas de DC.
+		// Step 3: download via gotd Client.Download() que usa a infraestrutura
+		// completa de download (DC transfers, CDN). O método anterior usava
+		// API().UploadGetFile() diretamente, que NÃO lida com FILE_MIGRATE
+		// e resulta em FILE_REFERENCE_EXPIRED.
 		ref, derr := decodeFileRef(meta.FileReference)
 		if derr != nil {
 			return apperrors.Wrap("telegram", "decode_fileref", derr)
 		}
 
-		// Tenta com ambos os tamanhos: "m" (320px), "x" (800px), "y" (1280px).
 		var buf bytes.Buffer
-		for _, thumbSize := range []string{"m", "x", "y"} {
+		for _, thumbSize := range []string{"x", "m", "y"} {
 			loc := &tg.InputPhotoFileLocation{
 				ID:            meta.PhotoID,
 				AccessHash:    meta.AccessHash,
 				FileReference: ref,
 				ThumbSize:     thumbSize,
 			}
+			buf.Reset()
 			m.log.Debug("RefetchAndDownload: tentando download",
 				"thumb_size", thumbSize, "photo_id", meta.PhotoID)
 
-			file, ferr := m.c.tg.API().UploadGetFile(ctx, &tg.UploadGetFileRequest{
-				Location: loc,
-				Offset:   0,
-				Limit:    1024 * 1024,
-			})
+			_, ferr := m.c.tg.Download(loc).Stream(ctx, &buf)
 			if ferr != nil {
 				m.log.Debug("RefetchAndDownload: falhou",
 					"thumb_size", thumbSize, "err", fmt.Sprintf("%v", ferr))
-				continue // tenta próximo tamanho
+				continue
 			}
-
-			switch f := file.(type) {
-			case *tg.UploadFile:
-				buf.Write(f.Bytes)
+			if buf.Len() > 0 {
 				m.log.Debug("RefetchAndDownload: sucesso",
-					"thumb_size", thumbSize, "bytes", len(f.Bytes))
+					"thumb_size", thumbSize, "bytes", buf.Len())
 				data = buf.Bytes()
 				return nil
-			default:
-				m.log.Debug("RefetchAndDownload: tipo inesperado", "type", fmt.Sprintf("%T", file))
-				continue
 			}
 		}
 		return apperrors.Wrap("telegram", "download_all_sizes",
@@ -385,4 +374,28 @@ func (m *MediaClient) ScrapePhotoURL(ctx context.Context, username string, msgID
 	}
 	return "", apperrors.Wrap("telegram", "scrape_photo",
 		fmt.Errorf("msg %d não encontrada na página de @%s", msgID, username))
+}
+
+// DownloadHTTP baixa bytes de uma URL via HTTP GET. Usado pelo resolver para
+// baixar imagens do CDN do Telegram após scraping (sem MTProto, sem file_reference).
+func (m *MediaClient) DownloadHTTP(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, apperrors.Wrap("telegram", "http_request", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Limiar/1.0)")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, apperrors.Wrap("telegram", "http_fetch", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apperrors.Wrap("telegram", "http_fetch",
+			fmt.Errorf("HTTP %d", resp.StatusCode))
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
+	if err != nil {
+		return nil, apperrors.Wrap("telegram", "http_read", err)
+	}
+	return data, nil
 }

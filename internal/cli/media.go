@@ -1,11 +1,8 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"time"
 
@@ -103,9 +100,8 @@ func runMediaSmoke(cmd *cobra.Command, p Provider, msgID int64) error {
 }
 
 // newResolveCmd constrói `media resolve`: baixa a imagem de uma mensagem e salva
-// no disco. Tenta primeiro web scraping da página pública do canal (t.me/s/username)
-// que não precisa de file_reference MTProto. Se falhar (canal privado ou mensagem
-// não encontrada na página), cai para o resolver MTProto (cache L1 + L2 + L3).
+// no disco. O MediaResolver tenta em ordem: cache L1 → MTProto L2 → renovação L3
+// → scraping L4 (página pública do canal).
 func newResolveCmd(p Provider) *cobra.Command {
 	var msgID int64
 	var outPath string
@@ -115,11 +111,11 @@ func newResolveCmd(p Provider) *cobra.Command {
 		Short: "Baixar a imagem de uma mensagem e salvar no disco",
 		Long: `Baixa a imagem da mensagem processada informada e salva no disco.
 
-Estratégia (em ordem):
-  1. Web scraping da página pública do canal (t.me/s/username) — rápido,
-     sem file_reference, funciona para canais públicos.
-  2. MTProto via MediaResolver (cache L1 + download L2 + renovação L3) —
-     para canais privados ou quando o scraping falha.
+O MediaResolver tenta automaticamente (em ordem):
+  L1: Cache in-memory (LRU + TTL 30min)
+  L2: Download MTProto via upload.GetFile
+  L3: Renovação de file_reference (soft → hard)
+  L4: Scraping da página pública do canal + download HTTP
 
 O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 		Args: cobra.NoArgs,
@@ -143,49 +139,11 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			}
 			defer func() { _ = closeStore() }()
 
-			// Busca metadados da mensagem para obter channel_id e message_id.
-			meta, err := repo.GetPhotoMetadata(ctx, msgID)
-			if err != nil {
-				return apperrors.Wrap("cli", "get_metadata", err)
-			}
-			if meta.PhotoID == 0 {
-				return fmt.Errorf("mensagem %d não possui foto", msgID)
-			}
-
-			// Busca o username do canal para scraping.
-			username, err := repo.GetChannelUsername(ctx, meta.ChannelID)
-			if err != nil {
-				log.Debug("canal não encontrado para scraping", "channel_id", meta.ChannelID)
-			}
-
 			mediaClient := p.NewMediaClient(log, repo)
-
-			// Estratégia 1: web scraping (não precisa de MTProto).
-			if username != "" {
-				presenter.Info(fmt.Sprintf("🔎 Tentando scraping de @%s (msg %d)...", username, meta.MsgID))
-				photoURL, scrapeErr := mediaClient.ScrapePhotoURL(ctx, username, meta.MsgID)
-				if scrapeErr == nil {
-					presenter.Step(fmt.Sprintf("📥 Baixando %d bytes via HTTP...", len(photoURL)))
-					data, dlErr := downloadHTTP(ctx, photoURL)
-					if dlErr == nil {
-						if wErr := os.WriteFile(outPath, data, 0o644); wErr != nil {
-							return apperrors.Wrap("cli", "write_file", wErr)
-						}
-						presenter.Success(fmt.Sprintf("✅ %d bytes salvos em %s (via scraping)", len(data), outPath))
-						log.Info("📷 media resolve OK (scraping)", "msg_id", msgID, "bytes", len(data))
-						return nil
-					}
-					log.Warn("download HTTP falhou, caindo para MTProto", "erro", dlErr)
-				} else {
-					log.Debug("scraping falhou, caindo para MTProto", "erro", scrapeErr)
-				}
-			}
-
-			// Estratégia 2: MTProto via MediaResolver.
 			cache := media.NewImageCache(200, 30*time.Minute)
 			resolver := media.NewMediaResolver(mediaClient, repo, cache, log)
 
-			presenter.Info(fmt.Sprintf("🔎 Resolvendo via MTProto (msg-id %d)...", msgID))
+			presenter.Info(fmt.Sprintf("🔎 Resolvendo imagem (msg-id %d)...", msgID))
 			data, err := resolver.ResolveImage(ctx, msgID)
 			if err != nil {
 				if errors.Is(err, apperrors.ErrNoPhoto) {
@@ -197,8 +155,8 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			if err := os.WriteFile(outPath, data, 0o644); err != nil {
 				return apperrors.Wrap("cli", "write_file", err)
 			}
-			presenter.Success(fmt.Sprintf("✅ %d bytes salvos em %s (via MTProto)", len(data), outPath))
-			log.Info("📷 media resolve OK (MTProto)", "msg_id", msgID, "bytes", len(data))
+			presenter.Success(fmt.Sprintf("✅ %d bytes salvos em %s", len(data), outPath))
+			log.Info("📷 media resolve OK", "msg_id", msgID, "bytes", len(data), "out", outPath)
 			return nil
 		},
 	}
@@ -206,22 +164,4 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 	cmd.Flags().Int64Var(&msgID, "msg-id", 0, "ID da mensagem processada (obrigatório)")
 	cmd.Flags().StringVar(&outPath, "out", "", "arquivo de saída JPEG (obrigatório)")
 	return cmd
-}
-
-// downloadHTTP baixa o conteúdo de uma URL via HTTP GET.
-func downloadHTTP(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Limiar/1.0)")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	return io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 }
