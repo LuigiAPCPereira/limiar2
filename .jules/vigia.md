@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-16 - [File Permissions] Forçar permissões estritas para arquivos de mídia baixados
+**Vulnerabilidade:** A CLI usava `os.WriteFile` com permissões `0o644` ao baixar arquivos de mídia e imagens do Telegram (via `media resolve`). Como os arquivos baixados de conversas privadas/canais podem conter dados sensíveis, essas permissões são excessivamente abertas (world-readable), gerando alertas como o G306 no `gosec`.
+**Aprendizado:** Arquivos gerados a partir de dados protegidos (como mídias do Telegram) devem herdar a mesma postura de segurança que os metadados do banco, isto é, ter leitura restrita.
+**Prevenção:** Sempre utilizar permissões `0o600` ao criar ou escrever arquivos que contenham informações advindas do Telegram (como payloads baixados por `os.WriteFile`), evitando a exposição dos arquivos a outros usuários no sistema local.
