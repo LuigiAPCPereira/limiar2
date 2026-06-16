@@ -46,7 +46,7 @@ jobs:
         
         # Inspeciona o go.mod diretamente
         for pkg in "${FORBIDDEN_IMPORTS[@]}"; do
-          if grep -q "$pkg" go.mod; then
+          if go list -m -f '{{if not .Indirect}}{{.Path}}{{end}}' all | grep -q "$pkg$"; then
             echo "::error::Importação proibida detectada: $pkg. O uso de drivers SQLite não-Turso ou ORMs é estritamente proibido pela arquitetura."
             exit 1
           fi
