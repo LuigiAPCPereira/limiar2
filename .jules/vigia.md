@@ -17,3 +17,7 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+## 2026-06-18 - Log seguro em panic recovery do Dispatcher
+**Vulnerabilidade:** O uso de `%v` ao logar o objeto do `recover()` em `internal/telegram/dispatcher.go` expunha os campos internos da struct via reflection. Em caso de panic causado por uma struct maliciosa ou sensível (ex: token MTProto), o segredo era vazado no output.
+**Aprendizado:** Em Go, utilizar `%v` diretamente em valores desconhecidos (como `any` retornado por `recover()`) pode contornar os mecanismos baseados em keys que os loggers (como `slog`) utilizam para ocultar segredos, pois a biblioteca `fmt` faz a stringificação antes de repassar o texto.
+**Prevenção:** Sempre utilize type switch ao resgatar `recover()`. Utilize interfaces seguras (como `error` via método `Error()`) ou strings cruas para emitir uma mensagem de diagnóstico segura, evitando dump literal do objeto em si.

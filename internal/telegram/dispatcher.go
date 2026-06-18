@@ -89,10 +89,16 @@ func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update)
 	defer func() {
 		if r := recover(); r != nil {
 			// Evitar logar o objeto de panic bruto para não vazar a sessão.
-			// Formatamos como erro para preservar a string do panic sem imprimir
-			// os conteúdos literais que o objeto poderia conter caso fosse impresso
-			// pela reflexão do logger.
-			d.log.Error("💥 Panic no handler recuperado", "erro", fmt.Errorf("panic: %v", r))
+			// Em vez de formatar com %v (que expõe dados internos), usamos o tipo com %T
+			// e tentamos extrair uma string de erro segura se possível.
+			safeMsg := fmt.Sprintf("%T", r)
+			switch v := r.(type) {
+			case error:
+				safeMsg = v.Error()
+			case string:
+				safeMsg = v
+			}
+			d.log.Error("💥 Panic no handler recuperado", "erro", fmt.Errorf("panic: %s", safeMsg))
 		}
 	}()
 	if err := h.HandleUpdate(ctx, update); err != nil {
