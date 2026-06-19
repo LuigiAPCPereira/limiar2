@@ -80,7 +80,10 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Updat
 		return apperrors.Wrap("collector", "classify", err)
 	}
 
-	h.log.Info("📩 Mensagem ao vivo", "canal_id", update.ChannelID, "msg_id", update.MessageID)
+	// Reduz interface boxing em chamadas de Logger no hot path
+	if _, ok := h.log.(logger.NopLogger); !ok {
+		h.log.Info("📩 Mensagem ao vivo", "canal_id", update.ChannelID, "msg_id", update.MessageID)
+	}
 
 	select {
 	case h.writeCh <- WriteJob{Message: classified}:

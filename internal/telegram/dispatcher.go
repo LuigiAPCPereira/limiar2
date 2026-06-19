@@ -96,7 +96,10 @@ func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update)
 		}
 	}()
 	if err := h.HandleUpdate(ctx, update); err != nil {
-		d.log.Error("❌ Handler retornou erro", "erro", err)
+		// Reduz interface boxing em chamadas de Logger no hot path
+		if _, ok := d.log.(logger.NopLogger); !ok {
+			d.log.Error("❌ Handler retornou erro", "erro", err)
+		}
 	}
 }
 
