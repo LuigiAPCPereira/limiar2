@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-19 - [File Permissions] Restrição de permissões em arquivos de mídia via media resolve
+**Vulnerabilidade:** A geração e escrita no sistema local de arquivos de imagens pelo comando CLI de `media resolve` utilizava uma permissão `0o644` (leitura universal para a máquina hospedeira). Isso expõe imagens vindas de canais privados do Telegram a usuários indesejados locais.
+**Aprendizado:** Quando o sistema manipula mídias/arquivos do banco de dados/Telegram para armazenamento local, é indispensável obedecer à regra de Menor Privilégio na criação de arquivos (Least Privilege).
+**Prevenção:** Sempre utilizar `0o600` ao criar arquivos com `os.WriteFile` que manipulem dados recuperados por requests autenticados.

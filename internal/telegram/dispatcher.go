@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/limiar/collector/internal/logger"
@@ -89,10 +88,18 @@ func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update)
 	defer func() {
 		if r := recover(); r != nil {
 			// Evitar logar o objeto de panic bruto para não vazar a sessão.
-			// Formatamos como erro para preservar a string do panic sem imprimir
-			// os conteúdos literais que o objeto poderia conter caso fosse impresso
-			// pela reflexão do logger.
-			d.log.Error("💥 Panic no handler recuperado", "erro", fmt.Errorf("panic: %v", r))
+			// Extraímos a mensagem com type switch para evitar o uso de reflexão
+			// (%v), o que poderia expor dados do objeto como o session token.
+			var errMsg string
+			switch v := r.(type) {
+			case error:
+				errMsg = v.Error()
+			case string:
+				errMsg = v
+			default:
+				errMsg = "tipo de panic não mapeado"
+			}
+			d.log.Error("💥 Panic no handler recuperado", "erro", errMsg)
 		}
 	}()
 	if err := h.HandleUpdate(ctx, update); err != nil {
