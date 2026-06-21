@@ -47,7 +47,7 @@ func newRunCmd(p Provider) *cobra.Command {
 
 			if withDashboard {
 				broker := dashboard.NewBroker()
-				srv := dashboard.NewServer(repo, log, 8080, broker)
+				srv := dashboard.NewServer(repo, nil, log, 8080, broker)
 
 				col.SetOnMessage(func(msg *model.RawMessage) {
 					data, err := json.Marshal(msg)

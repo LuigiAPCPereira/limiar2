@@ -36,7 +36,7 @@ func newDashboardCmd(p Provider) *cobra.Command {
 			log := p.Logger(format)
 			presenter := p.Presenter()
 
-			srv := dashboard.NewServer(repo, log, port, nil)
+			srv := dashboard.NewServer(repo, nil, log, port, nil)
 			presenter.Info(fmt.Sprintf("Dashboard: http://localhost:%d", port))
 			presenter.Step("Pressione Ctrl+C para encerrar")
 			return srv.ListenAndServe(ctx)

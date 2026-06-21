@@ -11,6 +11,8 @@ import (
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/media"
+	"github.com/limiar/collector/internal/processor"
+	"github.com/limiar/collector/internal/storage"
 )
 
 // newMediaCmd constrói o subcomando `media`: diagnóstico e validação do subsistema
@@ -58,15 +60,21 @@ func runMediaSmoke(cmd *cobra.Command, p Provider, msgID int64) error {
 	log := p.Logger(format)
 	presenter := p.Presenter()
 
-	repo, closeStore, err := p.OpenStore(ctx)
+	store, err := storage.Open(ctx, cfg.DBPath)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = closeStore() }()
+	defer func() { _ = store.Close() }()
+
+	procRepo, err := processor.NewRepository(store.DB())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = procRepo.Close() }()
 
 	presenter.Info("📷 Smoke test do subsistema de mídia")
 
-	stats, err := repo.PhotoMetadataStats(ctx)
+	stats, err := procRepo.PhotoMetadataStats(ctx)
 	if err != nil {
 		return apperrors.Wrap("cli", "media_stats", err)
 	}
@@ -80,7 +88,7 @@ func runMediaSmoke(cmd *cobra.Command, p Provider, msgID int64) error {
 	}
 
 	if msgID > 0 {
-		meta, err := repo.GetPhotoMetadata(ctx, msgID)
+		meta, err := procRepo.GetPhotoMetadata(ctx, msgID)
 		if err != nil {
 			presenter.Warning(fmt.Sprintf("msg-id %d: %v", msgID, err))
 		} else {
@@ -133,15 +141,20 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			log := p.Logger(format)
 			presenter := p.Presenter()
 
-			repo, closeStore, err := p.OpenStore(ctx)
+			store, err := storage.Open(ctx, cfg.DBPath)
 			if err != nil {
 				return err
 			}
-			defer func() { _ = closeStore() }()
+			defer func() { _ = store.Close() }()
 
+			procRepo, err := processor.NewRepository(store.DB())
+			if err != nil {
+				return err
+			}
+			defer func() { _ = procRepo.Close() }()
 
 			cache := media.NewCache(200, 30*time.Minute)
-			resolver := media.NewResolver(repo, cache, log)
+			resolver := media.NewResolver(procRepo, cache, log)
 
 			presenter.Info(fmt.Sprintf("🔎 Resolvendo imagem (msg-id %d)...", msgID))
 			data, source, err := resolver.ResolveImage(ctx, msgID)

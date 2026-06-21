@@ -10,27 +10,40 @@ import (
 	"time"
 
 	"github.com/limiar/collector/internal/logger"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
+	"github.com/limiar/collector/internal/processor"
 )
 
 // Server é um dashboard HTTP minimalista para inspecionar mensagens capturadas.
 // Quando o broker não é nil, o endpoint SSE /api/events é habilitado para
 // atualizações em tempo real.
 type Server struct {
-	repo      *storage.Repository
+	repo      dashboardRepo
+	processed processor.ProcessedReader
 	log       logger.Logger
 	port      int
 	broker    *Broker
 	startedAt time.Time
 }
 
+// dashboardRepo define as queries de leitura do storage consumidas pelo dashboard.
+type dashboardRepo interface {
+	ListChannels(ctx context.Context) ([]*model.Channel, error)
+	ListMessages(ctx context.Context, channelID int64, limit, offset int) ([]*model.RawMessage, error)
+	GetMessageByID(ctx context.Context, id int64) (*model.RawMessage, error)
+	CountMessagesByChannel(ctx context.Context) ([]model.ChannelStats, error)
+	CountRawMessages(ctx context.Context) (int64, error)
+}
+
 // NewServer constrói um servidor de dashboard na porta fornecida. broker pode ser nil
 // para desabilitar o SSE (o dashboard fará fallback para polling).
-func NewServer(repo *storage.Repository, log logger.Logger, port int, broker *Broker) *Server {
+// processed pode ser nil para desabilitar as queries de mensagens processadas
+// (usado pelo limiar-collector standalone que não tem acesso ao processor).
+func NewServer(repo dashboardRepo, processed processor.ProcessedReader, log logger.Logger, port int, broker *Broker) *Server {
 	if log == nil {
 		log = logger.NopLogger{}
 	}
-	return &Server{repo: repo, log: log, port: port, broker: broker, startedAt: time.Now()}
+	return &Server{repo: repo, processed: processed, log: log, port: port, broker: broker, startedAt: time.Now()}
 }
 
 // ListenAndServe inicia o servidor HTTP e bloqueia até que ctx seja cancelado.
@@ -144,6 +157,10 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProcessed(w http.ResponseWriter, r *http.Request) {
+	if s.processed == nil {
+		s.writeJSON(w, []any{})
+		return
+	}
 	channelID, _ := strconv.ParseInt(r.URL.Query().Get("channel_id"), 10, 64)
 	msgType := r.URL.Query().Get("type")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -155,7 +172,7 @@ func (s *Server) handleProcessed(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	msgs, err := s.repo.ListProcessedMessages(r.Context(), channelID, msgType, limit, offset)
+	msgs, err := s.processed.ListProcessedMessages(r.Context(), channelID, msgType, limit, offset)
 	if err != nil {
 		s.log.Error("Erro interno no dashboard", "erro", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -165,13 +182,17 @@ func (s *Server) handleProcessed(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProcessedStats(w http.ResponseWriter, r *http.Request) {
-	stats, err := s.repo.CountProcessedByType(r.Context())
+	if s.processed == nil {
+		s.writeJSON(w, map[string]any{"total": 0, "by_type": []any{}})
+		return
+	}
+	stats, err := s.processed.CountProcessedByType(r.Context())
 	if err != nil {
 		s.log.Error("Erro interno no dashboard", "erro", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	total, _ := s.repo.CountProcessedMessages(r.Context())
+	total, _ := s.processed.CountProcessedMessages(r.Context())
 	s.writeJSON(w, map[string]any{
 		"total":   total,
 		"by_type": stats,

@@ -113,7 +113,7 @@ func run() error {
 		return fmt.Errorf("limiar: criar dashboard repository: %w", err)
 	}
 	defer func() { _ = dashRepo.Close() }()
-	srv := dashboard.NewServer(dashRepo, log.WithComponent("dashboard"), 8080, broker)
+	srv := dashboard.NewServer(dashRepo, procRepo, log.WithComponent("dashboard"), 8080, broker)
 
 	col.SetOnMessage(func(msg *model.RawMessage) {
 		data, err := json.Marshal(msg)
