@@ -30,16 +30,9 @@ import (
 	"context"
 )
 
-// ImagePayload carrega os bytes de uma imagem baixada pelo Collector.
-// Enviada do Collector para o cache compartilhado.
-type ImagePayload struct {
-	PhotoID int64
-	Data    []byte
-}
-
-// MediaClient abstrai o download de imagens via MTProto.
+// Client abstrai o download de imagens via MTProto.
 // A implementação concreta sobre gotd/td vive em internal/telegram.
-type MediaClient interface {
+type Client interface {
 	// DownloadPhoto baixa os bytes da imagem usando os campos MTProto.
 	// Usado pelo Collector no momento da chegada da mensagem (janela onde
 	// file_reference é válido).
@@ -55,8 +48,8 @@ type PhotoDownloadRequest struct {
 	DCID          int
 }
 
-// MediaRepository abstrai o acesso ao banco para o subsistema de media.
-type MediaRepository interface {
+// Repository abstrai o acesso ao banco para o subsistema de media.
+type Repository interface {
 	// GetPhotoID retorna o photo_id (Telegram) de uma mensagem processada.
 	// Retorna (0, nil) se a mensagem não existe ou não tem foto.
 	GetPhotoID(ctx context.Context, processedMsgID int64) (int64, error)

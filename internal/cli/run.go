@@ -29,7 +29,7 @@ func newRunCmd(p Provider) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := p.Config()
 
-			format, _ := logger.ResolveFormat("run", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 			log := p.Logger(format)
 			presenter := p.Presenter()
 

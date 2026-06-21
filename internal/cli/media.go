@@ -54,7 +54,7 @@ func runMediaSmoke(cmd *cobra.Command, p Provider, msgID int64) error {
 	ctx := cmd.Context()
 
 	cfg := p.Config()
-	format, _ := logger.ResolveFormat("media", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+	format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 	log := p.Logger(format)
 	presenter := p.Presenter()
 
@@ -129,7 +129,7 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			}
 
 			cfg := p.Config()
-			format, _ := logger.ResolveFormat("media", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 			log := p.Logger(format)
 			presenter := p.Presenter()
 
@@ -139,9 +139,9 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			}
 			defer func() { _ = closeStore() }()
 
-			mediaClient := p.NewMediaClient(log, repo)
-			cache := media.NewImageCache(200, 30*time.Minute)
-			resolver := media.NewMediaResolver(mediaClient, repo, cache, log)
+
+			cache := media.NewCache(200, 30*time.Minute)
+			resolver := media.NewResolver(repo, cache, log)
 
 			presenter.Info(fmt.Sprintf("🔎 Resolvendo imagem (msg-id %d)...", msgID))
 			data, source, err := resolver.ResolveImage(ctx, msgID)

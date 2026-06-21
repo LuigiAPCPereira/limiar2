@@ -3,6 +3,7 @@ package logger
 import (
 	"io"
 	"os"
+	"sync"
 
 	"golang.org/x/term"
 )
@@ -38,8 +39,9 @@ var (
 
 // TerminalPresenter é a implementação concreta de Presenter para terminais.
 // Escreve mensagens formatadas com prefixo de emoji e cor ANSI condicional.
-// Sem mutex: cada método faz uma única Write, atômica para mensagens < PIPE_BUF.
+// Thread-safe: mu serializa escritas no writer compartilhado.
 type TerminalPresenter struct {
+	mu        sync.Mutex
 	w         io.Writer
 	useColors bool
 }
@@ -60,6 +62,8 @@ func (t *TerminalPresenter) Error(text string)   { t.emit(MsgError, text) }
 func (t *TerminalPresenter) Step(text string)    { t.emit(MsgStep, text) }
 
 func (t *TerminalPresenter) emit(mt MessageType, text string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	var buf [512]byte
 	b := buf[:0]
 	if t.useColors {

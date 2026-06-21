@@ -11,8 +11,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -25,6 +23,7 @@ import (
 	"github.com/limiar/collector/internal/collector"
 	"github.com/limiar/collector/internal/config"
 	"github.com/limiar/collector/internal/dashboard"
+	"github.com/limiar/collector/internal/id"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/processor"
 	"github.com/limiar/collector/internal/storage"
@@ -57,8 +56,8 @@ func run() error {
 	}
 
 	// --- Logger ---
-	runID := generateRunID()
-	format, _ := logger.ResolveFormat("run", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+	runID := id.NewRunID()
+	format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 	log := logger.NewSlogLogger(os.Stdout, logger.ParseLevel(cfg.LogLevel), format).
 		With("run_id", runID, "service", "limiar", "pipeline_stage", "orchestrator")
 	presenter := logger.NewTerminalPresenter(os.Stderr,
@@ -160,11 +159,3 @@ func run() error {
 	return nil
 }
 
-// generateRunID produz 8 bytes aleatórios formatados como hex (16 chars).
-func generateRunID() string {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "0000000000000000"
-	}
-	return hex.EncodeToString(b)
-}

@@ -25,14 +25,14 @@ func (r *fakeRepo) GetInlineThumb(_ context.Context, _ int64) ([]byte, error) {
 	return r.thumb, r.thumbErr
 }
 
-func newResolver(repo MediaRepository, cache *ImageCache) *MediaResolver {
-	return NewMediaResolver(nil, repo, cache, logger.NopLogger{})
+func newResolver(repo Repository, cache *Cache) *Resolver {
+	return NewResolver(repo, cache, logger.NopLogger{})
 }
 
 // --- tests ---
 
 func TestResolveImage_CacheHit(t *testing.T) {
-	cache := NewImageCache(10, 0)
+	cache := NewCache(10, 0)
 	cache.Put(42, []byte("cached-img"))
 
 	repo := &fakeRepo{photoID: 42}
@@ -51,7 +51,7 @@ func TestResolveImage_CacheHit(t *testing.T) {
 }
 
 func TestResolveImage_InlineThumbFallback(t *testing.T) {
-	cache := NewImageCache(10, 0)
+	cache := NewCache(10, 0)
 
 	repo := &fakeRepo{photoID: 42, thumb: []byte("inline-thumb-data")}
 	r := newResolver(repo, cache)
@@ -69,7 +69,7 @@ func TestResolveImage_InlineThumbFallback(t *testing.T) {
 }
 
 func TestResolveImage_NoPhoto(t *testing.T) {
-	cache := NewImageCache(10, 0)
+	cache := NewCache(10, 0)
 
 	repo := &fakeRepo{photoID: 0} // no photo
 	r := newResolver(repo, cache)
@@ -81,7 +81,7 @@ func TestResolveImage_NoPhoto(t *testing.T) {
 }
 
 func TestResolveImage_NoThumbNoCache(t *testing.T) {
-	cache := NewImageCache(10, 0)
+	cache := NewCache(10, 0)
 
 	repo := &fakeRepo{photoID: 42, thumb: nil} // photo exists but no inline thumb
 	r := newResolver(repo, cache)
@@ -93,7 +93,7 @@ func TestResolveImage_NoThumbNoCache(t *testing.T) {
 }
 
 func TestResolveImage_DBError(t *testing.T) {
-	cache := NewImageCache(10, 0)
+	cache := NewCache(10, 0)
 
 	repo := &fakeRepo{photoID: 42, thumbErr: errors.New("db offline")}
 	r := newResolver(repo, cache)
@@ -105,7 +105,7 @@ func TestResolveImage_DBError(t *testing.T) {
 }
 
 func TestPutCache(t *testing.T) {
-	cache := NewImageCache(10, 0)
+	cache := NewCache(10, 0)
 	r := newResolver(&fakeRepo{}, cache)
 
 	r.PutCache(42, []byte("proactive-img"))

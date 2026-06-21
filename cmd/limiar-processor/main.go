@@ -5,8 +5,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -16,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/limiar/collector/internal/dashboard"
+	"github.com/limiar/collector/internal/id"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/processor"
 	"github.com/limiar/collector/internal/storage"
@@ -45,10 +44,9 @@ func run() error {
 		return err
 	}
 
-	format, _ := logger.ResolveFormat("processor", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+	format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 	log := logger.NewSlogLogger(os.Stdout, logger.ParseLevel(cfg.LogLevel), format).
-		With("run_id", generateRunID(), "service", "limiar-processor", "pipeline_stage", "processor")
-
+		With("run_id", id.NewRunID(), "service", "limiar-processor", "pipeline_stage", "processor")
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
@@ -96,11 +94,3 @@ func run() error {
 	}
 }
 
-// generateRunID produz 8 bytes aleatórios formatados como hex (16 chars).
-func generateRunID() string {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "0000000000000000"
-	}
-	return hex.EncodeToString(b)
-}

@@ -25,6 +25,8 @@ var (
 	ErrDBWriteFailed = stderrors.New("falha ao gravar no banco de dados")
 	// ErrMaxRetriesExceeded indica que um loop de repetição esgotou seu limite.
 	ErrMaxRetriesExceeded = stderrors.New("máximo de tentativas excedido")
+	// ErrMessageNotFound indica que uma mensagem raw não foi encontrada no banco.
+	ErrMessageNotFound = stderrors.New("mensagem não encontrada")
 	// ErrNoPhoto indica que a mensagem processada não possui mídia de foto para
 	// resolver. Retornado pelo MediaResolver quando photo_id == 0 (ADR 011).
 	ErrNoPhoto = stderrors.New("mensagem sem foto")

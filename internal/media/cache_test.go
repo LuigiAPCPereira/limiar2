@@ -1,12 +1,13 @@
 package media
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestImageCache_PutAndGet(t *testing.T) {
-	c := NewImageCache(3, time.Minute)
+	c := NewCache(3, time.Minute)
 
 	c.Put(1, []byte("img1"))
 	c.Put(2, []byte("img2"))
@@ -28,7 +29,7 @@ func TestImageCache_PutAndGet(t *testing.T) {
 }
 
 func TestImageCache_LRUEviction(t *testing.T) {
-	c := NewImageCache(2, time.Minute)
+	c := NewCache(2, time.Minute)
 
 	c.Put(1, []byte("img1"))
 	c.Put(2, []byte("img2"))
@@ -51,7 +52,7 @@ func TestImageCache_LRUEviction(t *testing.T) {
 }
 
 func TestImageCache_TTLExpiry(t *testing.T) {
-	c := NewImageCache(10, 50*time.Millisecond)
+	c := NewCache(10, 50*time.Millisecond)
 
 	c.Put(1, []byte("img1"))
 
@@ -69,7 +70,7 @@ func TestImageCache_TTLExpiry(t *testing.T) {
 }
 
 func TestImageCache_Len(t *testing.T) {
-	c := NewImageCache(5, time.Minute)
+	c := NewCache(5, time.Minute)
 
 	if c.Len() != 0 {
 		t.Errorf("Len() = %d; want 0", c.Len())
@@ -80,5 +81,41 @@ func TestImageCache_Len(t *testing.T) {
 
 	if c.Len() != 2 {
 		t.Errorf("Len() = %d; want 2", c.Len())
+	}
+}
+
+// TestCache_Concurrent verifica que o cache é thread-safe para uso compartilhado
+// entre Collector (Put proativo) e API (Get). Execute com -race.
+func TestCache_Concurrent(t *testing.T) {
+	c := NewCache(100, 30*time.Minute)
+
+	const goroutines = 10
+	const opsPerGoroutine = 50
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(base int) {
+			defer wg.Done()
+			for i := 0; i < opsPerGoroutine; i++ {
+				id := int64(base*opsPerGoroutine + i)
+				c.Put(id, []byte{byte(id % 256)})
+				// Get no mesmo ID ou em outro aleatório.
+				if i%2 == 0 {
+					c.Get(id)
+				} else {
+					c.Get(int64((base+1)%goroutines*opsPerGoroutine + i))
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Após toda concorrência, Len deve refletir estado estável.
+	n := c.Len()
+	if n <= 0 || n > 100 {
+		t.Errorf("Len() = %d; want 1..100", n)
 	}
 }

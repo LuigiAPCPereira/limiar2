@@ -5,7 +5,6 @@ package logger
 const (
 	attrKeyComponent     = "component"
 	attrKeyRunID         = "run_id"
-	attrKeyError         = "erro"
 	attrKeyService       = "service"
 	attrKeyPipelineStage = "pipeline_stage"
 )

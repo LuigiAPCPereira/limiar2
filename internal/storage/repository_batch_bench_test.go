@@ -46,8 +46,8 @@ func openBenchRepo(b *testing.B) (*storage.DB, *storage.Repository, func()) {
 	}
 }
 
-// makeBenchMessages produz N mensagens com payloads distintos (tamanho ~512B)
-// para um único canal, espelhando o formato típico de update do Telegram.
+// makeBenchMessages produz N mensagens compartilhando o mesmo payload (~512B)
+// com MessageIDs sequenciais (1..N), espelhando o formato típico de update do Telegram.
 func makeBenchMessages(n int, channelID int64) []*storage.RawMessage {
 	msgs := make([]*storage.RawMessage, n)
 	payload := []byte(`{"_":"updateNewMessage","message":{"_":"message","id":0,"peer_id":{"_":"peerChannel","channel_id":` +
@@ -84,8 +84,8 @@ func BenchmarkSaveRawMessage_Single(b *testing.B) {
 // BenchmarkSaveRawMessageBatch_100 mede o throughput com lote de 100
 // mensagens por transação. Espera-se redução de ~100 fsyncs para 1 fsync
 // por lote, traduzindo em ganho de 10x–100x em disco rotacional/SSD.
-// Mensagens são pré-alocadas fora do loop para que o B/op reflita apenas
-// a operação de DB (mesma metodologia do benchmark Single).
+// Cada iteração processa um subrange distinto de MessageIDs (1..100, 101..200, ...),
+// portanto todas as execuções são INSERTs reais, não duplicatas.
 func BenchmarkSaveRawMessageBatch_100(b *testing.B) {
 	const batchSize = 100
 	_, repo, cleanup := openBenchRepo(b)

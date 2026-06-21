@@ -5,8 +5,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"time"
@@ -16,6 +14,7 @@ import (
 	"github.com/limiar/collector/internal/cli"
 	"github.com/limiar/collector/internal/collector"
 	"github.com/limiar/collector/internal/config"
+	"github.com/limiar/collector/internal/id"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/storage"
@@ -34,7 +33,7 @@ func (p *provider) Config() *config.Config { return p.cfg }
 // Vincula automaticamente run_id, service e pipeline_stage para correlação.
 func (p *provider) Logger(format string) logger.Logger {
 	log := logger.NewSlogLogger(os.Stdout, logger.ParseLevel(p.cfg.LogLevel), format)
-	return log.With("run_id", generateRunID(), "service", "limiar-collector", "pipeline_stage", "collector")
+	return log.With("run_id", id.NewRunID(), "service", "limiar-collector", "pipeline_stage", "collector")
 }
 
 // Presenter constrói um TerminalPresenter escrevendo em stderr.
@@ -87,15 +86,15 @@ func (p *provider) NewClient(log logger.Logger, repo *storage.Repository) telegr
 }
 
 // NewMediaClient envolve a facade telegram.Client em telegram.MediaClient (que
-// implementa media.MediaClient) para o comando `media resolve`.
-func (p *provider) NewMediaClient(log logger.Logger, repo *storage.Repository) media.MediaClient {
+// implementa media.Client) para o comando `media resolve`.
+func (p *provider) NewMediaClient(log logger.Logger, repo *storage.Repository) media.Client {
 	return telegram.NewMediaClient(p.newTelegramClient(log, repo), log.WithComponent("media-client"))
 }
 
 // NewImageCache constrói o cache in-memory compartilhado entre Collector e API.
 // 500 entradas, TTL 30min (ADR 011 v2).
-func (p *provider) NewImageCache() *media.ImageCache {
-	return media.NewImageCache(500, 30*time.Minute)
+func (p *provider) NewImageCache() *media.Cache {
+	return media.NewCache(500, 30*time.Minute)
 }
 
 // NewCollector monta o coletor com um NoopClassifier (Fase 1).
@@ -130,14 +129,4 @@ func run() error {
 
 	root := cli.NewRootCmd(&provider{cfg: cfg})
 	return root.ExecuteContext(context.Background())
-}
-
-// generateRunID produz 8 bytes aleatórios formatados como hex (16 chars).
-// Usa crypto/rand para garantir unicidade entre execuções.
-func generateRunID() string {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "0000000000000000"
-	}
-	return hex.EncodeToString(b)
 }

@@ -21,7 +21,7 @@ func newAuthCmd(p Provider) *cobra.Command {
 			ctx := cmd.Context()
 			cfg := p.Config()
 
-			format, _ := logger.ResolveFormat("auth", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 			log := p.Logger(format)
 			presenter := p.Presenter()
 

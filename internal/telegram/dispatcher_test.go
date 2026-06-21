@@ -2,7 +2,6 @@ package telegram_test
 
 import (
 	"context"
-	stderrors "errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -32,15 +31,6 @@ func (panicHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
 	panic("boom")
 }
 
-// errHandler retorna um erro, para verificar se o dispatcher faz log sem falhar.
-//nolint:unused
-type errHandler struct{ called atomic.Bool }
-
-//nolint:unused
-func (h *errHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
-	h.called.Store(true)
-	return stderrors.New("handler failed")
-}
 
 func TestDispatcherFansOutToAllHandlers(t *testing.T) {
 	d := telegram.NewDispatcher(256, nil)

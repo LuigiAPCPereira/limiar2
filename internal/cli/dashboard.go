@@ -32,7 +32,7 @@ func newDashboardCmd(p Provider) *cobra.Command {
 			defer func() { _ = closeStore() }()
 
 			cfg := p.Config()
-			format, _ := logger.ResolveFormat("dashboard", cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
+			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 			log := p.Logger(format)
 			presenter := p.Presenter()
 

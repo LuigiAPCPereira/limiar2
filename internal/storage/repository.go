@@ -264,17 +264,6 @@ func (r *Repository) GetChannel(ctx context.Context, id int64) (*Channel, error)
 	return ch, nil
 }
 
-// GetChannelUsername retorna o username de um canal pelo ID.
-// Usado pelo subsistema de mídia para scraping da página pública.
-func (r *Repository) GetChannelUsername(ctx context.Context, id int64) (string, error) {
-	var username string
-	err := r.db.QueryRowContext(ctx,
-		`SELECT username FROM channels WHERE id = ?`, id).Scan(&username)
-	if err != nil {
-		return "", apperrors.Wrap("storage", "get_channel_username", err)
-	}
-	return username, nil
-}
 
 // UpdateChannelLastMessage avança o cursor de coleta de um canal.
 func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error {
@@ -441,7 +430,7 @@ func (r *Repository) GetMessageByID(ctx context.Context, id int64) (*RawMessage,
 		FROM raw_messages WHERE id = ?`, id)
 	msg, err := scanMessage(row)
 	if stderrors.Is(err, sql.ErrNoRows) {
-		return nil, apperrors.Wrap("storage", "get_message", stderrors.New("not found"))
+		return nil, apperrors.Wrap("storage", "get_message", apperrors.ErrMessageNotFound)
 	}
 	if err != nil {
 		return nil, err
@@ -449,7 +438,11 @@ func (r *Repository) GetMessageByID(ctx context.Context, id int64) (*RawMessage,
 	return msg, nil
 }
 
-// --- Processed Messages (read-only para dashboard) ---
+// ═══════════════════════════════════════════════════════════════════
+// Processed Messages — queries somente de leitura sobre dados do processor.
+// Estas queries acessam processed_messages e tipos do domínio do processor.
+// O dashboard e a CLI de mídia são os únicos consumidores.
+// ═══════════════════════════════════════════════════════════════════
 
 // ProcessedMessage representa uma mensagem normalizada e classificada pelo processor.
 type ProcessedMessage struct {
@@ -679,6 +672,11 @@ func nullString(s string) any {
 	return s
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Media — metadados MTProto e thumbnails para o subsistema de mídia.
+// Consumido por: CLI media, media.Resolver (via media.Repository interface).
+// ═══════════════════════════════════════════════════════════════════
+
 // PhotoMetadata contém os campos MTProto necessários para download de imagem
 // sob demanda via upload.GetFile (ADR 011).
 type PhotoMetadata struct {
@@ -705,29 +703,6 @@ func (r *Repository) GetPhotoMetadata(ctx context.Context, processedMsgID int64)
 	return &m, nil
 }
 
-// UpdateFileReference atualiza o file_reference de uma mensagem após renovação L3 soft.
-func (r *Repository) UpdateFileReference(ctx context.Context, processedMsgID int64, fileRef string) error {
-	_, err := r.db.ExecContext(ctx,
-		`UPDATE processed_messages SET photo_file_ref = ? WHERE id = ?`,
-		fileRef, processedMsgID)
-	if err != nil {
-		return apperrors.Wrap("storage", "update_file_reference", err)
-	}
-	return nil
-}
-
-// UpdatePhotoMetadata atualiza todos os campos MTProto de imagem após renovação L3 hard.
-func (r *Repository) UpdatePhotoMetadata(ctx context.Context, processedMsgID int64, meta *PhotoMetadata) error {
-	_, err := r.db.ExecContext(ctx, `
-		UPDATE processed_messages
-		SET photo_id = ?, photo_access_hash = ?, photo_file_ref = ?, photo_dcid = ?
-		WHERE id = ?`,
-		meta.PhotoID, meta.AccessHash, meta.FileReference, meta.DCID, processedMsgID)
-	if err != nil {
-		return apperrors.Wrap("storage", "update_photo_metadata", err)
-	}
-	return nil
-}
 
 // GetPhotoID retorna o photo_id (Telegram) de uma mensagem processada.
 // Retorna (0, nil) se a mensagem não existe ou não tem foto.

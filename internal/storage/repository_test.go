@@ -407,3 +407,179 @@ func TestPeerRoundTrip(t *testing.T) {
 		t.Fatalf("peer round-trip failed: %+v", peers)
 	}
 }
+
+// Funcionalidade: limiar-collector, Propriedade 15: SaveRawMessageBatch persiste múltiplas
+// mensagens em transação única com flags inserted[] corretas e idempotência.
+func TestSaveRawMessageBatch(t *testing.T) {
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	// Canal necessário para FK constraint.
+	ch := &storage.Channel{ID: 1, Username: "batch_test", Title: "Batch", Active: true}
+	if err := repo.AddChannel(ctx, ch); err != nil {
+		t.Fatalf("AddChannel: %v", err)
+	}
+
+	now := time.Now().UTC()
+
+	t.Run("todas inseridas", func(t *testing.T) {
+		msgs := []*storage.RawMessage{
+			{ChannelID: 1, MessageID: 1, Payload: []byte(`{"a":1}`), ReceivedAt: now, SchemaVersion: 1},
+			{ChannelID: 1, MessageID: 2, Payload: []byte(`{"a":2}`), ReceivedAt: now, SchemaVersion: 1},
+			{ChannelID: 1, MessageID: 3, Payload: []byte(`{"a":3}`), ReceivedAt: now, SchemaVersion: 1},
+		}
+		inserted, totalInserted, err := repo.SaveRawMessageBatch(ctx, msgs)
+		if err != nil {
+			t.Fatalf("SaveRawMessageBatch: %v", err)
+		}
+		if len(inserted) != 3 {
+			t.Fatalf("len(inserted) = %d; want 3", len(inserted))
+		}
+		for i, ins := range inserted {
+			if !ins {
+				t.Errorf("inserted[%d] = false; want true", i)
+			}
+		}
+		if totalInserted != 3 {
+			t.Errorf("totalInserted = %d; want 3", totalInserted)
+		}
+	})
+
+	t.Run("duplicatas no batch", func(t *testing.T) {
+		// Mesmo (channel_id, message_id) deve ser deduplicado.
+		msgs := []*storage.RawMessage{
+			{ChannelID: 1, MessageID: 10, Payload: []byte(`{}`), ReceivedAt: now, SchemaVersion: 1},
+			{ChannelID: 1, MessageID: 10, Payload: []byte(`{}`), ReceivedAt: now, SchemaVersion: 1},
+		}
+		inserted, totalInserted, err := repo.SaveRawMessageBatch(ctx, msgs)
+		if err != nil {
+			t.Fatalf("SaveRawMessageBatch: %v", err)
+		}
+		if len(inserted) != 2 {
+			t.Fatalf("len(inserted) = %d; want 2", len(inserted))
+		}
+		if !inserted[0] {
+			t.Error("inserted[0] = false; want true (first occurrence)")
+		}
+		// ON CONFLICT DO NOTHING → segunda ocorrência é duplicata.
+		if inserted[1] {
+			t.Error("inserted[1] = true; want false (duplicate within batch)")
+		}
+		if totalInserted != 1 {
+			t.Errorf("totalInserted = %d; want 1", totalInserted)
+		}
+	})
+
+	t.Run("batch vazio", func(t *testing.T) {
+		inserted, totalInserted, err := repo.SaveRawMessageBatch(ctx, nil)
+		if err != nil {
+			t.Fatalf("SaveRawMessageBatch(nil): %v", err)
+		}
+		if inserted != nil {
+			t.Errorf("inserted = %v; want nil", inserted)
+		}
+		if totalInserted != 0 {
+			t.Errorf("totalInserted = %d; want 0", totalInserted)
+		}
+	})
+
+	t.Run("elemento único", func(t *testing.T) {
+		msgs := []*storage.RawMessage{
+			{ChannelID: 1, MessageID: 20, Payload: []byte(`{"single":true}`), ReceivedAt: now, SchemaVersion: 1},
+		}
+		inserted, totalInserted, err := repo.SaveRawMessageBatch(ctx, msgs)
+		if err != nil {
+			t.Fatalf("SaveRawMessageBatch: %v", err)
+		}
+		if len(inserted) != 1 || !inserted[0] {
+			t.Fatalf("inserted = %v; want [true]", inserted)
+		}
+		if totalInserted != 1 {
+			t.Errorf("totalInserted = %d; want 1", totalInserted)
+		}
+	})
+
+	t.Run("idempotência cross-batch", func(t *testing.T) {
+		msgs := []*storage.RawMessage{
+			{ChannelID: 1, MessageID: 30, Payload: []byte(`{"idem":true}`), ReceivedAt: now, SchemaVersion: 1},
+		}
+		// Primeiro batch: insere.
+		inserted, _, err := repo.SaveRawMessageBatch(ctx, msgs)
+		if err != nil || len(inserted) != 1 || !inserted[0] {
+			t.Fatalf("primeiro batch: inserted=%v err=%v", inserted, err)
+		}
+		// Segundo batch: mesma mensagem → duplicata.
+		inserted, totalInserted, err := repo.SaveRawMessageBatch(ctx, msgs)
+		if err != nil {
+			t.Fatalf("segundo batch: %v", err)
+		}
+		if inserted[0] {
+			t.Error("segundo batch: inserted[0] = true; want false (duplicate)")
+		}
+		if totalInserted != 0 {
+			t.Errorf("segundo batch: totalInserted = %d; want 0", totalInserted)
+		}
+	})
+}
+
+// Funcionalidade: limiar-collector, Propriedade 16: SavePeersBatch persiste múltiplos
+// peers em transação única com upsert (INSERT OR REPLACE).
+func TestSavePeersBatch(t *testing.T) {
+	t.Run("todas inseridas", func(t *testing.T) {
+		repo := newTestRepo(t)
+		ctx := context.Background()
+		peers := []*storage.Peer{
+			{ID: 1, AccessHash: 100, Type: "channel", Username: "ch1"},
+			{ID: 2, AccessHash: 200, Type: "channel", Username: "ch2"},
+			{ID: 3, AccessHash: 300, Type: "user", Username: ""},
+		}
+		if err := repo.SavePeersBatch(ctx, peers); err != nil {
+			t.Fatalf("SavePeersBatch: %v", err)
+		}
+		loaded, err := repo.LoadPeers(ctx)
+		if err != nil {
+			t.Fatalf("LoadPeers: %v", err)
+		}
+		if len(loaded) != 3 {
+			t.Fatalf("len(loaded) = %d; want 3", len(loaded))
+		}
+	})
+
+	t.Run("upsert substitui existente", func(t *testing.T) {
+		repo := newTestRepo(t)
+		ctx := context.Background()
+		peers := []*storage.Peer{
+			{ID: 10, AccessHash: 999, Type: "channel", Username: "original"},
+		}
+		if err := repo.SavePeersBatch(ctx, peers); err != nil {
+			t.Fatalf("primeiro SavePeersBatch: %v", err)
+		}
+		updated := []*storage.Peer{
+			{ID: 10, AccessHash: 111, Type: "channel", Username: "updated"},
+		}
+		if err := repo.SavePeersBatch(ctx, updated); err != nil {
+			t.Fatalf("segundo SavePeersBatch: %v", err)
+		}
+		loaded, err := repo.LoadPeers(ctx)
+		if err != nil {
+			t.Fatalf("LoadPeers: %v", err)
+		}
+		if len(loaded) != 1 {
+			t.Fatalf("len(loaded) = %d; want 1 (upsert, não insert extra)", len(loaded))
+		}
+		if loaded[0].AccessHash != 111 || loaded[0].Username != "updated" {
+			t.Errorf("peer = %+v; want AccessHash=111 Username=updated", loaded[0])
+		}
+	})
+
+	t.Run("batch vazio", func(t *testing.T) {
+		repo := newTestRepo(t)
+		ctx := context.Background()
+		if err := repo.SavePeersBatch(ctx, nil); err != nil {
+			t.Fatalf("SavePeersBatch(nil): %v", err)
+		}
+		if err := repo.SavePeersBatch(ctx, []*storage.Peer{}); err != nil {
+			t.Fatalf("SavePeersBatch(empty): %v", err)
+		}
+	})
+}

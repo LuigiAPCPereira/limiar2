@@ -39,7 +39,7 @@ func NewMediaClient(c *Client, log logger.Logger) *MediaClient {
 }
 
 // Compile-time: MediaClient satisfaz media.MediaClient.
-var _ media.MediaClient = (*MediaClient)(nil)
+var _ media.Client = (*MediaClient)(nil)
 
 // DownloadPhoto baixa a variante defaultThumbSize da foto via Client.Download().
 // Usa a infraestrutura completa de download do gotd (DC transfers, CDN).
