@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/telegram"
 )
 
@@ -23,7 +23,7 @@ func TestPeerStore_Get(t *testing.T) {
 func TestPeerStore_Set(t *testing.T) {
 	ps := telegram.NewPeerStore(nil, nil)
 
-	peer := &storage.Peer{
+	peer := &model.Peer{
 		ID:         123,
 		AccessHash: 456,
 		Type:       "user",

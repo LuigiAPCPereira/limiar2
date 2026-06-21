@@ -7,6 +7,7 @@ import (
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 )
 
 // PeerStore é um cache em memória de peers do Telegram protegido por um RWMutex,
@@ -14,7 +15,7 @@ import (
 // Leituras concorrentes não bloqueiam umas às outras.
 type PeerStore struct {
 	mu    sync.RWMutex
-	peers map[int64]*storage.Peer
+	peers map[int64]*model.Peer
 	repo  *storage.Repository
 	log   logger.Logger
 }
@@ -26,14 +27,14 @@ func NewPeerStore(repo *storage.Repository, log logger.Logger) *PeerStore {
 		log = logger.NopLogger{}
 	}
 	return &PeerStore{
-		peers: make(map[int64]*storage.Peer),
+		peers: make(map[int64]*model.Peer),
 		repo:  repo,
 		log:   log,
 	}
 }
 
 // Get retorna o peer em cache para o id especificado e se ele estava presente.
-func (ps *PeerStore) Get(id int64) (*storage.Peer, bool) {
+func (ps *PeerStore) Get(id int64) (*model.Peer, bool) {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
 	p, ok := ps.peers[id]
@@ -41,7 +42,7 @@ func (ps *PeerStore) Get(id int64) (*storage.Peer, bool) {
 }
 
 // Set insere ou substitui um peer no cache em memória.
-func (ps *PeerStore) Set(p *storage.Peer) {
+func (ps *PeerStore) Set(p *model.Peer) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.peers[p.ID] = p
@@ -55,7 +56,7 @@ func (ps *PeerStore) LoadFromDB(ctx context.Context) error {
 	}
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	ps.peers = make(map[int64]*storage.Peer, len(peers))
+	ps.peers = make(map[int64]*model.Peer, len(peers))
 	for _, p := range peers {
 		ps.peers[p.ID] = p
 	}
@@ -68,7 +69,7 @@ func (ps *PeerStore) LoadFromDB(ctx context.Context) error {
 // Usa SavePeersBatch para persistir todos em uma única transação (evita N+1).
 func (ps *PeerStore) FlushToDB(ctx context.Context) error {
 	ps.mu.RLock()
-	snapshot := make([]*storage.Peer, 0, len(ps.peers))
+	snapshot := make([]*model.Peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
 		snapshot = append(snapshot, p)
 	}

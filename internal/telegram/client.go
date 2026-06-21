@@ -15,7 +15,7 @@ import (
 
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 )
 
 // TelegramClient é a fachada (Facade) que esconde toda a complexidade do gotd/td (sessão, peers,
@@ -32,11 +32,11 @@ type TelegramClient interface {
 	AddUpdateHandler(h UpdateHandler)
 	// ResolveChannel resolve um @username para um Peer com o seu hash de acesso e
 	// o persiste no armazenamento de peers.
-	ResolveChannel(ctx context.Context, username string) (*storage.Peer, error)
+	ResolveChannel(ctx context.Context, username string) (*model.Peer, error)
 	// ResolveChannelChecked verifica a autenticação e resolve um canal em
 	// um único ciclo de vida de conexão. Retorna ErrNotAuthenticated se a
 	// sessão não estiver autorizada.
-	ResolveChannelChecked(ctx context.Context, username string) (*storage.Peer, error)
+	ResolveChannelChecked(ctx context.Context, username string) (*model.Peer, error)
 	// FetchHistory retorna até `limit` payloads brutos de mensagens recentes (as mais novas
 	// primeiro) para o canal, cada uma já serializada para JSON. O hash de acesso
 	// é buscado no armazenamento de peers; se o peer for desconhecido, ele retorna um
@@ -224,7 +224,7 @@ func (c *Client) Auth(ctx context.Context) error {
 	})
 }
 
-func (c *Client) doResolveChannel(ctx context.Context, username string) (*storage.Peer, error) {
+func (c *Client) doResolveChannel(ctx context.Context, username string) (*model.Peer, error) {
 	resolved, err := c.tg.API().ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
 		Username: username,
 	})
@@ -239,7 +239,7 @@ func (c *Client) doResolveChannel(ctx context.Context, username string) (*storag
 		return nil, apperrors.Wrap("telegram", "resolve_channel", err)
 	}
 	accessHash, _ := ch.GetAccessHash()
-	peer := &storage.Peer{
+	peer := &model.Peer{
 		ID:         ch.GetID(),
 		AccessHash: accessHash,
 		Type:       "channel",
@@ -250,9 +250,9 @@ func (c *Client) doResolveChannel(ctx context.Context, username string) (*storag
 }
 
 // ResolveChannel resolve um username para um Peer e o armazena em cache.
-func (c *Client) ResolveChannel(ctx context.Context, username string) (*storage.Peer, error) {
+func (c *Client) ResolveChannel(ctx context.Context, username string) (*model.Peer, error) {
 	username = NormalizeUsername(username)
-	var peer *storage.Peer
+	var peer *model.Peer
 	err := c.runOnce(ctx, func(ctx context.Context) error {
 		p, err := c.doResolveChannel(ctx, username)
 		if err != nil {
@@ -269,9 +269,9 @@ func (c *Client) ResolveChannel(ctx context.Context, username string) (*storage.
 
 // ResolveChannelChecked verifica a autenticação e resolve um canal em um
 // único ciclo de vida de conexão, evitando o problema de double-Run.
-func (c *Client) ResolveChannelChecked(ctx context.Context, username string) (*storage.Peer, error) {
+func (c *Client) ResolveChannelChecked(ctx context.Context, username string) (*model.Peer, error) {
 	username = NormalizeUsername(username)
-	var peer *storage.Peer
+	var peer *model.Peer
 	err := c.runOnce(ctx, func(ctx context.Context) error {
 		st, err := c.tg.Auth().Status(ctx)
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	"pgregory.net/rapid"
 
 	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/telegram"
 )
 
@@ -90,7 +91,7 @@ func TestPeerStoreGetSet(t *testing.T) {
 	if _, ok := ps.Get(1); ok {
 		t.Fatal("armazenamento vazio deveria falhar ao buscar")
 	}
-	ps.Set(&storage.Peer{ID: 1, AccessHash: 42, Type: "channel"})
+	ps.Set(&model.Peer{ID: 1, AccessHash: 42, Type: "channel"})
 	got, ok := ps.Get(1)
 	if !ok || got.AccessHash != 42 {
 		t.Fatalf("Get após Set falhou: %+v ok=%v", got, ok)
@@ -101,8 +102,8 @@ func TestPeerStoreFlushAndLoad(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()
 	ps := telegram.NewPeerStore(repo, nil)
-	ps.Set(&storage.Peer{ID: 10, AccessHash: 100, Type: "channel", Username: "a"})
-	ps.Set(&storage.Peer{ID: 20, AccessHash: 200, Type: "user", Username: "b"})
+	ps.Set(&model.Peer{ID: 10, AccessHash: 100, Type: "channel", Username: "a"})
+	ps.Set(&model.Peer{ID: 20, AccessHash: 200, Type: "user", Username: "b"})
 
 	if err := ps.FlushToDB(ctx); err != nil {
 		t.Fatalf("FlushToDB: %v", err)
@@ -126,7 +127,7 @@ func TestPeerStoreConcurrentAccess(t *testing.T) {
 	for w := 0; w < 4; w++ {
 		go func(base int64) {
 			for i := int64(0); i < 200; i++ {
-				ps.Set(&storage.Peer{ID: base*1000 + i, AccessHash: i, Type: "channel"})
+				ps.Set(&model.Peer{ID: base*1000 + i, AccessHash: i, Type: "channel"})
 			}
 			done <- struct{}{}
 		}(int64(w))
