@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-02-27 - Permissões Inseguras em os.WriteFile
+**Vulnerabilidade:** O uso de `os.WriteFile` com permissões `0o644` (ou mais permissivas) cria arquivos que podem ser lidos por outros usuários no sistema, o que é um risco de segurança (sinalizado pelo `gosec` como G306), especialmente para dados sensíveis.
+**Aprendizado:** A verificação G306 do `gosec` exige explicitamente que as permissões passadas para funções de criação de arquivo como `os.WriteFile` não sejam superiores a `0o600`.
+**Prevenção:** Sempre utilizar permissões `0o600` ao criar novos arquivos no disco com `os.WriteFile` ou similares.
