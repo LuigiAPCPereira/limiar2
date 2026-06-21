@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 )
 
 // NormalizedMessage é a estrutura canônica produzida pelo Estágio 1 do
@@ -112,7 +112,7 @@ var (
 )
 
 // Normalize transforma um payload bruto (Shape A ou B) em NormalizedMessage.
-func Normalize(raw *storage.RawMessage) (*NormalizedMessage, error) {
+func Normalize(raw *model.RawMessage) (*NormalizedMessage, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(raw.Payload, &payload); err != nil {
 		return nil, fmt.Errorf("processor: normalize: unmarshal payload: %w", err)

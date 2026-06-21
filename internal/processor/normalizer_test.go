@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 )
 
 func TestNormalize_ShapeA(t *testing.T) {
@@ -514,14 +514,14 @@ func TestSynthesize(t *testing.T) {
 	}
 }
 
-// makeRaw é um helper que cria um storage.RawMessage com payload JSON.
-func makeRaw(t *testing.T, id, channelID, messageID int64, payload map[string]any) *storage.RawMessage {
+// makeRaw é um helper que cria um model.RawMessage com payload JSON.
+func makeRaw(t *testing.T, id, channelID, messageID int64, payload map[string]any) *model.RawMessage {
 	t.Helper()
 	data, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	return &storage.RawMessage{
+	return &model.RawMessage{
 		ID:            id,
 		ChannelID:     channelID,
 		MessageID:     messageID,

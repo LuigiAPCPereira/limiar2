@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	apperrors "github.com/limiar/collector/internal/errors"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 )
 
 // Repository centraliza as queries do processor contra o banco Tursogo.
@@ -48,7 +48,7 @@ func (r *Repository) Close() error {
 // FetchUnprocessed retorna raw_messages que ainda não possuem entrada
 // correspondente em processed_messages. Usa cursor baseado no último
 // raw_message_id processado (evita LEFT JOIN que degrada com o tempo).
-func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]*storage.RawMessage, error) {
+func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]*model.RawMessage, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, channel_id, message_id, payload, received_at, schema_version
 		FROM raw_messages
@@ -62,10 +62,10 @@ func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]*storag
 	}
 	defer func() { _ = rows.Close() }()
 
-	var msgs []*storage.RawMessage
+	var msgs []*model.RawMessage
 	for rows.Next() {
 		var (
-			msg      storage.RawMessage
+			msg      model.RawMessage
 			payload  string
 			received string
 		)
@@ -73,7 +73,7 @@ func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]*storag
 			return nil, apperrors.Wrap("processor", "scan_unprocessed", err)
 		}
 		msg.Payload = []byte(payload)
-		msg.ReceivedAt = storage.ParseDBTime(received)
+		msg.ReceivedAt = model.ParseDBTime(received)
 		msgs = append(msgs, &msg)
 	}
 	if err := rows.Err(); err != nil {
@@ -124,14 +124,14 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		msg.Views,
 		msg.Forwards,
 		msg.ReplyToMsgID,
-		storage.BoolToInt(msg.HasURL),
-		storage.BoolToInt(msg.HasPrice),
-		storage.BoolToInt(msg.HasCoupon),
+		model.BoolToInt(msg.HasURL),
+		model.BoolToInt(msg.HasPrice),
+		model.BoolToInt(msg.HasCoupon),
 		priceAmount,
 		"BRL",
 		string(urgencyJSON),
-		msg.PostedAt.UTC().Format(storage.DBTimeLayout),
-		msg.ProcessedAt.UTC().Format(storage.DBTimeLayout),
+		msg.PostedAt.UTC().Format(model.DBTimeLayout),
+		msg.ProcessedAt.UTC().Format(model.DBTimeLayout),
 		msg.PriceOriginal,
 		msg.PriceDiscount,
 		msg.CouponCode,
@@ -143,8 +143,8 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		msg.Merchant,
 		msg.ProductName,
 		msg.Synthesis,
-		storage.BoolToInt(msg.IsDuplicate),
-		storage.BoolToInt(msg.FeedEligible),
+		model.BoolToInt(msg.IsDuplicate),
+		model.BoolToInt(msg.FeedEligible),
 		msg.PhotoAccessHash,
 		msg.PhotoFileRef,
 		msg.PhotoDCID,
@@ -230,14 +230,14 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			msg.Views,
 			msg.Forwards,
 			msg.ReplyToMsgID,
-			storage.BoolToInt(msg.HasURL),
-			storage.BoolToInt(msg.HasPrice),
-			storage.BoolToInt(msg.HasCoupon),
+			model.BoolToInt(msg.HasURL),
+			model.BoolToInt(msg.HasPrice),
+			model.BoolToInt(msg.HasCoupon),
 			priceAmount,
 			"BRL",
 			string(urgencyJSON),
-			msg.PostedAt.UTC().Format(storage.DBTimeLayout),
-			msg.ProcessedAt.UTC().Format(storage.DBTimeLayout),
+			msg.PostedAt.UTC().Format(model.DBTimeLayout),
+			msg.ProcessedAt.UTC().Format(model.DBTimeLayout),
 			msg.PriceOriginal,
 			msg.PriceDiscount,
 			msg.CouponCode,
@@ -249,8 +249,8 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			msg.Merchant,
 			msg.ProductName,
 			msg.Synthesis,
-			storage.BoolToInt(msg.IsDuplicate),
-			storage.BoolToInt(msg.FeedEligible),
+			model.BoolToInt(msg.IsDuplicate),
+			model.BoolToInt(msg.FeedEligible),
 			msg.PhotoAccessHash,
 			msg.PhotoFileRef,
 			msg.PhotoDCID,
