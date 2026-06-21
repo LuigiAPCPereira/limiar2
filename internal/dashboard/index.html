@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Dashboard do Limiar Collector para visualização de mensagens brutas e processadas.">
 <title>Limiar Dashboard</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
@@ -120,17 +119,17 @@
     </div>
   </div>
 
-  <div class="tabs" role="tablist" aria-label="Navegação principal">
-    <button id="tab-raw" class="tab" role="tab" :aria-selected="activeTab === 'raw'" :tabindex="activeTab === 'raw' ? '0' : '-1'" :class="{ active: activeTab === 'raw' }" @click="switchTab('raw')" @keydown.right.prevent="document.getElementById('tab-proc').focus()" aria-controls="panel-raw">
+  <div class="tabs">
+    <button class="tab" :class="{ active: activeTab === 'raw' }" @click="switchTab('raw')">
       Raw <span class="badge" x-text="totalMessages"></span>
     </button>
-    <button id="tab-proc" class="tab" role="tab" :aria-selected="activeTab === 'processed'" :tabindex="activeTab === 'processed' ? '0' : '-1'" :class="{ active: activeTab === 'processed' }" @click="switchTab('processed')" @keydown.left.prevent="document.getElementById('tab-raw').focus()" aria-controls="panel-proc">
+    <button class="tab" :class="{ active: activeTab === 'processed' }" @click="switchTab('processed')">
       Processadas <span class="badge" x-text="processedStats.total || 0"></span>
     </button>
   </div>
 
   <!-- ============ TAB: RAW ============ -->
-  <div id="panel-raw" role="tabpanel" tabindex="0" aria-labelledby="tab-raw" x-show="activeTab === 'raw'">
+  <div x-show="activeTab === 'raw'">
     <div class="toolbar">
       <input class="search-input" type="search" placeholder="Buscar no texto da mensagem..." x-model="search" @input.debounce.300ms="filterMessages()">
       <button class="refresh-btn" @click="refresh()">&#8635; Atualizar</button>
@@ -170,7 +169,7 @@
               <span x-text="channelName(m.ChannelID)"></span>
               <span x-text="formatDate(m.ReceivedAt)"></span>
             </div>
-            <div class="preview" :title="extractPreview(m)" x-html="highlightedPreview(m)"></div>
+            <div class="preview" x-html="highlightedPreview(m)"></div>
           </div>
         </template>
       </div>
@@ -178,7 +177,7 @@
   </div>
 
   <!-- ============ TAB: PROCESSED ============ -->
-  <div id="panel-proc" role="tabpanel" tabindex="0" aria-labelledby="tab-proc" x-show="activeTab === 'processed'">
+  <div x-show="activeTab === 'processed'">
     <div class="toolbar">
       <input class="search-input" type="search" placeholder="Buscar no texto processado..." x-model="procSearch" @input.debounce.300ms="filterProcessed()">
       <button class="refresh-btn" @click="loadProcessed()">&#8635; Atualizar</button>
@@ -230,7 +229,7 @@
                 <span class="urgency-chip" x-text="urgencyLabel(sig)"></span>
               </template>
             </div>
-            <div class="preview" :title="m.text_clean" x-text="truncate(m.text_clean, 180)"></div>
+            <div class="preview" x-text="truncate(m.text_clean, 180)"></div>
           </div>
         </template>
       </div>
@@ -338,9 +337,6 @@ function dashboard() {
       this.refresh();
       this.connectSSE();
       this._uptimeTimer = setInterval(() => this.updateUptime(), 1000);
-      this.$watch('totalMessages', val => {
-        document.title = val > 0 ? `(${val}) Limiar Dashboard` : 'Limiar Dashboard';
-      });
     },
 
     switchTab(tab) {

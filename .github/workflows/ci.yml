@@ -42,21 +42,15 @@ jobs:
         echo "Validando regras da arquitetura fechada (AGENTS.md)..."
         
         # O build não deve importar mattn/go-sqlite3, modernc.org/sqlite, gorm, etc.
-        # Exceção: o tursogo utiliza go-sqlite3 indiretamente
-        FORBIDDEN_IMPORTS=("modernc.org/sqlite" "gorm.io/gorm")
+        FORBIDDEN_IMPORTS=("github.com/mattn/go-sqlite3" "modernc.org/sqlite" "gorm.io/gorm")
         
-        # Inspeciona o go.mod diretamente (apenas imports diretos de ORMs e drivers não-Turso)
+        # Inspeciona o go.mod diretamente
         for pkg in "${FORBIDDEN_IMPORTS[@]}"; do
           if grep -q "$pkg" go.mod; then
             echo "::error::Importação proibida detectada: $pkg. O uso de drivers SQLite não-Turso ou ORMs é estritamente proibido pela arquitetura."
             exit 1
           fi
         done
-        # Verifica se o github.com/mattn/go-sqlite3 é uma dependência direta
-        if grep -qE "^\s*github\.com/mattn/go-sqlite3\s+v[0-9.]+\s*$" go.mod; then
-          echo "::error::Importação direta proibida detectada: github.com/mattn/go-sqlite3. Apenas a biblioteca do Turso pode depender dele indiretamente."
-          exit 1
-        fi
         echo "Validação de dependências concluída com sucesso."
 
     - name: Build
