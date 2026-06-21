@@ -12,40 +12,8 @@ import (
 // ErrNoSession indica que não há linha (row) de sessão presente no banco de dados.
 var ErrNoSession = stderrors.New("nenhuma sessão armazenada")
 
-// DBTimeLayout é o formato de data/hora textual usado pelos padrões (defaults)
-// datetime('now') do schema. Exportado para uso pelo processor.
-const DBTimeLayout = "2006-01-02 15:04:05"
 
-// RawMessage é um payload de mensagem capturada do Telegram aguardando processamento
-// posterior (downstream). Payload contém o update bruto do gotd/td serializado como JSON.
-type RawMessage struct {
-	ID            int64
-	ChannelID     int64
-	MessageID     int64
-	Payload       []byte
-	ReceivedAt    time.Time
-	SchemaVersion int
-}
 
-// Channel é um canal monitorado do Telegram e seu cursor de coleta.
-type Channel struct {
-	ID              int64
-	Username        string
-	Title           string
-	Active          bool
-	AddedAt         time.Time
-	LastMessageID   int64
-	LastCollectedAt time.Time
-}
-
-// Peer é um peer do Telegram armazenado em cache (canal, usuário ou chat) com seu hash de acesso.
-type Peer struct {
-	ID         int64
-	AccessHash int64
-	Type       string
-	Username   string
-	UpdatedAt  time.Time
-}
 
 // Repository centraliza toda instrução SQL contra o banco de dados Tursogo.
 // Escritas recorrentes usam prepared statements (instruções preparadas). Todos os marcadores (placeholders) são ?.
@@ -389,12 +357,6 @@ func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, o
 	return messages, nil
 }
 
-// ChannelStats mantém a contagem de mensagens para um único canal.
-type ChannelStats struct {
-	ChannelID    int64
-	Username     string
-	MessageCount int64
-}
 
 // CountMessagesByChannel retorna as contagens de mensagens agrupadas por canal.
 func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]ChannelStats, error) {
@@ -444,41 +406,7 @@ func (r *Repository) GetMessageByID(ctx context.Context, id int64) (*RawMessage,
 // O dashboard e a CLI de mídia são os únicos consumidores.
 // ═══════════════════════════════════════════════════════════════════
 
-// ProcessedMessage representa uma mensagem normalizada e classificada pelo processor.
-type ProcessedMessage struct {
-	ID             int64     `json:"id"`
-	RawMessageID   int64     `json:"raw_message_id"`
-	ChannelID      int64     `json:"channel_id"`
-	MessageID      int64     `json:"message_id"`
-	MessageType    string    `json:"message_type"`
-	TextClean      string    `json:"text_clean"`
-	TextLength     int       `json:"text_length"`
-	MediaType      string    `json:"media_type"`
-	HasURL         bool      `json:"has_url"`
-	HasPrice       bool      `json:"has_price"`
-	HasCoupon      bool      `json:"has_coupon"`
-	PriceAmount    int64     `json:"price_amount"`
-	PriceCurrency  string    `json:"price_currency"`
-	UrgencySignals string    `json:"urgency_signals"`
-	PostedAt       time.Time `json:"posted_at"`
-	ProcessedAt    time.Time `json:"processed_at"`
-	PriceOriginal  int64     `json:"price_original"`
-	PriceDiscount  int       `json:"price_discount"`
-	CouponCode     string    `json:"coupon_code"`
-	PaymentMethod  string    `json:"payment_method"`
-	Shipping       string    `json:"shipping"`
-	Installments   string    `json:"installments"`
-	DiscountPct    int       `json:"discount_percent"`
-	Merchant       string    `json:"merchant"`
-	ProductName    string    `json:"product_name"`
-	IsDuplicate    bool      `json:"is_duplicate"`
-}
 
-// ProcessedTypeStats contém contagem de mensagens processadas por tipo.
-type ProcessedTypeStats struct {
-	MessageType string `json:"message_type"`
-	Count       int64  `json:"count"`
-}
 
 // ListProcessedMessages retorna mensagens processadas com paginação e filtro opcional
 // por tipo e canal. Resultados ordenados por posted_at DESC.
@@ -640,30 +568,7 @@ func scanMessage(s scanner) (*RawMessage, error) {
 	return &msg, nil
 }
 
-// ParseDBTime converte uma string de data/hora do banco (formato "2006-01-02 15:04:05")
-// para time.Time. Tenta fallback para RFC3339 se o formato primário falhar.
-func ParseDBTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(DBTimeLayout, s)
-	if err != nil {
-		// Fallback para RFC3339 caso um chamador tenha armazenado dessa forma.
-		if t2, err2 := time.Parse(time.RFC3339, s); err2 == nil {
-			return t2
-		}
-		return time.Time{}
-	}
-	return t
-}
 
-// BoolToInt converte bool para int (1/0) para persistência no SQLite/Turso.
-func BoolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
 
 func nullString(s string) any {
 	if s == "" {
@@ -677,17 +582,6 @@ func nullString(s string) any {
 // Consumido por: CLI media, media.Resolver (via media.Repository interface).
 // ═══════════════════════════════════════════════════════════════════
 
-// PhotoMetadata contém os campos MTProto necessários para download de imagem
-// sob demanda via upload.GetFile (ADR 011).
-type PhotoMetadata struct {
-	ID            int64 // processed_messages.id (PK); 0 em metadados vindos de MTProto (renew/refetch)
-	MsgID         int64
-	ChannelID     int64
-	PhotoID       int64
-	AccessHash    int64
-	FileReference string // base64
-	DCID          int
-}
 
 // GetPhotoMetadata retorna os campos MTProto de imagem para uma mensagem processada.
 // Usado pelo MediaResolver para montar InputPhotoFileLocation.
@@ -740,15 +634,6 @@ func (r *Repository) GetInlineThumb(ctx context.Context, photoID int64) ([]byte,
 	return thumb, nil
 }
 
-// PhotoStats resume a cobertura de metadados MTProto em processed_messages para
-// diagnóstico do subsistema de mídia (smoke test, ADR 011). Permite validar, em
-// produção, se o backfill da Fase A produziu metadados utilizáveis pelo
-// MediaResolver na Wave 4.
-type PhotoStats struct {
-	TotalProcessed  int64 // total de mensagens processadas
-	WithPhoto       int64 // mensagens com photo_id > 0
-	CompleteMTProto int64 // com foto E todos os campos MTProto (access_hash, file_ref, dcid)
-}
 
 // PhotoMetadataStats agrega a cobertura de metadados de foto. Usado pelo
 // subcomando `media` (smoke test) para validar a fundação de mídia em produção.
