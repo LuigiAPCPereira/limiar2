@@ -9,6 +9,7 @@ import (
 // o único lugar na base de código onde um logger concreto é instanciado.
 type SlogLogger struct {
 	inner *slog.Logger
+	level slog.Level // nível mínimo para emitir logs
 }
 
 // asserção em tempo de compilação de que SlogLogger satisfaz Logger.
@@ -34,7 +35,7 @@ func NewSlogLogger(w io.Writer, level slog.Level, format string) *SlogLogger {
 	default:
 		handler = slog.NewTextHandler(w, opts)
 	}
-	return &SlogLogger{inner: slog.New(handler)}
+	return &SlogLogger{inner: slog.New(handler), level: level}
 }
 
 // Debug faz o log em nível debug.
@@ -51,16 +52,16 @@ func (l *SlogLogger) Error(msg string, args ...any) { l.inner.Error(msg, args...
 
 // With retorna um SlogLogger filho (child) contendo os pares chave/valor fornecidos.
 func (l *SlogLogger) With(args ...any) Logger {
-	return &SlogLogger{inner: l.inner.With(args...)}
+	return &SlogLogger{inner: l.inner.With(args...), level: l.level}
 }
 
 // WithComponent retorna um SlogLogger filho com o nome do componente vinculado.
 func (l *SlogLogger) WithComponent(name string) Logger {
-	return &SlogLogger{inner: l.inner.With(attrKeyComponent, name)}
+	return &SlogLogger{inner: l.inner.With(attrKeyComponent, name), level: l.level}
 }
 
-// ParseLevel mapeia uma string de nível de log da configuração para slog.Level, definindo como padrão Info
-// para valores não reconhecidos (Validate rejeita esses valores antes que este ponto seja alcançado).
+// IsInfoEnabled retorna true se mensagens Info são emitidas (level <= Info).
+func (l *SlogLogger) IsInfoEnabled() bool { return l.level <= slog.LevelInfo }
 func ParseLevel(level string) slog.Level {
 	switch level {
 	case "debug":
