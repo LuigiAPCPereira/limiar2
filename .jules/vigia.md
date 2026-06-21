@@ -17,7 +17,3 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
-## 2026-06-21 - Permissões Excessivas em Arquivos Salvos (G306)
-**Vulnerabilidade:** A CLI estava salvando arquivos de mídia com a permissão `0o644`, o que permitia que qualquer outro usuário no mesmo sistema lesse os conteúdos exportados.
-**Aprendizado:** Arquivos gerados a partir do banco de dados ou da API (como logs, extrações ou mídias baixadas) podem conter informações sensíveis do usuário da máquina e, portanto, não devem ser globalmente legíveis.
-**Prevenção:** Sempre utilize permissões restritivas, preferencialmente `0o600`, ao criar novos arquivos com `os.WriteFile` ou equivalentes, de forma que apenas o proprietário do arquivo possa acessá-lo.
