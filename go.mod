@@ -4,6 +4,7 @@ go 1.26.2
 
 require (
 	github.com/gotd/td v0.155.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	golang.org/x/sync v0.21.0
@@ -31,7 +32,6 @@ require (
 	github.com/gotd/ige v0.2.2 // indirect
 	github.com/gotd/log v0.1.0 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
