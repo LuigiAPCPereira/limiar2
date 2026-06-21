@@ -80,7 +80,9 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Updat
 		return apperrors.Wrap("collector", "classify", err)
 	}
 
-	h.log.Info("📩 Mensagem ao vivo", "canal_id", update.ChannelID, "msg_id", update.MessageID)
+	if _, isNop := h.log.(logger.NopLogger); !isNop {
+		h.log.Info("📩 Mensagem ao vivo", "canal_id", update.ChannelID, "msg_id", update.MessageID)
+	}
 
 	select {
 	case h.writeCh <- WriteJob{Message: classified}:
