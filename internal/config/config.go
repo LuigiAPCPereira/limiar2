@@ -27,7 +27,8 @@ const (
 	defaultDBWriterBuf     = 512
 	defaultHistoryMax      = 5000
 	defaultHistoryMaxDays  = 30
-)
+	defaultDashboardPort   = 8080
+ )
 
 // Limites de validação.
 const (
@@ -60,7 +61,8 @@ type Config struct {
 	DBWriterBufferSize   int           `mapstructure:"db_writer_buffer_size"`
 	HistoryMax           int           `mapstructure:"history_max"`
 	HistoryMaxDays       int           `mapstructure:"history_max_days"`
-}
+	DashboardPort        int           `mapstructure:"dashboard_port"`
+ }
 
 // Load lê as configurações das variáveis de ambiente com o prefixo LIMIAR_ e
 // opcionalmente de um arquivo .env no diretório atual para dentro do Config e aplica
@@ -189,6 +191,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.HistoryMaxDays == 0 {
 		c.HistoryMaxDays = defaultHistoryMaxDays
+	}
+	if c.DashboardPort == 0 {
+		c.DashboardPort = defaultDashboardPort
 	}
 }
 

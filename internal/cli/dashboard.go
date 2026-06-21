@@ -32,6 +32,9 @@ func newDashboardCmd(p Provider) *cobra.Command {
 			defer func() { _ = closeStore() }()
 
 			cfg := p.Config()
+			if port == 0 {
+				port = cfg.DashboardPort
+			}
 			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 			log := p.Logger(format)
 			presenter := p.Presenter()
@@ -43,6 +46,6 @@ func newDashboardCmd(p Provider) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().IntVar(&port, "port", 8080, "Porta do servidor HTTP")
+	cmd.Flags().IntVar(&port, "port", 0, "Porta do servidor HTTP (0 = usa LIMIAR_DASHBOARD_PORT ou 8080)")
 	return cmd
 }

@@ -113,7 +113,7 @@ func run() error {
 		return fmt.Errorf("limiar: criar dashboard repository: %w", err)
 	}
 	defer func() { _ = dashRepo.Close() }()
-	srv := dashboard.NewServer(dashRepo, procRepo, log.WithComponent("dashboard"), 8080, broker)
+	srv := dashboard.NewServer(dashRepo, procRepo, log.WithComponent("dashboard"), cfg.DashboardPort, broker)
 
 	col.SetOnMessage(func(msg *model.RawMessage) {
 		data, err := json.Marshal(msg)
@@ -131,9 +131,9 @@ func run() error {
 	log.Info("🚀 Limiar orquestrador iniciado",
 		"collector", "ativo",
 		"processor", "ativo",
-		"dashboard", "http://localhost:8080")
+		"dashboard", fmt.Sprintf("http://localhost:%d", cfg.DashboardPort))
 	presenter.Info("Limiar orquestrador iniciado")
-	presenter.Step("Dashboard: http://localhost:8080")
+	presenter.Step(fmt.Sprintf("Dashboard: http://localhost:%d", cfg.DashboardPort))
 	presenter.Step("Pressione Ctrl+C para encerrar")
 
 	g.Go(func() error {

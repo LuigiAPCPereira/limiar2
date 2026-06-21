@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -47,8 +48,8 @@ func newRunCmd(p Provider) *cobra.Command {
 
 			if withDashboard {
 				broker := dashboard.NewBroker()
-				srv := dashboard.NewServer(repo, nil, log, 8080, broker)
-
+				port := cfg.DashboardPort
+				srv := dashboard.NewServer(repo, nil, log, port, broker)
 				col.SetOnMessage(func(msg *model.RawMessage) {
 					data, err := json.Marshal(msg)
 					if err != nil {
@@ -58,7 +59,7 @@ func newRunCmd(p Provider) *cobra.Command {
 				})
 
 				go func() { _ = srv.ListenAndServe(ctx) }()
-				presenter.Info("Dashboard: http://localhost:8080")
+				presenter.Info(fmt.Sprintf("Dashboard: http://localhost:%d", port))
 			}
 
 			runErr := make(chan error, 1)
