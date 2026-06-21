@@ -21,6 +21,7 @@ type Logger interface {
 	// todos os registros subsequentes.
 	With(args ...any) Logger
 	// WithComponent retorna um Logger filho com o nome do componente vinculado.
+	WithComponent(name string) Logger
 	// IsInfoEnabled informa se o nível atual de log inclui mensagens Info.
 	// Usado em hot paths para evitar alocações variádicas (interface boxing)
 	// quando o log é descartado. Retorna false para NopLogger.
