@@ -88,11 +88,8 @@ func (d *Dispatcher) consume(ctx context.Context, h UpdateHandler, ch <-chan Upd
 func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update) {
 	defer func() {
 		if r := recover(); r != nil {
-			// Evitar logar o objeto de panic bruto para não vazar a sessão.
-			// Formatamos como erro para preservar a string do panic sem imprimir
-			// os conteúdos literais que o objeto poderia conter caso fosse impresso
-			// pela reflexão do logger.
-			d.log.Error("💥 Panic no handler recuperado", "erro", fmt.Errorf("panic: %v", r))
+			errMsg := safePanicMessage(r)
+			d.log.Error("💥 Panic no handler recuperado", "erro", errMsg, "tipo", fmt.Sprintf("%T", r))
 		}
 	}()
 	if err := h.HandleUpdate(ctx, update); err != nil {
@@ -133,4 +130,34 @@ func (d *Dispatcher) Shutdown(_ context.Context) error {
 	}
 	d.wg.Wait()
 	return nil
+}
+
+// safePanicMessage extrai uma string segura de um valor de panic sem vazar
+// dados sensíveis via reflexão (protege tokens de sessão, secrets, etc.).
+// Para panics do tipo error, extrai Error() com proteção interna contra
+// double-panic (nil error ou Error() que panica).
+func safePanicMessage(r any) string {
+	switch v := r.(type) {
+	case error:
+		return safeErrorString(v)
+	case string:
+		return v
+	default:
+		return fmt.Sprintf("panic de tipo %T", r)
+	}
+}
+func safeErrorString(err error) string {
+	if err == nil {
+		return "<nil>"
+	}
+	msg := ""
+	func() {
+		defer func() {
+			if recover() != nil {
+				msg = fmt.Sprintf("<error: panic em Error() tipo=%T>", err)
+			}
+		}()
+		msg = err.Error()
+	}()
+	return msg
 }

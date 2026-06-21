@@ -165,8 +165,11 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 				return apperrors.Wrap("cli", "media_resolve", err)
 			}
 
-			if err := os.WriteFile(outPath, data, 0o644); err != nil {
+			if err := os.WriteFile(outPath, data, 0o600); err != nil {
 				return apperrors.Wrap("cli", "write_file", err)
+			}
+			if err := os.Chmod(outPath, 0o600); err != nil {
+				return apperrors.Wrap("cli", "chmod", err)
 			}
 			presenter.Success(fmt.Sprintf("✅ %d bytes salvos em %s (source: %s)", len(data), outPath, source))
 			log.Info("📷 media resolve OK", "msg_id", msgID, "bytes", len(data), "source", source)
