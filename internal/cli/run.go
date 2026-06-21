@@ -13,7 +13,7 @@ import (
 	"github.com/limiar/collector/internal/dashboard"
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 )
 
 // newRunCmd constrói o subcomando `run`: o serviço coletor não interativo.
@@ -49,7 +49,7 @@ func newRunCmd(p Provider) *cobra.Command {
 				broker := dashboard.NewBroker()
 				srv := dashboard.NewServer(repo, log, 8080, broker)
 
-				col.SetOnMessage(func(msg *storage.RawMessage) {
+				col.SetOnMessage(func(msg *model.RawMessage) {
 					data, err := json.Marshal(msg)
 					if err != nil {
 						return

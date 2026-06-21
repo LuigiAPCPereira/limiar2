@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/limiar/collector/internal/collector"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 )
 
 func TestNoopClassifier_Classify(t *testing.T) {
@@ -13,7 +13,7 @@ func TestNoopClassifier_Classify(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("retorna o ponteiro original", func(t *testing.T) {
-		input := &storage.RawMessage{
+		input := &model.RawMessage{
 			ChannelID: 1,
 			MessageID: 2,
 			Payload:   []byte(`{"test":true}`),

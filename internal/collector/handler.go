@@ -60,7 +60,7 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Updat
 	// monitorados).
 
 	// A validação do channel monitorado acontece ANTES da alocação do
-	// struct *storage.RawMessage ou de outros processamentos, funcionando
+	// struct *model.RawMessage ou de outros processamentos, funcionando
 	// como um retorno antecipado (early return) no caminho crítico
 	// para evitar alocações e ciclos de GC.
 	if _, ok := h.monitoredChannels[update.ChannelID]; !ok {

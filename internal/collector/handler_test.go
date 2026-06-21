@@ -8,7 +8,7 @@ import (
 	"pgregory.net/rapid"
 
 	"github.com/limiar/collector/internal/collector"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/telegram"
 )
 
@@ -18,7 +18,7 @@ func TestProperty6NoopClassifierIdentity(t *testing.T) {
 	c := collector.NoopClassifier{}
 	ctx := context.Background()
 	rapid.Check(t, func(t *rapid.T) {
-		in := &storage.RawMessage{
+		in := &model.RawMessage{
 			ChannelID:     rapid.Int64().Draw(t, "channel"),
 			MessageID:     rapid.Int64().Draw(t, "message"),
 			Payload:       rapid.SliceOfN(rapid.Byte(), 0, 128).Draw(t, "payload"),
@@ -40,7 +40,7 @@ func TestProperty6NoopClassifierIdentity(t *testing.T) {
 func TestProperty5PayloadPreservation(t *testing.T) {
 	repo := newRepo(t)
 	ctx := context.Background()
-	ch := &storage.Channel{ID: 1, Username: "c", Title: "c", Active: true}
+	ch := &model.Channel{ID: 1, Username: "c", Title: "c", Active: true}
 	if err := repo.AddChannel(ctx, ch); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}

@@ -8,6 +8,7 @@ import (
 
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/telegram"
 )
@@ -121,7 +122,7 @@ func newChannelsAddCmd(p Provider) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ch := &storage.Channel{
+			ch := &model.Channel{
 				ID:       peer.ID,
 				Username: peer.Username,
 				Title:    peer.Username,

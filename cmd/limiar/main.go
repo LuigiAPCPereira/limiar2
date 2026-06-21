@@ -26,6 +26,7 @@ import (
 	"github.com/limiar/collector/internal/id"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/processor"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/telegram"
 )
@@ -114,8 +115,7 @@ func run() error {
 	defer func() { _ = dashRepo.Close() }()
 	srv := dashboard.NewServer(dashRepo, log.WithComponent("dashboard"), 8080, broker)
 
-	// Conecta o collector ao broker SSE: cada mensagem capturada é publicada.
-	col.SetOnMessage(func(msg *storage.RawMessage) {
+	col.SetOnMessage(func(msg *model.RawMessage) {
 		data, err := json.Marshal(msg)
 		if err != nil {
 			return

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
+	. "github.com/limiar/collector/internal/model"
 )
 
 // ErrNoSession indica que não há linha (row) de sessão presente no banco de dados.

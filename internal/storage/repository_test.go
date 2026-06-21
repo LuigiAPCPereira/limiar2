@@ -12,6 +12,7 @@ import (
 	"pgregory.net/rapid"
 
 	apperrors "github.com/limiar/collector/internal/errors"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/storage"
 )
 
@@ -256,7 +257,7 @@ func TestProperty4ChannelCRUD(t *testing.T) {
 		defer cleanup()
 
 		for i, name := range names {
-			ch := &storage.Channel{ID: int64(i + 1), Username: name, Title: name, Active: true}
+			ch := &model.Channel{ID: int64(i + 1), Username: name, Title: name, Active: true}
 			if err := r.AddChannel(ctx, ch); err != nil {
 				t.Fatalf("AddChannel %q: %v", name, err)
 			}
@@ -302,11 +303,11 @@ func TestSaveRawMessagePersistsJSON(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := context.Background()
 
-	ch := &storage.Channel{ID: 100, Username: "promos", Title: "Promos", Active: true}
+	ch := &model.Channel{ID: 100, Username: "promos", Title: "Promos", Active: true}
 	if err := repo.AddChannel(ctx, ch); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
-	msg := &storage.RawMessage{
+	msg := &model.RawMessage{
 		ChannelID:     100,
 		MessageID:     5,
 		Payload:       []byte(`{"_":"message","id":5}`),
@@ -336,11 +337,11 @@ func TestSaveRawMessagePersistsJSON(t *testing.T) {
 func TestSaveRawMessageDedupsByChannelAndMessageID(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := context.Background()
-	ch := &storage.Channel{ID: 101, Username: "dup", Title: "Dup", Active: true}
+	ch := &model.Channel{ID: 101, Username: "dup", Title: "Dup", Active: true}
 	if err := repo.AddChannel(ctx, ch); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
-	msg := &storage.RawMessage{ChannelID: 101, MessageID: 7, Payload: []byte(`{}`), ReceivedAt: time.Now().UTC(), SchemaVersion: 1}
+	msg := &model.RawMessage{ChannelID: 101, MessageID: 7, Payload: []byte(`{}`), ReceivedAt: time.Now().UTC(), SchemaVersion: 1}
 	insertedFlags := make([]bool, 3)
 	for i := 0; i < 3; i++ {
 		inserted, err := repo.SaveRawMessage(ctx, msg)
@@ -370,7 +371,7 @@ func TestSaveRawMessageDedupsByChannelAndMessageID(t *testing.T) {
 func TestProperty7ChannelMetadataUpdate(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := context.Background()
-	ch := &storage.Channel{ID: 200, Username: "deals", Title: "Deals", Active: true}
+	ch := &model.Channel{ID: 200, Username: "deals", Title: "Deals", Active: true}
 	if err := repo.AddChannel(ctx, ch); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
@@ -395,7 +396,7 @@ func TestProperty7ChannelMetadataUpdate(t *testing.T) {
 func TestPeerRoundTrip(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := context.Background()
-	p := &storage.Peer{ID: 777, AccessHash: 999, Type: "channel", Username: "x"}
+	p := &model.Peer{ID: 777, AccessHash: 999, Type: "channel", Username: "x"}
 	if err := repo.SavePeer(ctx, p); err != nil {
 		t.Fatalf("SavePeer: %v", err)
 	}
@@ -415,7 +416,7 @@ func TestSaveRawMessageBatch(t *testing.T) {
 	ctx := context.Background()
 
 	// Canal necessário para FK constraint.
-	ch := &storage.Channel{ID: 1, Username: "batch_test", Title: "Batch", Active: true}
+	ch := &model.Channel{ID: 1, Username: "batch_test", Title: "Batch", Active: true}
 	if err := repo.AddChannel(ctx, ch); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
@@ -423,7 +424,7 @@ func TestSaveRawMessageBatch(t *testing.T) {
 	now := time.Now().UTC()
 
 	t.Run("todas inseridas", func(t *testing.T) {
-		msgs := []*storage.RawMessage{
+		msgs := []*model.RawMessage{
 			{ChannelID: 1, MessageID: 1, Payload: []byte(`{"a":1}`), ReceivedAt: now, SchemaVersion: 1},
 			{ChannelID: 1, MessageID: 2, Payload: []byte(`{"a":2}`), ReceivedAt: now, SchemaVersion: 1},
 			{ChannelID: 1, MessageID: 3, Payload: []byte(`{"a":3}`), ReceivedAt: now, SchemaVersion: 1},
@@ -447,7 +448,7 @@ func TestSaveRawMessageBatch(t *testing.T) {
 
 	t.Run("duplicatas no batch", func(t *testing.T) {
 		// Mesmo (channel_id, message_id) deve ser deduplicado.
-		msgs := []*storage.RawMessage{
+		msgs := []*model.RawMessage{
 			{ChannelID: 1, MessageID: 10, Payload: []byte(`{}`), ReceivedAt: now, SchemaVersion: 1},
 			{ChannelID: 1, MessageID: 10, Payload: []byte(`{}`), ReceivedAt: now, SchemaVersion: 1},
 		}
@@ -484,7 +485,7 @@ func TestSaveRawMessageBatch(t *testing.T) {
 	})
 
 	t.Run("elemento único", func(t *testing.T) {
-		msgs := []*storage.RawMessage{
+		msgs := []*model.RawMessage{
 			{ChannelID: 1, MessageID: 20, Payload: []byte(`{"single":true}`), ReceivedAt: now, SchemaVersion: 1},
 		}
 		inserted, totalInserted, err := repo.SaveRawMessageBatch(ctx, msgs)
@@ -500,7 +501,7 @@ func TestSaveRawMessageBatch(t *testing.T) {
 	})
 
 	t.Run("idempotência cross-batch", func(t *testing.T) {
-		msgs := []*storage.RawMessage{
+		msgs := []*model.RawMessage{
 			{ChannelID: 1, MessageID: 30, Payload: []byte(`{"idem":true}`), ReceivedAt: now, SchemaVersion: 1},
 		}
 		// Primeiro batch: insere.
@@ -528,7 +529,7 @@ func TestSavePeersBatch(t *testing.T) {
 	t.Run("todas inseridas", func(t *testing.T) {
 		repo := newTestRepo(t)
 		ctx := context.Background()
-		peers := []*storage.Peer{
+		peers := []*model.Peer{
 			{ID: 1, AccessHash: 100, Type: "channel", Username: "ch1"},
 			{ID: 2, AccessHash: 200, Type: "channel", Username: "ch2"},
 			{ID: 3, AccessHash: 300, Type: "user", Username: ""},
@@ -548,13 +549,13 @@ func TestSavePeersBatch(t *testing.T) {
 	t.Run("upsert substitui existente", func(t *testing.T) {
 		repo := newTestRepo(t)
 		ctx := context.Background()
-		peers := []*storage.Peer{
+		peers := []*model.Peer{
 			{ID: 10, AccessHash: 999, Type: "channel", Username: "original"},
 		}
 		if err := repo.SavePeersBatch(ctx, peers); err != nil {
 			t.Fatalf("primeiro SavePeersBatch: %v", err)
 		}
-		updated := []*storage.Peer{
+		updated := []*model.Peer{
 			{ID: 10, AccessHash: 111, Type: "channel", Username: "updated"},
 		}
 		if err := repo.SavePeersBatch(ctx, updated); err != nil {
@@ -578,7 +579,7 @@ func TestSavePeersBatch(t *testing.T) {
 		if err := repo.SavePeersBatch(ctx, nil); err != nil {
 			t.Fatalf("SavePeersBatch(nil): %v", err)
 		}
-		if err := repo.SavePeersBatch(ctx, []*storage.Peer{}); err != nil {
+	if err := repo.SavePeersBatch(ctx, []*model.Peer{}); err != nil {
 			t.Fatalf("SavePeersBatch(empty): %v", err)
 		}
 	})

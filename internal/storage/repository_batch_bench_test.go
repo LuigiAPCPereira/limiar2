@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/storage"
 )
 
@@ -31,7 +32,7 @@ func openBenchRepo(b *testing.B) (*storage.DB, *storage.Repository, func()) {
 		b.Fatalf("repo: %v", err)
 	}
 	// Insere canal para satisfazer a FK (channel_id) de raw_messages.
-	if err := repo.AddChannel(context.Background(), &storage.Channel{
+	if err := repo.AddChannel(context.Background(), &model.Channel{
 		ID: 1, Username: "bench", Title: "Bench", Active: true,
 	}); err != nil {
 		_ = repo.Close()
@@ -48,12 +49,12 @@ func openBenchRepo(b *testing.B) (*storage.DB, *storage.Repository, func()) {
 
 // makeBenchMessages produz N mensagens compartilhando o mesmo payload (~512B)
 // com MessageIDs sequenciais (1..N), espelhando o formato típico de update do Telegram.
-func makeBenchMessages(n int, channelID int64) []*storage.RawMessage {
-	msgs := make([]*storage.RawMessage, n)
+func makeBenchMessages(n int, channelID int64) []*model.RawMessage {
+	msgs := make([]*model.RawMessage, n)
 	payload := []byte(`{"_":"updateNewMessage","message":{"_":"message","id":0,"peer_id":{"_":"peerChannel","channel_id":` +
 		fmt.Sprintf("%d", channelID) + `},"message":"oferta relâmpago produto X https://t.me/canal","date":1700000000}}`)
 	for i := 0; i < n; i++ {
-		msgs[i] = &storage.RawMessage{
+		msgs[i] = &model.RawMessage{
 			ChannelID:     channelID,
 			MessageID:     int64(i + 1),
 			Payload:       payload,

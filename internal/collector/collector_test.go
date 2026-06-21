@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/limiar/collector/internal/collector"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/telegram"
 )
@@ -43,21 +44,21 @@ func newRepo(t *testing.T) *storage.Repository {
 
 type fakeRepo struct {
 	mu       sync.Mutex
-	channels []*storage.Channel
-	saved    []*storage.RawMessage
+	channels []*model.Channel
+	saved    []*model.RawMessage
 	cursors  map[int64]int64
 	seen     map[[2]int64]struct{} // (channel_id, message_id) já "persistidos" — simula ON CONFLICT DO NOTHING real
 }
 
-func newFakeRepo(channels ...*storage.Channel) *fakeRepo {
+func newFakeRepo(channels ...*model.Channel) *fakeRepo {
 	return &fakeRepo{channels: channels, cursors: make(map[int64]int64), seen: make(map[[2]int64]struct{})}
 }
 
-func (f *fakeRepo) ListChannels(_ context.Context) ([]*storage.Channel, error) {
+func (f *fakeRepo) ListChannels(_ context.Context) ([]*model.Channel, error) {
 	return f.channels, nil
 }
 
-func (f *fakeRepo) SaveRawMessage(_ context.Context, msg *storage.RawMessage) (bool, error) {
+func (f *fakeRepo) SaveRawMessage(_ context.Context, msg *model.RawMessage) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	key := [2]int64{msg.ChannelID, msg.MessageID}
@@ -69,7 +70,7 @@ func (f *fakeRepo) SaveRawMessage(_ context.Context, msg *storage.RawMessage) (b
 	return true, nil
 }
 
-func (f *fakeRepo) SaveRawMessageBatch(_ context.Context, msgs []*storage.RawMessage) ([]bool, int, error) {
+func (f *fakeRepo) SaveRawMessageBatch(_ context.Context, msgs []*model.RawMessage) ([]bool, int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	inserted := make([]bool, len(msgs))
@@ -112,12 +113,12 @@ func (c *fakeClient) IsAuthenticated(context.Context) (bool, error) { return tru
 func (c *fakeClient) LoadPeers(context.Context) error               { return nil }
 func (c *fakeClient) AddUpdateHandler(telegram.UpdateHandler)       {}
 
-func (c *fakeClient) ResolveChannel(context.Context, string) (*storage.Peer, error) {
-	return &storage.Peer{ID: 1, Type: "channel"}, nil
+func (c *fakeClient) ResolveChannel(context.Context, string) (*model.Peer, error) {
+	return &model.Peer{ID: 1, Type: "channel"}, nil
 }
 
-func (c *fakeClient) ResolveChannelChecked(context.Context, string) (*storage.Peer, error) {
-	return &storage.Peer{ID: 1, Type: "channel"}, nil
+func (c *fakeClient) ResolveChannelChecked(context.Context, string) (*model.Peer, error) {
+	return &model.Peer{ID: 1, Type: "channel"}, nil
 }
 
 func (c *fakeClient) FetchHistory(_ context.Context, _ int64, minID int64, limit int) ([]telegram.HistoryMessage, error) {
@@ -188,7 +189,7 @@ func TestProperty16ShutdownWithinTimeout(t *testing.T) {
 
 // A primeira execução (last_message_id == 0) faz o backfill do histórico antes da captura ao vivo.
 func TestFirstRunBackfillsHistory(t *testing.T) {
-	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 0}
+	ch := &model.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 0}
 	repo := newFakeRepo(ch)
 	history := make([]telegram.HistoryMessage, 20)
 	for i := range history {
@@ -215,7 +216,7 @@ func TestFirstRunBackfillsHistory(t *testing.T) {
 
 // Modo de retomada (last_message_id > 0) faz o backfill apenas das mensagens mais novas que o cursor.
 func TestResumeBackfillFetchesOnlyNewMessages(t *testing.T) {
-	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 99}
+	ch := &model.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 99}
 	repo := newFakeRepo(ch)
 	// History contains one old message (id=1) and one new message (id=101).
 	history := []telegram.HistoryMessage{
@@ -245,7 +246,7 @@ func TestResumeBackfillFetchesOnlyNewMessages(t *testing.T) {
 // Mensagens mais antigas que "agora-historyMaxDays" são ignoradas, e a paginação para quando
 // a página atinge esse limite. O cursor avança para o id mais novo encontrado.
 func TestBackfillRespectsTemporalCutoff(t *testing.T) {
-	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 0}
+	ch := &model.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 0}
 	repo := newFakeRepo(ch)
 	now := time.Now()
 	history := []telegram.HistoryMessage{
@@ -285,7 +286,7 @@ func TestBackfillRespectsTemporalCutoff(t *testing.T) {
 // e potencialmente perigoso em reprocessamentos. Após o fix, scannedMaxID
 // permanece 0 e o orquestrador preserva o cursor em 105.
 func TestBackfillDoesNotAdvanceCursorOnDuplicates(t *testing.T) {
-	ch := &storage.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 105}
+	ch := &model.Channel{ID: 1, Username: "promos", Active: true, LastMessageID: 105}
 	repo := newFakeRepo(ch)
 
 	// Simula cursor previamente persistido em execução anterior (o valor que
@@ -296,7 +297,7 @@ func TestBackfillDoesNotAdvanceCursorOnDuplicates(t *testing.T) {
 	// Semeia o "DB" com as mensagens 1-105 já persistidas. O fakeRepo agora
 	// deduplica por (channel_id, message_id) simulando ON CONFLICT DO NOTHING.
 	for id := int64(1); id <= 105; id++ {
-		repo.saved = append(repo.saved, &storage.RawMessage{ChannelID: 1, MessageID: id})
+		repo.saved = append(repo.saved, &model.RawMessage{ChannelID: 1, MessageID: id})
 		repo.seen[[2]int64{1, id}] = struct{}{}
 	}
 
