@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2026-06-21 - Padrão de Abas Acessíveis no Dashboard
+**Aprendizado:** Componentes de abas interativas no dashboard precisavam de atributos WAI-ARIA (role="tablist", role="tab", aria-controls, aria-selected, role="tabpanel", aria-labelledby) para garantir que leitores de tela entendam a estrutura e o estado da interface dinamicamente renderizada pelo AlpineJS.
+**Ação:** Ao criar novas abas, sempre aplicar role="tablist" no container, role="tab", aria-controls, e aria-selected (gerenciado dinamicamente) em cada trigger, além de associar id, role="tabpanel", aria-labelledby com tabindex="0" nas áreas de conteúdo correspondentes.
