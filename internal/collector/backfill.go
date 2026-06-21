@@ -5,7 +5,7 @@ import (
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/telegram"
 )
 
@@ -14,7 +14,7 @@ import (
 // atingido. SaveRawMessage é idempotente (ON CONFLICT DO NOTHING na constraint
 // única (channel_id, message_id)), portanto buscar novamente mensagens que
 // já foram persistidas é seguro — elas são silenciosamente descartadas pelo DB.
-func (c *Collector) backfill(ctx context.Context, channels []*storage.Channel) error {
+func (c *Collector) backfill(ctx context.Context, channels []*model.Channel) error {
 	for _, ch := range channels {
 		if !ch.Active {
 			continue
@@ -57,7 +57,7 @@ func (c *Collector) backfill(ctx context.Context, channels []*storage.Channel) e
 // termina em caso de: página vazia, qualquer das condições de parada, ou cancelamento de contexto.
 // SaveRawMessage é idempotente (ON CONFLICT DO NOTHING no (channel_id, message_id)
 // único), então buscar uma mensagem já persistida é um no-op silencioso na camada do DB.
-func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (fetched, maxID int64, err error) {
+func (c *Collector) backfillChannel(ctx context.Context, ch *model.Channel) (fetched, maxID int64, err error) {
 	cursor := ch.LastMessageID
 	ceiling := int64(c.historyMax)
 	cutoff := time.Now().AddDate(0, 0, -c.historyMaxDays)
@@ -137,7 +137,7 @@ func (c *Collector) backfillChannel(ctx context.Context, ch *storage.Channel) (f
 				continue
 			}
 			job := WriteJob{
-				Message: &storage.RawMessage{
+				Message: &model.RawMessage{
 					ChannelID:     ch.ID,
 					MessageID:     m.MessageID,
 					Payload:       m.Payload,

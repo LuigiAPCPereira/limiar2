@@ -9,7 +9,7 @@ import (
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/media"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/telegram"
 )
 
@@ -21,12 +21,12 @@ const historyPageSize = 100
 // Repository é o subconjunto de operações de storage de que o collector precisa. Aceitar
 // uma interface mantém o collector testável usando fakes.
 type Repository interface {
-	ListChannels(ctx context.Context) ([]*storage.Channel, error)
-	SaveRawMessage(ctx context.Context, msg *storage.RawMessage) (inserted bool, err error)
+	ListChannels(ctx context.Context) ([]*model.Channel, error)
+	SaveRawMessage(ctx context.Context, msg *model.RawMessage) (inserted bool, err error)
 	// SaveRawMessageBatch persiste múltiplas mensagens em uma única transação.
 	// inserted[i] indica se msgs[i] foi efetivamente inserida (true) ou era duplicata (false).
 	// totalInserted é a soma dos true. Em falha, inserted é nil e err não é nil.
-	SaveRawMessageBatch(ctx context.Context, msgs []*storage.RawMessage) (inserted []bool, totalInserted int, err error)
+	SaveRawMessageBatch(ctx context.Context, msgs []*model.RawMessage) (inserted []bool, totalInserted int, err error)
 	UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error
 }
 
@@ -49,7 +49,7 @@ type Collector struct {
 	historyMax     int
 	historyMaxDays int
 	flushInterval  time.Duration
-	onMessage      func(*storage.RawMessage)
+	onMessage      func(*model.RawMessage)
 	mediaClient    mediaClient
 	imageCache     imageCache
 
@@ -65,7 +65,7 @@ type Collector struct {
 
 // SetOnMessage registra um callback invocado após cada gravação bem-sucedida no
 // banco de dados. É seguro chamar antes de Run. Passe nil para desabilitar.
-func (c *Collector) SetOnMessage(fn func(*storage.RawMessage)) {
+func (c *Collector) SetOnMessage(fn func(*model.RawMessage)) {
 	c.onMessage = fn
 }
 
@@ -225,7 +225,7 @@ func (c *Collector) shutdown() {
 // compartilhado. Executa em goroutine para não bloquear o dbWriter.
 // O file_reference MTProto é válido apenas na janela de chegada da mensagem —
 // este é o único momento confiável para download full-res.
-func (c *Collector) proactiveDownload(ctx context.Context, msg *storage.RawMessage) {
+func (c *Collector) proactiveDownload(ctx context.Context, msg *model.RawMessage) {
 	req, err := telegram.ExtractPhotoRequest(msg.Payload)
 	if err != nil || req == nil {
 		return // sem foto ou erro de parse — silencioso

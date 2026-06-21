@@ -6,7 +6,7 @@ import (
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 )
 
 // dbWriter é a única goroutine que escreve no banco de dados (fan-in). Ele
@@ -75,7 +75,7 @@ func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
 	}
 
 	// Separa mensagens para o commit em lote.
-	msgs := make([]*storage.RawMessage, len(batch))
+	msgs := make([]*model.RawMessage, len(batch))
 	for i, job := range batch {
 		msgs[i] = job.Message
 	}
@@ -137,7 +137,7 @@ func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
 // writeBatchWithRetry tenta commitar um lote em transação única até maxWriteRetry+1
 // vezes. Idempotente graças ao ON CONFLICT DO NOTHING — retries não criam
 // duplicatas. Retorna nil no sucesso, o último erro após retries esgotados.
-func (c *Collector) writeBatchWithRetry(ctx context.Context, msgs []*storage.RawMessage) ([]bool, error) {
+func (c *Collector) writeBatchWithRetry(ctx context.Context, msgs []*model.RawMessage) ([]bool, error) {
 	var lastErr error
 	for attempt := 0; attempt <= c.maxWriteRetry; attempt++ {
 		inserted, _, err := c.repo.SaveRawMessageBatch(ctx, msgs)

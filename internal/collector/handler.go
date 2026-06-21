@@ -6,7 +6,7 @@ import (
 
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
-	"github.com/limiar/collector/internal/storage"
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/telegram"
 )
 
@@ -20,7 +20,7 @@ const schemaVersion = 1
 // do cursor para esses jobs porque o orquestrador do backfill avança o cursor
 // uma vez por canal com o id máximo verdadeiro (evitando a corrida da ordem descendente).
 type WriteJob struct {
-	Message  *storage.RawMessage
+	Message  *model.RawMessage
 	ErrCh    chan<- error
 	Backfill bool
 }
@@ -67,7 +67,7 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Updat
 		return nil
 	}
 
-	msg := &storage.RawMessage{
+	msg := &model.RawMessage{
 		ChannelID:     update.ChannelID,
 		MessageID:     update.MessageID,
 		Payload:       update.Payload,
