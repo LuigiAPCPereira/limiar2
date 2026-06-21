@@ -41,7 +41,7 @@ func withAuthenticatedStore(
 	log := p.Logger(format)
 	presenter := p.Presenter()
 
-	repo, closeStore, err := p.OpenStore(ctx)
+	repo, closeStore, err := p.OpenStore(ctx, log)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func newChannelsAddCmd(p Provider) *cobra.Command {
 			log := p.Logger(format)
 			presenter := p.Presenter()
 
-			repo, closeStore, err := p.OpenStore(ctx)
+			repo, closeStore, err := p.OpenStore(ctx, log)
 			if err != nil {
 				return err
 			}

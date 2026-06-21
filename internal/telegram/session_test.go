@@ -22,7 +22,7 @@ func newRepo(t *testing.T) *storage.Repository {
 	if err != nil {
 		t.Fatalf("mkdtemp: %v", err)
 	}
-	db, err := storage.Open(ctx, filepath.Join(dir, "t.db"))
+	db, err := storage.Open(ctx, filepath.Join(dir, "t.db"), nil)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

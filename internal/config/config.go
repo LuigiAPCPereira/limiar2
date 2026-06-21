@@ -87,7 +87,7 @@ func Load(v *viper.Viper) (*Config, error) {
 		"app_id", "api_hash", "db_path", "log_level", "log_format",
 		"shutdown_timeout", "max_retries", "io_timeout",
 		"dispatcher_buffer_size", "db_writer_buffer_size",
-		"history_max", "history_max_days",
+		"history_max", "history_max_days", "dashboard_port",
 	} {
 		if err := v.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("config: bind_env %s: %w", key, err)

@@ -45,8 +45,8 @@ func (p *provider) Presenter() logger.Presenter {
 
 // OpenStore abre o banco de dados Tursogo e retorna um Repository com um fechador (closer)
 // que libera as instruções preparadas (prepared statements) e a conexão.
-func (p *provider) OpenStore(ctx context.Context) (*storage.Repository, func() error, error) {
-	db, err := storage.Open(ctx, p.cfg.DBPath)
+func (p *provider) OpenStore(ctx context.Context, log logger.Logger) (*storage.Repository, func() error, error) {
+	db, err := storage.Open(ctx, p.cfg.DBPath, log)
 	if err != nil {
 		return nil, nil, err
 	}

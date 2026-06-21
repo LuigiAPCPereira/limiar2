@@ -25,12 +25,6 @@ func newDashboardCmd(p Provider) *cobra.Command {
 			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
 
-			repo, closeStore, err := p.OpenStore(ctx)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = closeStore() }()
-
 			cfg := p.Config()
 			if port == 0 {
 				port = cfg.DashboardPort
@@ -38,6 +32,12 @@ func newDashboardCmd(p Provider) *cobra.Command {
 			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
 			log := p.Logger(format)
 			presenter := p.Presenter()
+
+			repo, closeStore, err := p.OpenStore(ctx, log)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closeStore() }()
 
 			srv := dashboard.NewServer(repo, nil, log, port, nil)
 			presenter.Info(fmt.Sprintf("Dashboard: http://localhost:%d", port))

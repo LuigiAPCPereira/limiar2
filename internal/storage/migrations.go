@@ -6,8 +6,9 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"os"
 	"sort"
+
+	"github.com/limiar/collector/internal/logger"
 )
 
 //go:embed migrations/*.sql
@@ -39,8 +40,10 @@ func migrationApplied(ctx context.Context, db *sql.DB, version string) (bool, er
 
 // migrate aplica toda migration embutida na ordem lexical do nome do arquivo.
 // Cada migration é executada dentro de uma transação. Migrations já registradas
-// em schema_migrations são puladas. Após execução bem-sucedida, a versão é
-func migrate(ctx context.Context, db *sql.DB) error {
+func migrate(ctx context.Context, db *sql.DB, log logger.Logger) error {
+	if log == nil {
+		log = logger.NopLogger{}
+	}
 	if err := ensureMigrationsTable(ctx, db); err != nil {
 		return err
 	}
@@ -58,8 +61,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	}
 	sort.Strings(names)
 
-	fmt.Fprintf(os.Stderr, "storage: verificando %d migrações...\n", len(names))
-	applied := 0
+	log.Info("🔍 Verificando migrações", "total", len(names))
+	preExisting := 0
+	executed := 0
 
 	for _, name := range names {
 		migrated, err := migrationApplied(ctx, db, name)
@@ -67,7 +71,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 		if migrated {
-			applied++
+			preExisting++
 			continue
 		}
 
@@ -76,7 +80,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 
-		fmt.Fprintf(os.Stderr, "storage: aplicando migração %s (%d bytes)...\n", name, len(sqlBytes))
+		log.Info("⚙️ Aplicando migração", "nome", name, "bytes", len(sqlBytes))
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("begin tx %s: %w", name, err)
@@ -96,10 +100,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit %s: %w", name, err)
 		}
-		applied++
+		executed++
 	}
 
-	fmt.Fprintf(os.Stderr, "storage: migrações ok (%d já aplicadas, %d executadas)\n",
-		applied, len(names)-applied)
+	log.Info("✅ Migrações concluídas", "já_aplicadas", preExisting, "executadas", executed)
 	return nil
 }

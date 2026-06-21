@@ -38,7 +38,7 @@ func openTempRepo() (*storage.Repository, func(), error) {
 		return nil, nil, err
 	}
 	dbPath := filepath.Join(dir, "test.db")
-	db, err := storage.Open(ctx, dbPath)
+	db, err := storage.Open(ctx, dbPath, nil)
 	if err != nil {
 		_ = os.RemoveAll(dir)
 		return nil, nil, err
@@ -60,7 +60,7 @@ func openTempRepo() (*storage.Repository, func(), error) {
 func TestOpenRunsMigrations(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "m.db")
-	db, err := storage.Open(ctx, dbPath)
+	db, err := storage.Open(ctx, dbPath, nil)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestMigrationTrackingIdempotent(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "idem.db")
 
 	// Primeira abertura: aplica todas as migrações.
-	db1, err := storage.Open(ctx, dbPath)
+	db1, err := storage.Open(ctx, dbPath, nil)
 	if err != nil {
 		t.Fatalf("Open #1: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestMigrationTrackingIdempotent(t *testing.T) {
 	_ = db1.Close()
 
 	// Segunda abertura: não deve duplicar registros.
-	db2, err := storage.Open(ctx, dbPath)
+	db2, err := storage.Open(ctx, dbPath, nil)
 	if err != nil {
 		t.Fatalf("Open #2: %v", err)
 	}

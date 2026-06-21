@@ -60,7 +60,7 @@ func runMediaSmoke(cmd *cobra.Command, p Provider, msgID int64) error {
 	log := p.Logger(format)
 	presenter := p.Presenter()
 
-	store, err := storage.Open(ctx, cfg.DBPath)
+	store, err := storage.Open(ctx, cfg.DBPath, log)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			log := p.Logger(format)
 			presenter := p.Presenter()
 
-			store, err := storage.Open(ctx, cfg.DBPath)
+			store, err := storage.Open(ctx, cfg.DBPath, log)
 			if err != nil {
 				return err
 			}

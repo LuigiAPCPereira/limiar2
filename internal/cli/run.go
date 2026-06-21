@@ -37,7 +37,7 @@ func newRunCmd(p Provider) *cobra.Command {
 			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
 
-			repo, closeStore, err := p.OpenStore(ctx)
+			repo, closeStore, err := p.OpenStore(ctx, log)
 			if err != nil {
 				return err
 			}

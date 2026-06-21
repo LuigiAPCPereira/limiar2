@@ -50,7 +50,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	db, err := storage.Open(ctx, cfg.DBPath)
+	db, err := storage.Open(ctx, cfg.DBPath, log.WithComponent("storage"))
 	if err != nil {
 		return fmt.Errorf("abrir banco: %w", err)
 	}

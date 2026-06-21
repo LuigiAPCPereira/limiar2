@@ -16,7 +16,7 @@ func openTempProcessorRepo() (*Repository, *storage.DB, func(), error) {
 		return nil, nil, nil, err
 	}
 	dbPath := filepath.Join(dir, "test.db")
-	db, err := storage.Open(ctx, dbPath)
+	db, err := storage.Open(ctx, dbPath, nil)
 	if err != nil {
 		_ = os.RemoveAll(dir)
 		return nil, nil, nil, err

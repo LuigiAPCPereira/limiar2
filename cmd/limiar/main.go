@@ -69,7 +69,7 @@ func run() error {
 	defer stop()
 
 	// --- Banco (único *sql.DB para todo o pipeline) ---
-	db, err := storage.Open(ctx, cfg.DBPath)
+	db, err := storage.Open(ctx, cfg.DBPath, log.WithComponent("storage"))
 	if err != nil {
 		return err
 	}

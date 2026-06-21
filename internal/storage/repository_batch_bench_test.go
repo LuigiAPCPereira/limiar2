@@ -20,7 +20,7 @@ func openBenchRepo(b *testing.B) (*storage.DB, *storage.Repository, func()) {
 	if err != nil {
 		b.Fatalf("mkdtemp: %v", err)
 	}
-	db, err := storage.Open(context.Background(), filepath.Join(dir, "bench.db"))
+	db, err := storage.Open(context.Background(), filepath.Join(dir, "bench.db"), nil)
 	if err != nil {
 		_ = os.RemoveAll(dir)
 		b.Fatalf("open: %v", err)

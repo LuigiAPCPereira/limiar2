@@ -28,7 +28,7 @@ type Provider interface {
 	// Presenter constrói um Presenter para Mensagens_de_Apresentação ao operador.
 	Presenter() logger.Presenter
 	// OpenStore abre o banco de dados e retorna um Repository junto com uma função de fechamento.
-	OpenStore(ctx context.Context) (*storage.Repository, func() error, error)
+	OpenStore(ctx context.Context, log logger.Logger) (*storage.Repository, func() error, error)
 	// NewClient constrói a fachada (facade) do Telegram vinculada ao repositório e logger fornecidos.
 	NewClient(log logger.Logger, repo *storage.Repository) telegram.TelegramClient
 	// NewCollector constrói o coletor vinculado ao cliente, repositório e logger fornecidos.

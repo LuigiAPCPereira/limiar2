@@ -13,6 +13,8 @@ import (
 	"os"
 
 	_ "turso.tech/database/tursogo" // registra o driver "turso"
+
+	"github.com/limiar/collector/internal/logger"
 )
 
 // driverName é o nome do driver database/sql registrado pelo tursogo.
@@ -27,19 +29,24 @@ type DB struct {
 // todas as migrações embarcadas. O DB retornado deve ser fechado pelo chamador.
 // Durante a abertura, emite logs de progresso via stderr para visibilidade
 // pré-logger estruturado (o logger ainda não está configurado neste ponto).
-func Open(ctx context.Context, dbPath string) (*DB, error) {
-	// Garante que o arquivo do banco seja criado/mantido com
-	// permissões restritas (0600) para proteger a sessão do Telegram e as mensagens.
+// Open abre (ou cria) o banco de dados Tursogo no dbPath especificado e aplica
+// todas as migrações embarcadas. O DB retornado deve ser fechado pelo chamador.
+// log pode ser nil (usa NopLogger).
+func Open(ctx context.Context, dbPath string, log logger.Logger) (*DB, error) {
+	if log == nil {
+		log = logger.NopLogger{}
+	}
+
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0600) // #nosec G304 — path from validated config
 		if err != nil {
 			return nil, fmt.Errorf("storage: create db %q: %w", dbPath, err)
 		}
 		_ = f.Close()
-		fmt.Fprintf(os.Stderr, "storage: banco criado em %s\n", dbPath)
+		log.Info("📦 Banco criado", "caminho", dbPath)
 	}
 
-	fmt.Fprintf(os.Stderr, "storage: abrindo %s (driver=%s)...\n", dbPath, driverName)
+	log.Info("🔌 Abrindo banco", "caminho", dbPath, "driver", driverName)
 	conn, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("storage: open %q: %w", dbPath, err)
@@ -48,32 +55,25 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "storage: conexão estabelecida\n")
 
-	// WAL mode permite readers e writers concorrentes — necessário quando
-	// collector e processor rodam simultaneamente no mesmo limiar.db.
 	if _, err := conn.ExecContext(ctx, `PRAGMA journal_mode=WAL`); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: wal mode: %w", err)
 	}
-	// busy_timeout faz o SQLite esperar até 5s quando o banco está ocupado,
-	// em vez de retornar SQLITE_BUSY imediatamente.
 	if _, err := conn.ExecContext(ctx, `PRAGMA busy_timeout=5000`); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: busy_timeout: %w", err)
 	}
-	// foreign_keys habilita validação de chaves estrangeiras. Sem este PRAGMA,
-	// FKs são apenas decorativas (inserções com referências inválidas não falham).
 	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: foreign_keys: %w", err)
 	}
 
-	if err := migrate(ctx, conn); err != nil {
+	if err := migrate(ctx, conn, log); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: migrate: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "storage: pronto (%s, WAL, busy_timeout=5s, foreign_keys=ON)\n", dbPath)
+	log.Info("✅ Banco pronto", "caminho", dbPath, "journal", "WAL", "busy_timeout_ms", 5000, "foreign_keys", true)
 	return &DB{conn: conn}, nil
 }
 
