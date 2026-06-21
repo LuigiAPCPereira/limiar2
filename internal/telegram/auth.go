@@ -89,24 +89,30 @@ func (a *terminalAuthenticator) promptMasked(label string) (string, error) {
 
 // Phone solicita o número de telefone da conta.
 func (a *terminalAuthenticator) Phone(_ context.Context) (string, error) {
+	a.log.Info("📱 Solicitando código de autenticação")
 	_, _ = fmt.Fprintln(a.out, "  Informe o número de telefone da conta (formato internacional).")
 	return a.prompt("  📞 Telefone › ")
 }
 
 // Password solicita a senha 2FA. O gotd chama isso apenas quando a 2FA é
 // requerida (ele apresenta isso como a etapa da senha, em vez de ErrPasswordRequired
-// para o chamador de Flow.Run).
 func (a *terminalAuthenticator) Password(_ context.Context) (string, error) {
 	if a.password != "" {
+		a.log.Info("🔒 Verificação em duas etapas concluída")
 		return a.password, nil
 	}
 	_, _ = fmt.Fprintln(a.out)
 	_, _ = fmt.Fprintln(a.out, "  🔒 Verificação em duas etapas ativada.")
-	return a.promptMasked("  🔐 Senha 2FA › ")
+	senha, err := a.promptMasked("  🔐 Senha 2FA › ")
+	if err == nil {
+		a.log.Info("🔒 Verificação em duas etapas concluída")
+	}
+	return senha, err
 }
 
 // Code solicita o código de login que o Telegram envia para a conta.
 func (a *terminalAuthenticator) Code(_ context.Context, _ *tg.AuthSentCode) (string, error) {
+	a.log.Info("🔐 Enviando código de verificação")
 	_, _ = fmt.Fprintln(a.out)
 	_, _ = fmt.Fprintln(a.out, "  Telegram enviou um código para o seu aplicativo ou SMS.")
 	return a.promptMasked("  🔢 Código › ")

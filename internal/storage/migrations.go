@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"os"
 	"sort"
 )
 
@@ -39,7 +40,6 @@ func migrationApplied(ctx context.Context, db *sql.DB, version string) (bool, er
 // migrate aplica toda migration embutida na ordem lexical do nome do arquivo.
 // Cada migration é executada dentro de uma transação. Migrations já registradas
 // em schema_migrations são puladas. Após execução bem-sucedida, a versão é
-// registrada na tabela de controle.
 func migrate(ctx context.Context, db *sql.DB) error {
 	if err := ensureMigrationsTable(ctx, db); err != nil {
 		return err
@@ -58,12 +58,16 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	}
 	sort.Strings(names)
 
+	fmt.Fprintf(os.Stderr, "storage: verificando %d migrações...\n", len(names))
+	applied := 0
+
 	for _, name := range names {
-		applied, err := migrationApplied(ctx, db, name)
+		migrated, err := migrationApplied(ctx, db, name)
 		if err != nil {
 			return err
 		}
-		if applied {
+		if migrated {
+			applied++
 			continue
 		}
 
@@ -72,6 +76,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 
+		fmt.Fprintf(os.Stderr, "storage: aplicando migração %s (%d bytes)...\n", name, len(sqlBytes))
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("begin tx %s: %w", name, err)
@@ -91,6 +96,10 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit %s: %w", name, err)
 		}
+		applied++
 	}
+
+	fmt.Fprintf(os.Stderr, "storage: migrações ok (%d já aplicadas, %d executadas)\n",
+		applied, len(names)-applied)
 	return nil
 }

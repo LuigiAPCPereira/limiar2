@@ -25,6 +25,8 @@ type DB struct {
 
 // Open abre (ou cria) o banco de dados Tursogo no dbPath especificado e aplica
 // todas as migrações embarcadas. O DB retornado deve ser fechado pelo chamador.
+// Durante a abertura, emite logs de progresso via stderr para visibilidade
+// pré-logger estruturado (o logger ainda não está configurado neste ponto).
 func Open(ctx context.Context, dbPath string) (*DB, error) {
 	// Garante que o arquivo do banco seja criado/mantido com
 	// permissões restritas (0600) para proteger a sessão do Telegram e as mensagens.
@@ -34,13 +36,10 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 			return nil, fmt.Errorf("storage: create db %q: %w", dbPath, err)
 		}
 		_ = f.Close()
-	} else {
-		// Reforça permissões restritas mesmo se o arquivo já existir
-		if err := os.Chmod(dbPath, 0600); err != nil {
-			return nil, fmt.Errorf("storage: chmod db %q: %w", dbPath, err)
-		}
+		fmt.Fprintf(os.Stderr, "storage: banco criado em %s\n", dbPath)
 	}
 
+	fmt.Fprintf(os.Stderr, "storage: abrindo %s (driver=%s)...\n", dbPath, driverName)
 	conn, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("storage: open %q: %w", dbPath, err)
@@ -49,6 +48,7 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
+	fmt.Fprintf(os.Stderr, "storage: conexão estabelecida\n")
 
 	// WAL mode permite readers e writers concorrentes — necessário quando
 	// collector e processor rodam simultaneamente no mesmo limiar.db.
@@ -73,6 +73,7 @@ func Open(ctx context.Context, dbPath string) (*DB, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: migrate: %w", err)
 	}
+	fmt.Fprintf(os.Stderr, "storage: pronto (%s, WAL, busy_timeout=5s, foreign_keys=ON)\n", dbPath)
 	return &DB{conn: conn}, nil
 }
 

@@ -100,14 +100,17 @@ func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update)
 	}
 }
 
-// Dispatch entrega uma atualização para o canal de cada handler. Ele retorna assim que
-// a atualização for enfileirada para todos os handlers (bloqueando apenas se um buffer estiver cheio).
+// Dispatch entrega uma atualização para o canal de cada handler via envio não bloqueante.
+// Se o buffer de um handler estiver cheio, o update é descartado para esse handler com
+// aviso de log, sem bloquear os demais handlers (evita cascata de bloqueio).
 func (d *Dispatcher) Dispatch(ctx context.Context, update Update) {
-	for _, ch := range d.chans {
+	for i, ch := range d.chans {
 		select {
 		case ch <- update:
 		case <-ctx.Done():
 			return
+		default:
+			d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
 		}
 	}
 }

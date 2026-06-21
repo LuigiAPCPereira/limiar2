@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/telegram"
 )
@@ -27,12 +26,16 @@ func (c *Collector) backfill(ctx context.Context, channels []*model.Channel) err
 
 		fetched, maxID, err := c.backfillChannel(ctx, ch)
 		if err != nil {
-			return apperrors.Wrap("collector", "fetch_history", err)
+			c.log.Error("📜 Falha ao buscar histórico do canal",
+				"canal", ch.Username, "erro", err)
+			continue // não aborta todos os canais — tenta o próximo
 		}
 
 		if maxID > 0 {
 			if err := c.repo.UpdateChannelLastMessage(ctx, ch.ID, maxID, time.Now().UTC()); err != nil {
-				return apperrors.Wrap("collector", "advance_cursor", err)
+				c.log.Error("📜 Falha ao avançar cursor do canal",
+					"canal", ch.Username, "erro", err)
+				continue
 			}
 		}
 
