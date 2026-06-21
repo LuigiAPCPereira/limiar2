@@ -55,7 +55,7 @@ func TestDispatcherFansOutToAllHandlers(t *testing.T) {
 }
 
 func TestDispatcherDeliversManyUpdates(t *testing.T) {
-	d := telegram.NewDispatcher(256, nil)
+	d := telegram.NewDispatcher(512, nil) // buffer > n para evitar descarte no envio não bloqueante
 	h := &countingHandler{got: make(chan struct{}, 1000)}
 	d.Register(h)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -105,7 +105,7 @@ func TestDispatcherShutdownIsClean(t *testing.T) {
 
 // Dispatch concorrente a partir de múltiplos produtores deve ser livre de corrida (execute com -race).
 func TestDispatcherConcurrentDispatch(t *testing.T) {
-	d := telegram.NewDispatcher(512, nil)
+	d := telegram.NewDispatcher(1024, nil) // buffer > 4*250 para evitar descarte no envio não bloqueante
 	h := &countingHandler{got: make(chan struct{}, 4000)}
 	d.Register(h)
 	ctx, cancel := context.WithCancel(context.Background())
