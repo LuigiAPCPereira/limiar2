@@ -27,7 +27,8 @@
   .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
   .tab { padding: 0.75rem 1.25rem; cursor: pointer; font-size: 0.9rem; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
   .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
   .tab .badge { font-size: 0.7rem; background: var(--border); color: var(--muted); padding: 0.1rem 0.4rem; border-radius: 9999px; margin-left: 0.4rem; }
   .tab.active .badge { background: #0c4a6e; color: var(--accent); }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
@@ -119,17 +120,23 @@
     </div>
   </div>
 
-  <div class="tabs">
-    <button class="tab" :class="{ active: activeTab === 'raw' }" @click="switchTab('raw')">
+  <div class="tabs" role="tablist" aria-label="Visualização de mensagens">
+    <button class="tab" :class="{ active: activeTab === 'raw' }" @click="switchTab('raw')"
+            role="tab" :aria-selected="activeTab === 'raw'" aria-controls="panel-raw" id="tab-raw"
+            @keydown.left.prevent="switchTab('raw')" @keydown.right.prevent="switchTab('processed')"
+            @keydown.home.prevent="switchTab('raw')" @keydown.end.prevent="switchTab('processed')">
       Raw <span class="badge" x-text="totalMessages"></span>
     </button>
-    <button class="tab" :class="{ active: activeTab === 'processed' }" @click="switchTab('processed')">
+    <button class="tab" :class="{ active: activeTab === 'processed' }" @click="switchTab('processed')"
+            role="tab" :aria-selected="activeTab === 'processed'" aria-controls="panel-processed" id="tab-processed"
+            @keydown.left.prevent="switchTab('raw')" @keydown.right.prevent="switchTab('processed')"
+            @keydown.home.prevent="switchTab('raw')" @keydown.end.prevent="switchTab('processed')">
       Processadas <span class="badge" x-text="processedStats.total || 0"></span>
     </button>
   </div>
 
   <!-- ============ TAB: RAW ============ -->
-  <div x-show="activeTab === 'raw'">
+  <div id="panel-raw" x-show="activeTab === 'raw'" role="tabpanel" aria-labelledby="tab-raw">
     <div class="toolbar">
       <input class="search-input" type="search" placeholder="Buscar no texto da mensagem..." x-model="search" @input.debounce.300ms="filterMessages()">
       <button class="refresh-btn" @click="refresh()">&#8635; Atualizar</button>
@@ -177,7 +184,7 @@
   </div>
 
   <!-- ============ TAB: PROCESSED ============ -->
-  <div x-show="activeTab === 'processed'">
+  <div id="panel-processed" x-show="activeTab === 'processed'" role="tabpanel" aria-labelledby="tab-processed">
     <div class="toolbar">
       <input class="search-input" type="search" placeholder="Buscar no texto processado..." x-model="procSearch" @input.debounce.300ms="filterProcessed()">
       <button class="refresh-btn" @click="loadProcessed()">&#8635; Atualizar</button>
