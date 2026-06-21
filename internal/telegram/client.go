@@ -354,11 +354,13 @@ func (c *Client) Run(ctx context.Context) error {
 		c.tg = c.newGotdClient()
 		err := c.tg.Run(ctx, func(ctx context.Context) error {
 			attempt = 0 // reseta em caso de conexão bem-sucedida
+			c.log.Info("🔗 Conexão Telegram estabelecida")
 			<-ctx.Done()
 			return ctx.Err()
 		})
 		if ctx.Err() != nil {
-			return nil // desligamento limpo
+			c.log.Info("🔌 Conexão Telegram encerrada (desligamento)")
+			return nil
 		}
 		if err != nil {
 			delay, berr := CalculateBackoff(attempt, c.backoff, c.rng)
