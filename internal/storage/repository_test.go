@@ -27,7 +27,6 @@ func newTestRepo(t *testing.T) *storage.Repository {
 	return repo
 }
 
-
 // openTempRepo abre um Repository apoiado por um banco de dados novo num diretório temporário sem
 // requerer *testing.T, para que seja utilizável dentro das closures de propriedades do rapid. O
 // cleanup retornado fecha o repo/db e remove o diretório temporário.
@@ -505,7 +504,7 @@ func TestSavePeersBatch(t *testing.T) {
 		if err := repo.SavePeersBatch(ctx, nil); err != nil {
 			t.Fatalf("SavePeersBatch(nil): %v", err)
 		}
-	if err := repo.SavePeersBatch(ctx, []*model.Peer{}); err != nil {
+		if err := repo.SavePeersBatch(ctx, []*model.Peer{}); err != nil {
 			t.Fatalf("SavePeersBatch(empty): %v", err)
 		}
 	})
