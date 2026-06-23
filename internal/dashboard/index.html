@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Dashboard local do Limiar Collector para visualização de mensagens do Telegram.">
 <title>Limiar Dashboard</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
@@ -176,7 +177,7 @@
               <span x-text="channelName(m.ChannelID)"></span>
               <span x-text="formatDate(m.ReceivedAt)"></span>
             </div>
-            <div class="preview" x-html="highlightedPreview(m)"></div>
+            <div class="preview" :title="extractPreview(m)" x-html="highlightedPreview(m)"></div>
           </div>
         </template>
       </div>
@@ -236,7 +237,7 @@
                 <span class="urgency-chip" x-text="urgencyLabel(sig)"></span>
               </template>
             </div>
-            <div class="preview" x-text="truncate(m.text_clean, 180)"></div>
+            <div class="preview" :title="m.text_clean" x-text="truncate(m.text_clean, 180)"></div>
           </div>
         </template>
       </div>
@@ -344,6 +345,10 @@ function dashboard() {
       this.refresh();
       this.connectSSE();
       this._uptimeTimer = setInterval(() => this.updateUptime(), 1000);
+
+      this.$watch('totalMessages', val => {
+        document.title = val > 0 ? `(${val}) Limiar Dashboard` : 'Limiar Dashboard';
+      });
     },
 
     switchTab(tab) {

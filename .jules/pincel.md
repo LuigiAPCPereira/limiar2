@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2026-06-23 - Acessibilidade de contexto e previews
+**Aprendizado:** Elementos truncados visualmente e atualizações em tempo real muitas vezes perdem contexto. Sem um atributo `title`, textos truncados ficam inacessíveis para o usuário, forçando aberturas desnecessárias de modais. Além disso, quando o dashboard está em abas de fundo, o usuário não sabe se novas mensagens chegaram.
+**Ação:** Sempre adicionar atributos `:title` (tooltips nativos) em textos limitados por `truncate()` ou `overflow: hidden`, e atualizar dinamicamente o `<title>` do documento com a contagem de atualizações relevantes para tornar a interface reativa mesmo quando não está em foco.
