@@ -7,7 +7,7 @@ import (
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
-	"github.com/limiar/collector/internal/model"
+	. "github.com/limiar/collector/internal/model"
 )
 
 // ErrNoSession indica que não há linha (row) de sessão presente no banco de dados.
@@ -61,7 +61,7 @@ func (r *Repository) SaveSession(ctx context.Context, data []byte) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO sessions (id, data, updated_at) VALUES (1, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-		data, time.Now().UTC().Format(model.DBTimeLayout))
+		data, time.Now().UTC().Format(DBTimeLayout))
 	if err != nil {
 		return apperrors.Wrap("storage", "save_session", err)
 	}
@@ -93,10 +93,10 @@ func (r *Repository) CountSessions(ctx context.Context) (int64, error) {
 // --- Peers ---
 
 // SavePeer insere ou atualiza um peer por id.
-func (r *Repository) SavePeer(ctx context.Context, p *model.Peer) error {
+func (r *Repository) SavePeer(ctx context.Context, p *Peer) error {
 	_, err := r.stmtSavePeer.ExecContext(ctx,
 		p.ID, p.AccessHash, p.Type, nullString(p.Username),
-		time.Now().UTC().Format(model.DBTimeLayout))
+		time.Now().UTC().Format(DBTimeLayout))
 	if err != nil {
 		return apperrors.Wrap("storage", "save_peer", err)
 	}
@@ -106,7 +106,7 @@ func (r *Repository) SavePeer(ctx context.Context, p *model.Peer) error {
 // SavePeersBatch insere ou atualiza múltiplos peers em uma única transação.
 // Significativamente mais rápido que SavePeer individual no SQLite/Turso
 // (elimina N commits → 1 commit).
-func (r *Repository) SavePeersBatch(ctx context.Context, peers []*model.Peer) error {
+func (r *Repository) SavePeersBatch(ctx context.Context, peers []*Peer) error {
 	if len(peers) == 0 {
 		return nil
 	}
@@ -117,7 +117,7 @@ func (r *Repository) SavePeersBatch(ctx context.Context, peers []*model.Peer) er
 	defer func() { _ = tx.Rollback() }()
 
 	stmt := tx.StmtContext(ctx, r.stmtSavePeer)
-	now := time.Now().UTC().Format(model.DBTimeLayout)
+	now := time.Now().UTC().Format(DBTimeLayout)
 
 	for _, p := range peers {
 		_, err := stmt.ExecContext(ctx,
@@ -134,7 +134,7 @@ func (r *Repository) SavePeersBatch(ctx context.Context, peers []*model.Peer) er
 }
 
 // LoadPeers retorna todos os peers em cache.
-func (r *Repository) LoadPeers(ctx context.Context) ([]*model.Peer, error) {
+func (r *Repository) LoadPeers(ctx context.Context) ([]*Peer, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, access_hash, type, username, updated_at FROM peers`)
 	if err != nil {
@@ -142,10 +142,10 @@ func (r *Repository) LoadPeers(ctx context.Context) ([]*model.Peer, error) {
 	}
 	defer func() { _ = rows.Close() }()
 
-	var peers []*model.Peer
+	var peers []*Peer
 	for rows.Next() {
 		var (
-			p        model.Peer
+			p        Peer
 			username sql.NullString
 			updated  string
 		)
@@ -153,7 +153,7 @@ func (r *Repository) LoadPeers(ctx context.Context) ([]*model.Peer, error) {
 			return nil, apperrors.Wrap("storage", "scan_peer", err)
 		}
 		p.Username = username.String
-		p.UpdatedAt = model.ParseDBTime(updated)
+		p.UpdatedAt = ParseDBTime(updated)
 		peers = append(peers, &p)
 	}
 	if err := rows.Err(); err != nil {
@@ -165,12 +165,12 @@ func (r *Repository) LoadPeers(ctx context.Context) ([]*model.Peer, error) {
 // --- Channels ---
 
 // AddChannel insere um canal monitorado.
-func (r *Repository) AddChannel(ctx context.Context, ch *model.Channel) error {
+func (r *Repository) AddChannel(ctx context.Context, ch *Channel) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO channels (id, username, title, active)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(username) DO UPDATE SET title = excluded.title, active = excluded.active`,
-		ch.ID, ch.Username, ch.Title, model.BoolToInt(ch.Active))
+		ch.ID, ch.Username, ch.Title, BoolToInt(ch.Active))
 	if err != nil {
 		return apperrors.Wrap("storage", "add_channel", err)
 	}
@@ -195,7 +195,7 @@ func (r *Repository) RemoveChannel(ctx context.Context, username string) error {
 }
 
 // ListChannels retorna todos os canais monitorados ordenados pelo id.
-func (r *Repository) ListChannels(ctx context.Context) ([]*model.Channel, error) {
+func (r *Repository) ListChannels(ctx context.Context) ([]*Channel, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, username, title, active, added_at, last_message_id, last_collected_at
 		FROM channels ORDER BY id`)
@@ -204,7 +204,7 @@ func (r *Repository) ListChannels(ctx context.Context) ([]*model.Channel, error)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var channels []*model.Channel
+	var channels []*Channel
 	for rows.Next() {
 		ch, err := scanChannel(rows)
 		if err != nil {
@@ -219,7 +219,7 @@ func (r *Repository) ListChannels(ctx context.Context) ([]*model.Channel, error)
 }
 
 // GetChannel retorna um único canal pelo id, ou ErrChannelNotFound.
-func (r *Repository) GetChannel(ctx context.Context, id int64) (*model.Channel, error) {
+func (r *Repository) GetChannel(ctx context.Context, id int64) (*Channel, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, username, title, active, added_at, last_message_id, last_collected_at
 		FROM channels WHERE id = ?`, id)
@@ -238,7 +238,7 @@ func (r *Repository) GetChannel(ctx context.Context, id int64) (*model.Channel, 
 func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE channels SET last_message_id = ?, last_collected_at = ? WHERE id = ?`,
-		messageID, collectedAt.UTC().Format(model.DBTimeLayout), channelID)
+		messageID, collectedAt.UTC().Format(DBTimeLayout), channelID)
 	if err != nil {
 		return apperrors.Wrap("storage", "update_channel_last_message", err)
 	}
@@ -252,10 +252,10 @@ func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, me
 // flag inserted (inserida) retornada é verdadeira quando uma nova linha foi escrita e falsa quando
 // a mensagem já estava presente (uma duplicata). Isso permite que os chamadores produzam
 // contagens precisas de observabilidade "novo vs duplicado".
-func (r *Repository) SaveRawMessage(ctx context.Context, msg *model.RawMessage) (inserted bool, err error) {
+func (r *Repository) SaveRawMessage(ctx context.Context, msg *RawMessage) (inserted bool, err error) {
 	res, err := r.stmtSaveMessage.ExecContext(ctx,
 		msg.ChannelID, msg.MessageID, string(msg.Payload),
-		msg.ReceivedAt.UTC().Format(model.DBTimeLayout), msg.SchemaVersion)
+		msg.ReceivedAt.UTC().Format(DBTimeLayout), msg.SchemaVersion)
 	if err != nil {
 		return false, apperrors.Wrap("storage", "save_raw_message", err)
 	}
@@ -277,7 +277,7 @@ func (r *Repository) SaveRawMessage(ctx context.Context, msg *model.RawMessage) 
 //
 // inserted[i] indica se msgs[i] foi uma nova inserção (true) ou duplicata (false).
 // totalInserted é o número de linhas efetivamente adicionadas (soma dos true).
-func (r *Repository) SaveRawMessageBatch(ctx context.Context, msgs []*model.RawMessage) (inserted []bool, totalInserted int, err error) {
+func (r *Repository) SaveRawMessageBatch(ctx context.Context, msgs []*RawMessage) (inserted []bool, totalInserted int, err error) {
 	if len(msgs) == 0 {
 		return nil, 0, nil
 	}
@@ -293,7 +293,7 @@ func (r *Repository) SaveRawMessageBatch(ctx context.Context, msgs []*model.RawM
 	for i, msg := range msgs {
 		res, execErr := stmt.ExecContext(ctx,
 			msg.ChannelID, msg.MessageID, string(msg.Payload),
-			msg.ReceivedAt.UTC().Format(model.DBTimeLayout), msg.SchemaVersion)
+			msg.ReceivedAt.UTC().Format(DBTimeLayout), msg.SchemaVersion)
 		if execErr != nil {
 			return nil, 0, apperrors.Wrap("storage", "save_raw_message_batch_exec", execErr)
 		}
@@ -327,7 +327,7 @@ func (r *Repository) CountRawMessages(ctx context.Context) (int64, error) {
 
 // ListMessages retorna mensagens recentes, opcionalmente filtradas pelo channelID.
 // Passe 0 para channelID para listar todos os canais. Os resultados são ordenados por received_at DESC.
-func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, offset int) ([]*model.RawMessage, error) {
+func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, offset int) ([]*RawMessage, error) {
 	query := `SELECT id, channel_id, message_id, payload, received_at, schema_version
 		FROM raw_messages`
 	args := []any{}
@@ -344,7 +344,7 @@ func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, o
 	}
 	defer func() { _ = rows.Close() }()
 
-	var messages []*model.RawMessage
+	var messages []*RawMessage
 	for rows.Next() {
 		msg, err := scanMessage(rows)
 		if err != nil {
@@ -360,7 +360,7 @@ func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, o
 
 
 // CountMessagesByChannel retorna as contagens de mensagens agrupadas por canal.
-func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]model.ChannelStats, error) {
+func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]ChannelStats, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT c.id, c.username, COUNT(m.id) as msg_count
 		FROM channels c
@@ -372,9 +372,9 @@ func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]model.Channe
 	}
 	defer func() { _ = rows.Close() }()
 
-	var stats []model.ChannelStats
+	var stats []ChannelStats
 	for rows.Next() {
-		var s model.ChannelStats
+		var s ChannelStats
 		if err := rows.Scan(&s.ChannelID, &s.Username, &s.MessageCount); err != nil {
 			return nil, apperrors.Wrap("storage", "scan_channel_stats", err)
 		}
@@ -387,7 +387,7 @@ func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]model.Channe
 }
 
 // GetMessageByID retorna uma única mensagem pelo seu ID no banco de dados.
-func (r *Repository) GetMessageByID(ctx context.Context, id int64) (*model.RawMessage, error) {
+func (r *Repository) GetMessageByID(ctx context.Context, id int64) (*RawMessage, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, channel_id, message_id, payload, received_at, schema_version
 		FROM raw_messages WHERE id = ?`, id)
@@ -408,9 +408,9 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
-func scanChannel(s scanner) (*model.Channel, error) {
+func scanChannel(s scanner) (*Channel, error) {
 	var (
-		ch       model.Channel
+		ch       Channel
 		active   int
 		addedAt  string
 		lastColl sql.NullString
@@ -423,16 +423,16 @@ func scanChannel(s scanner) (*model.Channel, error) {
 		return nil, apperrors.Wrap("storage", "scan_channel", err)
 	}
 	ch.Active = active != 0
-	ch.AddedAt = model.ParseDBTime(addedAt)
+	ch.AddedAt = ParseDBTime(addedAt)
 	if lastColl.Valid {
-		ch.LastCollectedAt = model.ParseDBTime(lastColl.String)
+		ch.LastCollectedAt = ParseDBTime(lastColl.String)
 	}
 	return &ch, nil
 }
 
-func scanMessage(s scanner) (*model.RawMessage, error) {
+func scanMessage(s scanner) (*RawMessage, error) {
 	var (
-		msg      model.RawMessage
+		msg      RawMessage
 		payload  string
 		received string
 	)
@@ -443,7 +443,7 @@ func scanMessage(s scanner) (*model.RawMessage, error) {
 		return nil, apperrors.Wrap("storage", "scan_message", err)
 	}
 	msg.Payload = []byte(payload)
-	msg.ReceivedAt = model.ParseDBTime(received)
+	msg.ReceivedAt = ParseDBTime(received)
 	return &msg, nil
 }
 
