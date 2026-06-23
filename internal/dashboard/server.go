@@ -61,13 +61,23 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
+
+	// Middleware de segurança para adicionar cabeçalhos Defense in Depth.
+	secureMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:;")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		mux.ServeHTTP(w, r)
+	})
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           secureMux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // Limita cabeçalho a 1MB
 	}
 
 	errCh := make(chan error, 1)

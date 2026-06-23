@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-12 - [Security Headers] Falta de Content-Security-Policy e Headers de Segurança
+**Vulnerabilidade:** O dashboard HTTP estava servindo páginas sem os devidos cabeçalhos de segurança (Security Headers). Isso poderia permitir ataques como Cross-Site Scripting (XSS), MIME sniffing, e Clickjacking (se embutido via iFrame), mesmo que a aplicação rodasse apenas em localhost. Além disso, o servidor HTTP permitia cabeçalhos sem um limite explícito de tamanho.
+**Aprendizado:** Mesmo interfaces administrativas rodando em `127.0.0.1` (sem autenticação explícita) precisam de Defesa em Profundidade. A falta de cabeçalhos básicos de segurança viola o princípio do mínimo privilégio para a renderização do navegador. A omissão de `MaxHeaderBytes` possibilita a exaustão de memória em caso de ataques de Slowloris/Header flood.
+**Prevenção:** Sempre utilize middlewares para adicionar cabeçalhos como `Content-Security-Policy`, `X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY` em todas as rotas do HTTP Server. Da mesma forma, configure explicitamente `MaxHeaderBytes: 1 << 20` (1MB) na definição do `http.Server`.
