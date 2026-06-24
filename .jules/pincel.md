@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2025-06-13 - Acessibilidade de contexto: Tooltips nativos e Título de página reativo
+**Aprendizado:** Em dashboards, strings truncadas (com ellipsis via CSS ou JS) ocultam informação valiosa que o usuário pode querer ler sem abrir um painel de detalhes. Além disso, abas em background no navegador não notificam o usuário sobre novos eventos (como a chegada de mensagens processadas/raw).
+**Ação:** Sempre adicione um atributo `:title` (nativo HTML) com o conteúdo completo de strings truncadas para permitir leitura via hover. Adicionalmente, amarre a contagem de itens em destaque (ex: número de mensagens não lidas ou total atual) à tag `<title>` do documento dinamicamente (ex: usando `x-effect="document.title = ..."` no AlpineJS) para que a aba do navegador seja reativa e informe o estado sem estar em foco.
