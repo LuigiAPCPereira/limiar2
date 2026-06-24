@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-24 - [Security Headers] Falta de Content-Security-Policy e limites no dashboard HTTP
+**Vulnerabilidade:** A API do dashboard estava sendo servida sem cabeçalhos de segurança básicos (como `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`) e sem um limite explícito de `MaxHeaderBytes` na configuração do servidor HTTP. Isso abria o dashboard para possíveis ataques como Cross-Site Scripting (XSS), ataques de MIME-sniffing, Clickjacking e até mesmo Denial-of-Service via cabeçalhos maliciosos muito grandes.
+**Aprendizado:** Mesmo que o dashboard seja rodado localmente e seja apenas de leitura ("read-only"), a defesa em profundidade (Defense in Depth) é uma boa prática e deve ser implementada para proteger a aplicação em qualquer contexto. Além disso, a configuração padrão do `http.Server` do Go precisa de limites estritos ajustados para mitigar vetores de DoS.
+**Prevenção:** Sempre adicionar cabeçalhos de segurança via um middleware padrão no servidor HTTP usando `w.Header().Set(...)` (ex: `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`) e configurar `MaxHeaderBytes` (ex: `1 << 20`) no struct de configuração `http.Server`.
