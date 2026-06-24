@@ -107,7 +107,11 @@ func (d *Dispatcher) Dispatch(ctx context.Context, update Update) {
 		case <-ctx.Done():
 			return
 		default:
-			d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
+			// Otimização: evita interface boxing dos argumentos caso seja NopLogger,
+			// reduzindo alocações em cenários de alta pressão com buffer cheio.
+			if _, isNop := d.log.(logger.NopLogger); !isNop {
+				d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
+			}
 		}
 	}
 }

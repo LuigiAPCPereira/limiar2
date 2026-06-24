@@ -90,7 +90,11 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Updat
 	case <-ctx.Done():
 		return apperrors.Wrap("collector", "handle_update", ctx.Err())
 	default:
-		h.log.Warn("⚠️ Canal de escrita cheio, job descartado", "canal_id", update.ChannelID, "msg_id", update.MessageID)
+		// Evita alocações de argumentos na chamada variádica quando o
+		// logger é descartável (NopLogger), zerando allocs no hot path.
+		if _, isNop := h.log.(logger.NopLogger); !isNop {
+			h.log.Warn("⚠️ Canal de escrita cheio, job descartado", "canal_id", update.ChannelID, "msg_id", update.MessageID)
+		}
 		return nil
 	}
 }

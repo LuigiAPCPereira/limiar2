@@ -41,3 +41,26 @@ func BenchmarkHandleUpdate(b *testing.B) {
 		_ = h.HandleUpdate(ctx, update)
 	}
 }
+
+func BenchmarkHandleUpdate_FullWriteCh(b *testing.B) {
+	writeCh := make(chan WriteJob, 1) // Buffer cheio para forçar default block
+	writeCh <- WriteJob{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	monitored := map[int64]struct{}{1: {}}
+	h := NewMessageHandler(NoopClassifier{}, writeCh, monitored, logger.NopLogger{})
+
+	update := telegram.Update{
+		ChannelID: 1,
+		MessageID: 42,
+		Payload:   []byte(`{"example":true}`),
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = h.HandleUpdate(ctx, update)
+	}
+}
