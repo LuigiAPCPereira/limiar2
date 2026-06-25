@@ -89,7 +89,7 @@
   .cli-cmd { font-family: monospace; background: var(--surface); color: var(--accent); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.8rem; }
 </style>
 </head>
-<body x-data="dashboard()">
+<body x-data="dashboard()" x-effect="document.title = totalMessages > 0 ? '(' + totalMessages + ') Limiar Dashboard' : 'Limiar Dashboard'">
 
 <header>
   <h1>&#9670; <span>Limiar</span> Dashboard</h1>
@@ -176,7 +176,7 @@
               <span x-text="channelName(m.ChannelID)"></span>
               <span x-text="formatDate(m.ReceivedAt)"></span>
             </div>
-            <div class="preview" x-html="highlightedPreview(m)"></div>
+            <div class="preview" x-html="highlightedPreview(m)" :title="extractPreview(m)"></div>
           </div>
         </template>
       </div>
@@ -236,7 +236,7 @@
                 <span class="urgency-chip" x-text="urgencyLabel(sig)"></span>
               </template>
             </div>
-            <div class="preview" x-text="truncate(m.text_clean, 180)"></div>
+            <div class="preview" x-text="truncate(m.text_clean, 180)" :title="m.text_clean"></div>
           </div>
         </template>
       </div>
@@ -260,7 +260,7 @@
             <div class="field"><dt>Processada em</dt><dd x-text="formatDate(detailProc.processed_at)"></dd></div>
             <div class="field"><dt>Media</dt><dd x-text="detailProc.media_type"></dd></div>
             <div class="field" x-show="detailProc.merchant"><dt>Loja</dt><dd class="merchant-tag" x-text="detailProc.merchant"></dd></div>
-            <div class="field" x-show="detailProc.product_name"><dt>Produto</dt><dd x-text="truncate(detailProc.product_name, 60)"></dd></div>
+            <div class="field" x-show="detailProc.product_name"><dt>Produto</dt><dd x-text="truncate(detailProc.product_name, 60)" :title="detailProc.product_name"></dd></div>
             <div class="field" x-show="detailProc.has_price"><dt>Preço</dt><dd><span class="price-tag" x-text="formatPrice(detailProc.price_amount)"></span><span x-show="detailProc.price_original > 0" style="color:var(--muted);font-size:0.65rem;margin-left:0.3rem;text-decoration:line-through" x-text="formatPrice(detailProc.price_original)"></span><span x-show="detailProc.price_discount > 0" style="color:var(--red);font-size:0.65rem;margin-left:0.3rem" x-text="'-' + detailProc.price_discount + '%'"></span></dd></div>
             <div class="field"><dt>URL</dt><dd x-text="detailProc.has_url ? 'Sim' : 'Não'"></dd></div>
             <div class="field"><dt>Cupom</dt><dd><span x-text="detailProc.has_coupon ? 'Sim' : 'Não'"></span><span x-show="detailProc.coupon_code" class="coupon-code" style="margin-left:0.3rem" x-text="detailProc.coupon_code"></span></dd></div>
