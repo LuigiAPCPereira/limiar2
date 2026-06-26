@@ -60,10 +60,19 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		mux.HandleFunc("/api/events", s.handleEvents)
 	}
 
+	// Middleware de segurança (Defesa em Profundidade)
+	secureHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:;")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		mux.ServeHTTP(w, r)
+	})
+
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           secureHandler,
+		MaxHeaderBytes:    1 << 20, // 1MB limite para cabeçalhos (Defesa em Profundidade)
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,

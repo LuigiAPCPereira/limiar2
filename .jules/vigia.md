@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-26 - [Defesa em Profundidade] Headers de Segurança e Limites no HTTP Dashboard
+**Vulnerabilidade:** O servidor HTTP do dashboard (vanilla HTML embarcado) estava ausente de headers de segurança padrão, como `Content-Security-Policy`, `X-Content-Type-Options` e `X-Frame-Options`. Além disso, a configuração do `http.Server` não impunha um limite explícito sobre o tamanho dos cabeçalhos aceitos nas requisições.
+**Aprendizado:** Mesmo para servidores HTTP locais de dashboard, é crucial aplicar camadas de defesa em profundidade para mitigar classes inteiras de vulnerabilidades web (e.g. XSS via renderização indevida) e prevenir vetores de DoS que envolvam exploração de recursos por meio de cabeçalhos extensos na fase de parsing da rede.
+**Prevenção:** Sempre utilize um middleware ou envolva o manipulador base do servidor (mux) para injetar cabecalhos como `Content-Security-Policy`, garantindo compatibilidade quando uso de bibliotecas de CDN forem aplicadas. E no uso de instâncias Custom do `http.Server`, configure explicitamente a propriedade `MaxHeaderBytes` para valores seguros (ex: `1 << 20` para 1 MB), mitigando eventuais problemas de recursos.
