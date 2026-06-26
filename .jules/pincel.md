@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2024-11-21 - Reactive Document Titles e Native Tooltips
+**Aprendizado:** Modificar `document.title` com AlpineJS (via `x-effect`) ajuda a manter abas em background relevantes mostrando estatísticas atualizadas. Tooltips nativos (usando o atributo `title`) são rápidos para permitir a leitura completa de strings dinamicamente truncadas na UI, aumentando muito a acessibilidade em dashboards web.
+**Ação:** Em dashboards single-page vanilla onde atualizações ocorrem (ex. SSE), sempre bindar `<title>` ao estado central da aplicação e usar atributos `title` nativos para conteúdos truncados visualmente com CSS ou JS, permitindo descoberta contextual rápida.
