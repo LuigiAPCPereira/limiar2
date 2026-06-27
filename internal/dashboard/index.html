@@ -176,7 +176,7 @@
               <span x-text="channelName(m.ChannelID)"></span>
               <span x-text="formatDate(m.ReceivedAt)"></span>
             </div>
-            <div class="preview" x-html="highlightedPreview(m)"></div>
+            <div class="preview" x-html="highlightedPreview(m)" :title="extractPreview(m)"></div>
           </div>
         </template>
       </div>
@@ -236,7 +236,7 @@
                 <span class="urgency-chip" x-text="urgencyLabel(sig)"></span>
               </template>
             </div>
-            <div class="preview" x-text="truncate(m.text_clean, 180)"></div>
+            <div class="preview" x-text="truncate(m.text_clean, 180)" :title="m.text_clean"></div>
           </div>
         </template>
       </div>
@@ -377,7 +377,6 @@ function dashboard() {
       try {
         const res = await fetch('/api/channels');
         this.channelStats = await res.json();
-        document.title = '(' + this.totalMessages + ') Limiar Dashboard';
       } catch {}
     },
 
