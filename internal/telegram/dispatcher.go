@@ -89,11 +89,15 @@ func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update)
 	defer func() {
 		if r := recover(); r != nil {
 			errMsg := safePanicMessage(r)
-			d.log.Error("💥 Panic no handler recuperado", "erro", errMsg, "tipo", fmt.Sprintf("%T", r))
+			if _, isNop := d.log.(logger.NopLogger); !isNop {
+				d.log.Error("💥 Panic no handler recuperado", "erro", errMsg, "tipo", fmt.Sprintf("%T", r))
+			}
 		}
 	}()
 	if err := h.HandleUpdate(ctx, update); err != nil {
-		d.log.Error("❌ Handler retornou erro", "erro", err)
+		if _, isNop := d.log.(logger.NopLogger); !isNop {
+			d.log.Error("❌ Handler retornou erro", "erro", err)
+		}
 	}
 }
 
@@ -107,7 +111,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, update Update) {
 		case <-ctx.Done():
 			return
 		default:
-			d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
+			if _, isNop := d.log.(logger.NopLogger); !isNop {
+				d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
+			}
 		}
 	}
 }

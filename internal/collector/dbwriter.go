@@ -6,6 +6,7 @@ import (
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
+	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/model"
 )
 
@@ -118,7 +119,9 @@ func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
 
 		for chID, info := range latestCursors {
 			if updErr := c.repo.UpdateChannelLastMessage(ctx, chID, info.msgID, info.recAt); updErr != nil {
-				c.log.Warn("⚠️  Cursor não atualizado", "canal_id", chID, "erro", updErr)
+				if _, isNop := c.log.(logger.NopLogger); !isNop {
+					c.log.Warn("⚠️  Cursor não atualizado", "canal_id", chID, "erro", updErr)
+				}
 			}
 		}
 		return
@@ -127,8 +130,10 @@ func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
 	// Falha persistente do lote: cai para escrita individual (writeWithRetry),
 	// que tem seu próprio loop de retry. Menor throughput, mas maximiza
 	// recuperação de mensagens sob falha transitória do DB.
-	c.log.Warn("⚠️  Lote falhou, caindo para escrita individual",
-		"tamanho_lote", len(batch), "erro", err)
+	if _, isNop := c.log.(logger.NopLogger); !isNop {
+		c.log.Warn("⚠️  Lote falhou, caindo para escrita individual",
+			"tamanho_lote", len(batch), "erro", err)
+	}
 	for _, job := range batch {
 		c.writeWithRetry(ctx, job)
 	}
@@ -169,7 +174,9 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 			// de coleta.
 			if !job.Backfill && job.Message.ChannelID != 0 {
 				if err := c.repo.UpdateChannelLastMessage(ctx, job.Message.ChannelID, job.Message.MessageID, job.Message.ReceivedAt); err != nil {
-					c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", err)
+					if _, isNop := c.log.(logger.NopLogger); !isNop {
+						c.log.Warn("⚠️  Cursor não atualizado", "canal_id", job.Message.ChannelID, "erro", err)
+					}
 				}
 			}
 		} else {
@@ -187,10 +194,12 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 	}
 
 	// Falha persistente: registra explicitamente a mensagem perdida no log, nunca a descarta silenciosamente.
-	c.log.Error("❌ Mensagem perdida após retries",
-		"canal_id", job.Message.ChannelID,
-		"mensagem_id", job.Message.MessageID,
-		"erro", lastErr)
+	if _, isNop := c.log.(logger.NopLogger); !isNop {
+		c.log.Error("❌ Mensagem perdida após retries",
+			"canal_id", job.Message.ChannelID,
+			"mensagem_id", job.Message.MessageID,
+			"erro", lastErr)
+	}
 	if job.ErrCh != nil {
 		job.ErrCh <- apperrors.Wrap("collector", "db_write", apperrors.ErrDBWriteFailed)
 	}

@@ -176,7 +176,9 @@ func (c *Client) onUpdate(ctx context.Context, u tg.UpdatesClass) error {
 
 	payload, err := encodeUpdate(u)
 	if err != nil {
-		c.log.Error("🔧 Falha ao codificar update", "erro", err)
+		if _, isNop := c.log.(logger.NopLogger); !isNop {
+			c.log.Error("🔧 Falha ao codificar update", "erro", err)
+		}
 		return nil // nunca encerre o loop de recebimento devido a uma única atualização ruim
 	}
 
