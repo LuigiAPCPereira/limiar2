@@ -18,6 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
-## 2025-06-13 - Retenção de contexto em abas de fundo e tooltips nativos
-**Aprendizado:** Em dashboards, os usuários frequentemente deixam abas abertas em segundo plano e podem não perceber atualizações via SSE se apenas o DOM for alterado. Além disso, truncar textos sem fornecer uma alternativa clara prejudica o consumo da informação.
-**Ação:** Atualizar o `<title>` do documento dinamicamente com informações de estado relevantes (ex: contagem de mensagens) ajuda a manter a aba reativa. Para elementos truncados, o uso do atributo nativo `:title` fornece tooltips acessíveis "gratuitos" sem necessidade de bibliotecas JS extras.
+## 2025-06-13 - Retenção de contexto em abas de fundo
+**Aprendizado:** Em dashboards, os usuários frequentemente deixam abas abertas em segundo plano e podem não perceber atualizações via SSE se apenas o DOM for alterado.
+**Ação:** Atualizar o `<title>` do documento dinamicamente com informações de estado relevantes (ex: contagem de mensagens) ajuda a manter a aba reativa.
