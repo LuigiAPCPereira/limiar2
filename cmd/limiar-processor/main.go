@@ -71,7 +71,11 @@ func run() error {
 			return fmt.Errorf("criar dashboard repository: %w", err)
 		}
 		srv := dashboard.NewServer(dashRepo, repo, log.WithComponent("dashboard"), dashboardPort, nil)
-		go func() { _ = srv.ListenAndServe(ctx) }()
+		go func() {
+			if err := srv.ListenAndServe(ctx); err != nil {
+				log.Error("Dashboard encerrou com erro", "erro", err)
+			}
+		}()
 		log.Info("🌐 Dashboard disponível", "porta", dashboardPort)
 	}
 

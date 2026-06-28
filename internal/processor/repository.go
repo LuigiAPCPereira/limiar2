@@ -188,7 +188,7 @@ func (r *Repository) CrossChannelDuplicates(ctx context.Context, pairs map[strin
 	for rows.Next() {
 		var hash string
 		if err := rows.Scan(&hash); err != nil {
-			continue
+			return result, apperrors.Wrap("processor", "scan_cross_channel_dup", err)
 		}
 		result[hash] = true
 	}
@@ -200,25 +200,29 @@ func (r *Repository) CrossChannelDuplicates(ctx context.Context, pairs map[strin
 
 // SaveProcessedBatch persiste múltiplas mensagens em uma única transação.
 // Significativamente mais rápido que INSERTs individuais no SQLite (10-50x).
-// Mensagens com erro individual são logadas mas não abortam o batch.
-func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedMessage) (saved, failed int) {
+// Mensagens com erro individual são contabilizadas em failed mas não abortam
+// o batch. Erros de transação (begin/commit) são retornados via err.
+func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedMessage) (saved, failed int, err error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, len(msgs)
+		return 0, len(msgs), apperrors.Wrap("processor", "save_processed_batch_begin", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	stmt := tx.StmtContext(ctx, r.stmtInsertProcessed)
 
 	for _, msg := range msgs {
-		urgencyJSON, _ := json.Marshal(msg.UrgencySignals)
+		urgencyJSON, marshalErr := json.Marshal(msg.UrgencySignals)
+		if marshalErr != nil {
+			urgencyJSON = []byte("[]")
+		}
 
 		var priceAmount any
 		if msg.PriceAmount > 0 {
 			priceAmount = msg.PriceAmount
 		}
 
-		_, err := stmt.ExecContext(ctx,
+		_, execErr := stmt.ExecContext(ctx,
 			msg.RawMessageID,
 			msg.ChannelID,
 			msg.MessageID,
@@ -256,17 +260,17 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 			msg.PhotoDCID,
 			msg.InlineThumb,
 		)
-		if err != nil {
+		if execErr != nil {
 			failed++
 			continue
 		}
 		saved++
 	}
 
-	if err := tx.Commit(); err != nil {
-		return 0, len(msgs)
+	if commitErr := tx.Commit(); commitErr != nil {
+		return 0, len(msgs), apperrors.Wrap("processor", "save_processed_batch_commit", commitErr)
 	}
-	return saved, failed
+	return saved, failed, nil
 }
 
 // ═══════════════════════════════════════════════════════════════════

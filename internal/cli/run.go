@@ -58,7 +58,11 @@ func newRunCmd(p Provider) *cobra.Command {
 					broker.Publish(dashboard.Event{Type: "message", Data: data})
 				})
 
-				go func() { _ = srv.ListenAndServe(ctx) }()
+				go func() {
+					if err := srv.ListenAndServe(ctx); err != nil {
+						log.Error("Dashboard encerrou com erro", "erro", err)
+					}
+				}()
 				presenter.Info(fmt.Sprintf("Dashboard: http://localhost:%d", port))
 			}
 

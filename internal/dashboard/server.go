@@ -201,7 +201,10 @@ func (s *Server) handleProcessedStats(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	total, _ := s.processed.CountProcessedMessages(r.Context())
+	total, totalErr := s.processed.CountProcessedMessages(r.Context())
+	if totalErr != nil {
+		s.log.Warn("Erro ao contar mensagens processadas", "erro", totalErr)
+	}
 	s.writeJSON(w, map[string]any{
 		"total":   total,
 		"by_type": stats,
