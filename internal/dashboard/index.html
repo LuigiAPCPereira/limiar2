@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Dashboard interno do limiar-collector para inspeção de mensagens capturadas em tempo real.">
 <title>Limiar Dashboard</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
@@ -176,7 +177,7 @@
               <span x-text="channelName(m.ChannelID)"></span>
               <span x-text="formatDate(m.ReceivedAt)"></span>
             </div>
-            <div class="preview" x-html="highlightedPreview(m)"></div>
+            <div class="preview" x-html="highlightedPreview(m)" :title="truncate(extractPreview(m), 1000)"></div>
           </div>
         </template>
       </div>
@@ -236,7 +237,7 @@
                 <span class="urgency-chip" x-text="urgencyLabel(sig)"></span>
               </template>
             </div>
-            <div class="preview" x-text="truncate(m.text_clean, 180)"></div>
+            <div class="preview" :title="truncate(m.text_clean || '', 1000)" x-text="truncate(m.text_clean, 180)"></div>
           </div>
         </template>
       </div>
@@ -260,7 +261,7 @@
             <div class="field"><dt>Processada em</dt><dd x-text="formatDate(detailProc.processed_at)"></dd></div>
             <div class="field"><dt>Media</dt><dd x-text="detailProc.media_type"></dd></div>
             <div class="field" x-show="detailProc.merchant"><dt>Loja</dt><dd class="merchant-tag" x-text="detailProc.merchant"></dd></div>
-            <div class="field" x-show="detailProc.product_name"><dt>Produto</dt><dd x-text="truncate(detailProc.product_name, 60)"></dd></div>
+            <div class="field" x-show="detailProc.product_name"><dt>Produto</dt><dd x-text="truncate(detailProc.product_name, 60)" :title="truncate(detailProc.product_name, 300)"></dd></div>
             <div class="field" x-show="detailProc.has_price"><dt>Preço</dt><dd><span class="price-tag" x-text="formatPrice(detailProc.price_amount)"></span><span x-show="detailProc.price_original > 0" style="color:var(--muted);font-size:0.65rem;margin-left:0.3rem;text-decoration:line-through" x-text="formatPrice(detailProc.price_original)"></span><span x-show="detailProc.price_discount > 0" style="color:var(--red);font-size:0.65rem;margin-left:0.3rem" x-text="'-' + detailProc.price_discount + '%'"></span></dd></div>
             <div class="field"><dt>URL</dt><dd x-text="detailProc.has_url ? 'Sim' : 'Não'"></dd></div>
             <div class="field"><dt>Cupom</dt><dd><span x-text="detailProc.has_coupon ? 'Sim' : 'Não'"></span><span x-show="detailProc.coupon_code" class="coupon-code" style="margin-left:0.3rem" x-text="detailProc.coupon_code"></span></dd></div>
@@ -344,6 +345,10 @@ function dashboard() {
       this.refresh();
       this.connectSSE();
       this._uptimeTimer = setInterval(() => this.updateUptime(), 1000);
+      this.$watch('totalMessages', val => {
+        document.title = val > 0 ? `(${val}) Limiar Dashboard` : 'Limiar Dashboard';
+      });
+      document.title = this.totalMessages > 0 ? `(${this.totalMessages}) Limiar Dashboard` : 'Limiar Dashboard';
     },
 
     switchTab(tab) {
@@ -478,20 +483,31 @@ function dashboard() {
     },
 
     extractPreview(m) {
+      if (m._preview !== undefined) return m._preview;
       try {
         const p = this.decodePayload(m.Payload);
-        return this.extractText(p) || JSON.stringify(p).substring(0, 200);
-      } catch (e) { return '(erro: ' + e.message + ')'; }
+        m._preview = this.extractText(p) || JSON.stringify(p).substring(0, 200);
+      } catch (e) {
+        m._preview = '(erro: ' + e.message + ')';
+      }
+      return m._preview;
     },
 
     highlightedPreview(m) {
       let text = this.extractPreview(m);
       if (text.length > 180) text = text.substring(0, 180) + '...';
-      const escaped = this.escapeHtml(text);
       const q = this.search.trim();
-      if (!q) return escaped;
+      if (!q) return this.escapeHtml(text);
+
       const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-      return escaped.replace(re, '<mark>$1</mark>');
+      const parts = text.split(re);
+
+      return parts.map(part => {
+        if (part.toLowerCase() === q.toLowerCase()) {
+          return `<mark>${this.escapeHtml(part)}</mark>`;
+        }
+        return this.escapeHtml(part);
+      }).join('');
     },
 
     channelName(id) {
