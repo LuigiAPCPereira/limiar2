@@ -1,8 +1,18 @@
 package dashboard
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 const clientBuffer = 64
+
+// maxSubscribers limita o número de clientes SSE simultâneos para evitar
+// exaustão de recursos por abertura descontrolada de conexões.
+const maxSubscribers = 64
+
+// ErrMaxSubscribers é retornado quando o limite de assinantes SSE é atingido.
+var ErrMaxSubscribers = errors.New("limite de assinantes SSE atingido")
 
 // Event é um único evento SSE (Server-Sent Events) enviado aos clientes do dashboard conectados.
 type Event struct {
@@ -24,13 +34,18 @@ func NewBroker() *Broker {
 }
 
 // Subscribe registra um novo cliente e retorna seu canal de eventos.
+// Retorna ErrMaxSubscribers se o limite de conexões simultâneas for atingido.
 // O chamador deve invocar Unsubscribe quando terminar.
-func (b *Broker) Subscribe() chan Event {
-	ch := make(chan Event, clientBuffer)
+func (b *Broker) Subscribe() (chan Event, error) {
 	b.mu.Lock()
+	if len(b.clients) >= maxSubscribers {
+		b.mu.Unlock()
+		return nil, ErrMaxSubscribers
+	}
+	ch := make(chan Event, clientBuffer)
 	b.clients[ch] = struct{}{}
 	b.mu.Unlock()
-	return ch
+	return ch, nil
 }
 
 // Unsubscribe remove o canal de um cliente e o fecha.

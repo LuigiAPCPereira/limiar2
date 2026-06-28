@@ -14,6 +14,9 @@ var redactedKeys = map[string]struct{}{
 	"token":     {},
 	"password":  {},
 	"auth_code": {},
+	"secret":    {},
+	"api_key":   {},
+	"apikey":    {},
 }
 
 const redactedValue = "****"

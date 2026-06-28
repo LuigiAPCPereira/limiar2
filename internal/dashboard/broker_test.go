@@ -8,7 +8,10 @@ func TestBroker_SubscribeUnsubscribe(t *testing.T) {
 	broker := NewBroker()
 
 	// Test Subscribe
-	ch := broker.Subscribe()
+	ch, err := broker.Subscribe()
+	if err != nil {
+		t.Fatalf("Subscribe() returned error: %v", err)
+	}
 	if ch == nil {
 		t.Fatal("Subscribe() returned nil channel")
 	}
@@ -51,9 +54,9 @@ func TestBroker_Publish(t *testing.T) {
 	broker := NewBroker()
 
 	// Subscribe 3 clients
-	ch1 := broker.Subscribe()
-	ch2 := broker.Subscribe()
-	ch3 := broker.Subscribe()
+	ch1, _ := broker.Subscribe()
+	ch2, _ := broker.Subscribe()
+	ch3, _ := broker.Subscribe()
 
 	// Publish an event
 	testEvent := Event{Type: "test", Data: []byte("test data")}
@@ -87,7 +90,7 @@ func TestBroker_Publish(t *testing.T) {
 
 func TestBroker_Publish_NonBlocking_FullBuffer(t *testing.T) {
 	broker := NewBroker()
-	ch := broker.Subscribe()
+	ch, _ := broker.Subscribe()
 
 	// Fill the buffer
 	for i := 0; i < clientBuffer; i++ {
