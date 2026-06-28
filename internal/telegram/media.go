@@ -13,6 +13,7 @@ import (
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/media"
+	"github.com/limiar/collector/internal/model"
 )
 
 // defaultThumbSize é a variante de tamanho da foto baixada: "x" = 800px (~50KB).
@@ -77,53 +78,32 @@ func (m *MediaClient) DownloadPhoto(ctx context.Context, req media.PhotoDownload
 
 // ExtractPhotoRequest extrai os campos MTProto de download do payload JSON de uma
 // mensagem. Usado pelo Collector para download proativo no momento da chegada.
-// Retorna (nil, nil) se a mensagem não tem foto.
+// Retorna (nil, nil) se a mensagem não tem foto. Delega a navegação do payload
+// para model.ExtractPhotoFields (função compartilhada com processor/normalizer.go).
 func ExtractPhotoRequest(payload []byte) (*media.PhotoDownloadRequest, error) {
 	var msg map[string]any
 	if err := json.Unmarshal(payload, &msg); err != nil {
 		return nil, apperrors.Wrap("telegram", "parse_payload", err)
 	}
-	m, ok := msg["Media"].(map[string]any)
-	if !ok {
+	pf := model.ExtractPhotoFields(msg)
+	if pf.PhotoID == 0 {
 		return nil, nil
 	}
-	photo, ok := m["Photo"].(map[string]any)
-	if !ok {
-		return nil, nil
-	}
-	photoID := payloadToInt64(photo["ID"])
-	accessHash := payloadToInt64(photo["AccessHash"])
-	fileRef, _ := photo["FileReference"].(string)
-	dcid := payloadToInt(photo["DCID"])
 
 	var refBytes []byte
-	if fileRef != "" {
-		decoded, err := base64.StdEncoding.DecodeString(fileRef)
+	if pf.FileRef != "" {
+		decoded, err := base64.StdEncoding.DecodeString(pf.FileRef)
 		if err == nil {
 			refBytes = decoded
 		}
 	}
 
 	return &media.PhotoDownloadRequest{
-		PhotoID:       photoID,
-		AccessHash:    accessHash,
+		PhotoID:       pf.PhotoID,
+		AccessHash:    pf.AccessHash,
 		FileReference: refBytes,
-		DCID:          dcid,
+		DCID:          pf.DCID,
 	}, nil
-}
-
-func payloadToInt64(v any) int64 {
-	if n, ok := v.(float64); ok {
-		return int64(n)
-	}
-	return 0
-}
-
-func payloadToInt(v any) int {
-	if n, ok := v.(float64); ok {
-		return int(n)
-	}
-	return 0
 }
 
 // wrapFileErr traduz erros gotd de download. FILE_REFERENCE_EXPIRED vira o sentinel

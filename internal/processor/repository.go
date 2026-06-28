@@ -99,9 +99,10 @@ func (r *Repository) CountUnprocessed(ctx context.Context) (int64, error) {
 	return n, nil
 }
 
-// SaveProcessed persiste uma mensagem normalizada em processed_messages.
-// Idempotente via ON CONFLICT DO NOTHING.
-func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) error {
+// processedInsertArgs monta a lista de argumentos para INSERT em processed_messages.
+// Centraliza a conversão NormalizedMessage → []any, evitando duplicação entre
+// SaveProcessed e SaveProcessedBatch.
+func processedInsertArgs(msg *NormalizedMessage) []any {
 	urgencyJSON, err := json.Marshal(msg.UrgencySignals)
 	if err != nil {
 		urgencyJSON = []byte("[]")
@@ -112,7 +113,7 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		priceAmount = msg.PriceAmount
 	}
 
-	_, err = r.stmtInsertProcessed.ExecContext(ctx,
+	return []any{
 		msg.RawMessageID,
 		msg.ChannelID,
 		msg.MessageID,
@@ -149,7 +150,13 @@ func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) 
 		msg.PhotoFileRef,
 		msg.PhotoDCID,
 		msg.InlineThumb,
-	)
+	}
+}
+
+// SaveProcessed persiste uma mensagem normalizada em processed_messages.
+// Idempotente via ON CONFLICT DO NOTHING.
+func (r *Repository) SaveProcessed(ctx context.Context, msg *NormalizedMessage) error {
+	_, err := r.stmtInsertProcessed.ExecContext(ctx, processedInsertArgs(msg)...)
 	if err != nil {
 		return apperrors.Wrap("processor", "save_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
 	}
@@ -211,51 +218,7 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 	stmt := tx.StmtContext(ctx, r.stmtInsertProcessed)
 
 	for _, msg := range msgs {
-		urgencyJSON, _ := json.Marshal(msg.UrgencySignals)
-
-		var priceAmount any
-		if msg.PriceAmount > 0 {
-			priceAmount = msg.PriceAmount
-		}
-
-		_, err := stmt.ExecContext(ctx,
-			msg.RawMessageID,
-			msg.ChannelID,
-			msg.MessageID,
-			msg.MessageType,
-			msg.Text,
-			msg.TextLength,
-			msg.MediaType,
-			msg.PhotoID,
-			msg.Views,
-			msg.Forwards,
-			msg.ReplyToMsgID,
-			model.BoolToInt(msg.HasURL),
-			model.BoolToInt(msg.HasPrice),
-			model.BoolToInt(msg.HasCoupon),
-			priceAmount,
-			"BRL",
-			string(urgencyJSON),
-			msg.PostedAt.UTC().Format(model.DBTimeLayout),
-			msg.ProcessedAt.UTC().Format(model.DBTimeLayout),
-			msg.PriceOriginal,
-			msg.PriceDiscount,
-			msg.CouponCode,
-			msg.PaymentMethod,
-			msg.Shipping,
-			msg.Installments,
-			msg.DiscountPct,
-			msg.URLHash,
-			msg.Merchant,
-			msg.ProductName,
-			msg.Synthesis,
-			model.BoolToInt(msg.IsDuplicate),
-			model.BoolToInt(msg.FeedEligible),
-			msg.PhotoAccessHash,
-			msg.PhotoFileRef,
-			msg.PhotoDCID,
-			msg.InlineThumb,
-		)
+		_, err := stmt.ExecContext(ctx, processedInsertArgs(msg)...)
 		if err != nil {
 			failed++
 			continue
