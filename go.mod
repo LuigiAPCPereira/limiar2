@@ -3,7 +3,7 @@ module github.com/limiar/collector
 go 1.26.2
 
 require (
-	github.com/gotd/td v0.157.1
+	github.com/gotd/td v0.159.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
@@ -36,7 +36,8 @@ require (
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
-	github.com/ogen-go/ogen v1.20.3 // indirect
+	github.com/mattn/go-sqlite3 v1.14.45 // indirect
+	github.com/ogen-go/ogen v1.22.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
 	github.com/refraction-networking/utls v1.8.2 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
@@ -48,6 +49,7 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tursodatabase/turso-go-platform-libs v0.6.1 // indirect
 	github.com/xyproto/randomstring v1.2.0 // indirect
+	github.com/yuin/goldmark v1.8.2 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/metric v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
