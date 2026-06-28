@@ -44,7 +44,7 @@ func TestProperty2_PreserveKeyAndTransparent(t *testing.T) {
 
 		// Skip if key happens to be sensitive
 		lowerKey := strings.ToLower(key)
-		for _, sk := range []string{"api_hash", "apihash", "session", "token", "password", "auth_code"} {
+		for _, sk := range []string{"api_hash", "apihash", "session", "token", "password", "auth_code", "secret", "api_key", "apikey"} {
 			if lowerKey == sk {
 				return
 			}

@@ -87,7 +87,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		return srv.Shutdown(context.Background())
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
 	case err := <-errCh:
 		return err
 	}
@@ -98,11 +100,19 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = fmt.Fprint(w, indexHTML)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	count, err := s.repo.CountRawMessages(r.Context())
 	status := "ok"
 	dbStatus := true
@@ -119,6 +129,10 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChannels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	stats, err := s.repo.CountMessagesByChannel(r.Context())
 	if err != nil {
 		s.log.Error("Erro interno no dashboard", "erro", err)
@@ -129,6 +143,10 @@ func (s *Server) handleChannels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	channelID, _ := strconv.ParseInt(r.URL.Query().Get("channel_id"), 10, 64)
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
@@ -149,6 +167,10 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	idStr := r.URL.Path[len("/api/message/"):]
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -166,6 +188,10 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProcessed(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	if s.processed == nil {
 		s.writeJSON(w, []any{})
 		return
@@ -191,6 +217,10 @@ func (s *Server) handleProcessed(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProcessedStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	if s.processed == nil {
 		s.writeJSON(w, map[string]any{"total": 0, "by_type": []any{}})
 		return
@@ -212,6 +242,10 @@ func (s *Server) handleProcessedStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -222,7 +256,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch := s.broker.Subscribe()
+	ch, err := s.broker.Subscribe()
+	if err != nil {
+		http.Error(w, "too many subscribers", http.StatusServiceUnavailable)
+		return
+	}
 	defer s.broker.Unsubscribe(ch)
 
 	for {
