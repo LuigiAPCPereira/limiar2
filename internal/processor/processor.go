@@ -88,9 +88,15 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 	p.markDuplicates(ctx, normalized)
 
 	// Persiste todas em transação única (10-50x mais rápido que INSERTs individuais).
-	saved, saveFailed := p.repo.SaveProcessedBatch(ctx, normalized)
+	saved, saveFailed, saveErr := p.repo.SaveProcessedBatch(ctx, normalized)
+	if saveErr != nil {
+		p.log.Error("❌ Erro ao salvar batch processado", "erro", saveErr)
+	}
 
-	backlog, _ := p.repo.CountUnprocessed(ctx)
+	backlog, backlogErr := p.repo.CountUnprocessed(ctx)
+	if backlogErr != nil {
+		p.log.Warn("⚠️ Erro ao contar backlog", "erro", backlogErr)
+	}
 
 	p.log.Info("⚙️ Batch processado",
 		"processadas", saved,
@@ -124,7 +130,11 @@ func (p *Processor) markDuplicates(ctx context.Context, msgs []*NormalizedMessag
 		return
 	}
 	crossDups, err := p.repo.CrossChannelDuplicates(ctx, seen)
-	if err != nil || len(crossDups) == 0 {
+	if err != nil {
+		p.log.Warn("⚠️ Erro ao verificar duplicatas cross-channel", "erro", err)
+		return
+	}
+	if len(crossDups) == 0 {
 		return
 	}
 	for _, nm := range msgs {
