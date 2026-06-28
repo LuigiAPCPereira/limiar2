@@ -78,7 +78,7 @@ func Load(v *viper.Viper) (*Config, error) {
 
 	// Tenta carregar o arquivo .env do diretório atual. É opcional e silenciosamente
 	// ignorado se não estiver presente. Variáveis de ambiente têm precedência sobre o .env.
-	if err := loadDotEnv(); err != nil {
+	if err := LoadDotEnv(); err != nil {
 		return nil, fmt.Errorf("config: carregar .env: %w", err)
 	}
 
@@ -113,11 +113,11 @@ func Load(v *viper.Viper) (*Config, error) {
 	return &c, nil
 }
 
-// loadDotEnv lê os pares chave=valor com o prefixo LIMIAR_* de um arquivo .env no diretório
+// LoadDotEnv lê os pares chave=valor com o prefixo LIMIAR_* de um arquivo .env no diretório
 // atual e os define como variáveis de ambiente. Variáveis de ambiente
 // já existentes têm precedência (não são sobrescritas). Linhas que começam com '#'
 // e linhas em branco são ignoradas. Retorna nil se o .env não existir.
-func loadDotEnv() error {
+func LoadDotEnv() error {
 	data, err := os.ReadFile(".env")
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -44,9 +44,10 @@ jobs:
         # O build não deve importar mattn/go-sqlite3, modernc.org/sqlite, gorm, etc.
         FORBIDDEN_IMPORTS=("github.com/mattn/go-sqlite3" "modernc.org/sqlite" "gorm.io/gorm")
         
-        # Inspeciona o go.mod diretamente
+        # Inspeciona o go.mod diretamente (ignora indirect — dependências
+        # transitivas de bibliotecas permitidas, como tursogo → mattn/go-sqlite3).
         for pkg in "${FORBIDDEN_IMPORTS[@]}"; do
-          if grep -q "$pkg" go.mod; then
+          if grep "$pkg" go.mod | grep -qv "// indirect"; then
             echo "::error::Importação proibida detectada: $pkg. O uso de drivers SQLite não-Turso ou ORMs é estritamente proibido pela arquitetura."
             exit 1
           fi

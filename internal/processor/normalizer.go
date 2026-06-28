@@ -129,16 +129,16 @@ func Normalize(raw *model.RawMessage) (*NormalizedMessage, error) {
 		ProcessedAt:  time.Now().UTC(),
 	}
 
-	nm.MessageID = toInt64(msg["ID"])
+	nm.MessageID = model.JSONToInt64(msg["ID"])
 	nm.ChannelID = extractChannelID(msg)
 	nm.PostedAt = extractDate(msg)
-	nm.Text = cleanText(toString(msg["Message"]))
+	nm.Text = cleanText(model.JSONToString(msg["Message"]))
 	nm.TextLength = utf8.RuneCountInString(nm.Text)
 	nm.MediaType = extractMediaType(msg)
 	nm.PhotoID, nm.PhotoAccessHash, nm.PhotoFileRef, nm.PhotoDCID = extractPhotoMetadata(msg)
 	nm.InlineThumb = extractInlineThumb(msg)
-	nm.Views = toInt(msg["Views"])
-	nm.Forwards = toInt(msg["Forwards"])
+	nm.Views = model.JSONToInt(msg["Views"])
+	nm.Forwards = model.JSONToInt(msg["Forwards"])
 	nm.ReplyToMsgID = extractReplyTo(msg)
 
 	// Extração de sinais
@@ -313,7 +313,7 @@ func extractChannelID(msg map[string]any) int64 {
 	if !ok {
 		return 0
 	}
-	return toInt64(peerID["ChannelID"])
+	return model.JSONToInt64(peerID["ChannelID"])
 }
 
 func extractDate(msg map[string]any) time.Time {
@@ -361,26 +361,11 @@ func extractMediaType(msg map[string]any) string {
 }
 
 // extractPhotoMetadata extrai os campos MTProto necessários para download
-// sob demanda via upload.GetFile (ADR 011). Retorna (0, 0, "", 0) se a
-// mensagem não contém Media.Photo.
-//
-// NOTA: internal/telegram/media.go possui uma cópia independente desta função
-// (photoMetaFromPayload) porque telegram não pode importar processor (dep. reversa).
-// Se o schema do payload mudar, atualize AMBAS.
+// sob demanda via upload.GetFile (ADR 011). Delega para model.ExtractPhotoFields
+// (função compartilhada com telegram/media.go).
 func extractPhotoMetadata(msg map[string]any) (int64, int64, string, int) {
-	media, ok := msg["Media"].(map[string]any)
-	if !ok {
-		return 0, 0, "", 0
-	}
-	photo, ok := media["Photo"].(map[string]any)
-	if !ok {
-		return 0, 0, "", 0
-	}
-	photoID := toInt64(photo["ID"])
-	accessHash := toInt64(photo["AccessHash"])
-	fileRef, _ := photo["FileReference"].(string)
-	dcid := toInt(photo["DCID"])
-	return photoID, accessHash, fileRef, dcid
+	pf := model.ExtractPhotoFields(msg)
+	return pf.PhotoID, pf.AccessHash, pf.FileRef, pf.DCID
 }
 
 // extractInlineThumb extrai o thumbnail inline (Type "i") de Media.Photo.Sizes.
@@ -422,7 +407,7 @@ func extractReplyTo(msg map[string]any) int64 {
 	if !ok {
 		return 0
 	}
-	return toInt64(reply["ReplyToMsgID"])
+	return model.JSONToInt64(reply["ReplyToMsgID"])
 }
 
 // extractWebpageURL extrai URL de Media.Webpage quando presente.
@@ -475,33 +460,4 @@ func parseBRL(raw string) int64 {
 		return 0
 	}
 	return int64(math.Round(f * 100))
-}
-
-func toInt64(v any) int64 {
-	switch n := v.(type) {
-	case float64:
-		return int64(n)
-	case json.Number:
-		i, _ := n.Int64()
-		return i
-	case int64:
-		return n
-	case int:
-		return int64(n)
-	}
-	return 0
-}
-
-func toInt(v any) int {
-	return int(toInt64(v))
-}
-
-func toString(v any) string {
-	switch s := v.(type) {
-	case string:
-		return s
-	case json.Number:
-		return s.String()
-	}
-	return ""
 }
