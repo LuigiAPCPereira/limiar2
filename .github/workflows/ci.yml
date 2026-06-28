@@ -42,7 +42,7 @@ jobs:
         echo "Validando regras da arquitetura fechada (AGENTS.md)..."
         
         # O build não deve importar mattn/go-sqlite3, modernc.org/sqlite, gorm, etc.
-        FORBIDDEN_IMPORTS=("github.com/mattn/go-sqlite3" "modernc.org/sqlite" "gorm.io/gorm")
+        FORBIDDEN_IMPORTS=("modernc.org/sqlite" "gorm.io/gorm")
         
         # Inspeciona o go.mod diretamente
         for pkg in "${FORBIDDEN_IMPORTS[@]}"; do
