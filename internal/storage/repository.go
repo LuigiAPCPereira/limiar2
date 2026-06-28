@@ -7,6 +7,7 @@ import (
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
+	//nolint:staticcheck
 	. "github.com/limiar/collector/internal/model"
 )
 
