@@ -12,7 +12,7 @@ func TestNewRunID_Length(t *testing.T) {
 func TestNewRunID_IsHex(t *testing.T) {
 	id := NewRunID()
 	for _, c := range id {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			t.Errorf("NewRunID() contains non-hex char %q in %q", string(c), id)
 			break
 		}
