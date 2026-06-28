@@ -2,6 +2,8 @@ package collector
 
 import (
 	"context"
+	stderrors "errors"
+	"fmt"
 	"time"
 
 	"github.com/limiar/collector/internal/model"
@@ -14,6 +16,7 @@ import (
 // única (channel_id, message_id)), portanto buscar novamente mensagens que
 // já foram persistidas é seguro — elas são silenciosamente descartadas pelo DB.
 func (c *Collector) backfill(ctx context.Context, channels []*model.Channel) error {
+	var channelErrs []error
 	for _, ch := range channels {
 		if !ch.Active {
 			continue
@@ -28,6 +31,7 @@ func (c *Collector) backfill(ctx context.Context, channels []*model.Channel) err
 		if err != nil {
 			c.log.Error("📜 Falha ao buscar histórico do canal",
 				"canal", ch.Username, "erro", err)
+			channelErrs = append(channelErrs, fmt.Errorf("%s: %w", ch.Username, err))
 			continue // não aborta todos os canais — tenta o próximo
 		}
 
@@ -35,6 +39,7 @@ func (c *Collector) backfill(ctx context.Context, channels []*model.Channel) err
 			if err := c.repo.UpdateChannelLastMessage(ctx, ch.ID, maxID, time.Now().UTC()); err != nil {
 				c.log.Error("📜 Falha ao avançar cursor do canal",
 					"canal", ch.Username, "erro", err)
+				channelErrs = append(channelErrs, fmt.Errorf("%s: cursor: %w", ch.Username, err))
 				continue
 			}
 		}
@@ -43,6 +48,9 @@ func (c *Collector) backfill(ctx context.Context, channels []*model.Channel) err
 			"canal", ch.Username,
 			"total", fetched,
 			"max_msg_id", maxID)
+	}
+	if len(channelErrs) > 0 {
+		return fmt.Errorf("backfill falhou em %d canal(is): %w", len(channelErrs), stderrors.Join(channelErrs...))
 	}
 	return nil
 }

@@ -227,8 +227,12 @@ func (c *Collector) shutdown() {
 // este é o único momento confiável para download full-res.
 func (c *Collector) proactiveDownload(ctx context.Context, msg *model.RawMessage) {
 	req, err := telegram.ExtractPhotoRequest(msg.Payload)
-	if err != nil || req == nil {
-		return // sem foto ou erro de parse — silencioso
+	if err != nil {
+		c.log.Debug("extração de foto falhou", "canal_id", msg.ChannelID, "msg_id", msg.MessageID, "erro", err)
+		return
+	}
+	if req == nil {
+		return // sem foto na mensagem
 	}
 	go func() {
 		data, err := c.mediaClient.DownloadPhoto(ctx, *req)
