@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"testing"
+
+	"github.com/limiar/collector/internal/model"
 )
 
 func TestExtractPhotoRequest_WithPhoto(t *testing.T) {
@@ -115,7 +117,7 @@ func TestExtractPhotoRequest_NoFileReference(t *testing.T) {
 	}
 }
 
-func TestPayloadToInt64(t *testing.T) {
+func TestJSONToInt64(t *testing.T) {
 	tests := []struct {
 		name string
 		val  any
@@ -129,15 +131,15 @@ func TestPayloadToInt64(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := payloadToInt64(tt.val)
+			got := model.JSONToInt64(tt.val)
 			if got != tt.want {
-				t.Errorf("payloadToInt64(%v) = %d, want %d", tt.val, got, tt.want)
+				t.Errorf("JSONToInt64(%v) = %d, want %d", tt.val, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestPayloadToInt(t *testing.T) {
+func TestJSONToInt(t *testing.T) {
 	tests := []struct {
 		name string
 		val  any
@@ -150,9 +152,9 @@ func TestPayloadToInt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := payloadToInt(tt.val)
+			got := model.JSONToInt(tt.val)
 			if got != tt.want {
-				t.Errorf("payloadToInt(%v) = %d, want %d", tt.val, got, tt.want)
+				t.Errorf("JSONToInt(%v) = %d, want %d", tt.val, got, tt.want)
 			}
 		})
 	}
