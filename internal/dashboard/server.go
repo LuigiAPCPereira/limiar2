@@ -63,7 +63,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 
 	secureMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js; style-src 'self' 'unsafe-inline'; connect-src 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		mux.ServeHTTP(w, r)
