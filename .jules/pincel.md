@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2024-03-05 - Contexto de aba e tooltips nativos no Dashboard
+**Aprendizado:** Em painéis dinâmicos, abas em segundo plano perdem o contexto se a `<title>` for estática, além de textos truncados com `text-overflow: ellipsis` ocultarem informações vitais se não houver feedback via `title`. A acessibilidade de SEO/geral também sofre sem uma tag `meta name="description"`.
+**Ação:** Atualizar o título do documento dinamicamente para incluir o status atual (como a contagem de mensagens usando `x-effect` do AlpineJS), adicionar o atributo HTML `:title` (nativo) aos elementos que têm truncate e assegurar que há metadata como descrições no cabeçalho da página.
