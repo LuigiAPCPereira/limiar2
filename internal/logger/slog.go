@@ -62,6 +62,9 @@ func (l *SlogLogger) WithComponent(name string) Logger {
 
 // IsInfoEnabled retorna true se mensagens Info são emitidas (level <= Info).
 func (l *SlogLogger) IsInfoEnabled() bool { return l.level <= slog.LevelInfo }
+
+// IsWarnEnabled retorna true se mensagens Warn são emitidas (level <= Warn).
+func (l *SlogLogger) IsWarnEnabled() bool { return l.level <= slog.LevelWarn }
 func ParseLevel(level string) slog.Level {
 	switch level {
 	case "debug":

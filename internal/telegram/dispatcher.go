@@ -107,7 +107,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, update Update) {
 		case <-ctx.Done():
 			return
 		default:
-			d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
+			if d.log.IsWarnEnabled() {
+				d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
+			}
 		}
 	}
 }

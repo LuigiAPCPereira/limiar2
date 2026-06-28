@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Dashboard interno do limiar-collector para inspeção de mensagens capturadas em tempo real.">
 <title>Limiar Dashboard</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
@@ -89,7 +90,7 @@
   .cli-cmd { font-family: monospace; background: var(--surface); color: var(--accent); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.8rem; }
 </style>
 </head>
-<body x-data="dashboard()">
+<body x-data="dashboard()" x-effect="document.title = totalMessages > 0 ? '(' + totalMessages + ') Limiar Dashboard' : 'Limiar Dashboard'">
 
 <header>
   <h1>&#9670; <span>Limiar</span> Dashboard</h1>
@@ -176,7 +177,7 @@
               <span x-text="channelName(m.ChannelID)"></span>
               <span x-text="formatDate(m.ReceivedAt)"></span>
             </div>
-            <div class="preview" x-html="highlightedPreview(m)"></div>
+            <div class="preview" x-html="highlightedPreview(m)" :title="extractPreview(m)"></div>
           </div>
         </template>
       </div>
@@ -236,7 +237,7 @@
                 <span class="urgency-chip" x-text="urgencyLabel(sig)"></span>
               </template>
             </div>
-            <div class="preview" x-text="truncate(m.text_clean, 180)"></div>
+            <div class="preview" :title="m.text_clean || ''" x-text="truncate(m.text_clean, 180)"></div>
           </div>
         </template>
       </div>

@@ -26,4 +26,8 @@ type Logger interface {
 	// Usado em hot paths para evitar alocações variádicas (interface boxing)
 	// quando o log é descartado. Retorna false para NopLogger.
 	IsInfoEnabled() bool
+	// IsWarnEnabled informa se o nível atual de log inclui mensagens Warn.
+	// Usado em hot paths para evitar alocações variádicas (interface boxing)
+	// quando o log é descartado. Retorna false para NopLogger.
+	IsWarnEnabled() bool
 }
