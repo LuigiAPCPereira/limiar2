@@ -144,7 +144,20 @@
       </h2>
       <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens raw">
         <template x-if="filteredMessages.length === 0">
-          <div class="empty" x-text="loading ? 'Carregando...' : 'Nenhuma mensagem encontrada'"></div>
+          <div class="empty">
+            <template x-if="loading">
+              <span>Carregando...</span>
+            </template>
+            <template x-if="!loading && channelStats.length === 0">
+              <div>
+                Nenhum canal monitorado.<br>
+                Use <code style="background:var(--border);padding:0.2rem 0.4rem;border-radius:0.25rem;margin-top:0.5rem;display:inline-block">limiar-collector channels add</code> para adicionar.
+              </div>
+            </template>
+            <template x-if="!loading && channelStats.length > 0">
+              <span>Nenhuma mensagem encontrada</span>
+            </template>
+          </div>
         </template>
         <template x-for="m in filteredMessages" :key="m.ID">
           <div class="msg-item" @click="showRawDetail(m.ID)" role="button" tabindex="0" @keydown.enter.prevent="showRawDetail(m.ID)" @keydown.space.prevent="showRawDetail(m.ID)">
@@ -184,7 +197,20 @@
       </h2>
       <div class="msg-list" role="log" aria-live="polite" aria-label="Lista de mensagens processadas">
         <template x-if="filteredProcessed.length === 0">
-          <div class="empty" x-text="procLoading ? 'Carregando...' : 'Nenhuma mensagem processada encontrada'"></div>
+          <div class="empty">
+            <template x-if="procLoading">
+              <span>Carregando...</span>
+            </template>
+            <template x-if="!procLoading && channelStats.length === 0">
+              <div>
+                Nenhum canal monitorado.<br>
+                Use <code style="background:var(--border);padding:0.2rem 0.4rem;border-radius:0.25rem;margin-top:0.5rem;display:inline-block">limiar-collector channels add</code> para adicionar.
+              </div>
+            </template>
+            <template x-if="!procLoading && channelStats.length > 0">
+              <span>Nenhuma mensagem processada encontrada</span>
+            </template>
+          </div>
         </template>
         <template x-for="m in filteredProcessed" :key="m.id">
           <div class="msg-item" @click="showProcDetail(m)" role="button" tabindex="0" @keydown.enter.prevent="showProcDetail(m)" @keydown.space.prevent="showProcDetail(m)">

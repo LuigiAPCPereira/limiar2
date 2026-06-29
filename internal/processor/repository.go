@@ -303,9 +303,7 @@ func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64,
 		if curr.Valid {
 			m.PriceCurrency = curr.String
 		}
-		if urgency.Valid {
-			m.UrgencySignals = urgency.String
-		}
+		// urgency signals foram removidos do model.ProcessedMessage
 		m.PostedAt = model.ParseDBTime(posted)
 		m.ProcessedAt = model.ParseDBTime(procAt)
 		msgs = append(msgs, &m)
