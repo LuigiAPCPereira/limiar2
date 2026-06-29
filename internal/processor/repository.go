@@ -15,6 +15,7 @@ import (
 // Repository centraliza as queries do processor contra o banco Tursogo.
 // O processor lê raw_messages (read-only) e escreve em processed_messages.
 type Repository struct {
+	stmtUpsertProcessed    *sql.Stmt
 	db                  *sql.DB
 	stmtInsertProcessed *sql.Stmt
 }
@@ -27,7 +28,7 @@ func NewRepository(db *sql.DB) (*Repository, error) {
 			text_clean, text_length, media_type, photo_id,
 			views, forwards, reply_to_msg_id,
 			has_url, has_price, has_coupon, price_amount, price_currency,
-			urgency_signals, posted_at, processed_at,
+			posted_at, processed_at,
 			price_original, price_discount, coupon_code,
 			payment_method, shipping, installments, discount_percent,
 			url_hash, merchant, product_name, synthesis, is_duplicate, feed_eligible,
@@ -37,12 +38,13 @@ func NewRepository(db *sql.DB) (*Repository, error) {
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "prepare_insert_processed", err)
 	}
-	return &Repository{db: db, stmtInsertProcessed: stmt}, nil
+	return &Repository{db: db, stmtInsertProcessed: stmt, stmtUpsertProcessed: stmt}, nil
 }
 
 // Close libera prepared statements.
 func (r *Repository) Close() error {
-	return r.stmtInsertProcessed.Close()
+	if err := r.stmtInsertProcessed.Close(); err != nil { return err }
+	return r.stmtUpsertProcessed.Close()
 }
 
 // FetchUnprocessed retorna raw_messages que ainda não possuem entrada
@@ -242,7 +244,7 @@ func (r *Repository) SaveProcessedBatch(ctx context.Context, msgs []*NormalizedM
 func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64, msgType string, limit, offset int) ([]*model.ProcessedMessage, error) {
 	query := `SELECT id, raw_message_id, channel_id, message_id, message_type,
 		text_clean, text_length, media_type, has_url, has_price, has_coupon,
-		price_amount, price_currency, urgency_signals, posted_at, processed_at,
+		price_amount, price_currency, posted_at, processed_at,
 		price_original, price_discount, coupon_code, payment_method, shipping,
 		installments, discount_percent, merchant, product_name, is_duplicate
 		FROM processed_messages`
@@ -283,12 +285,11 @@ func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64,
 			hasCpn  int
 			isDup   int
 			price   sql.NullInt64
-			urgency sql.NullString
 			curr    sql.NullString
 		)
 		if err := rows.Scan(&m.ID, &m.RawMessageID, &m.ChannelID, &m.MessageID, &m.MessageType,
 			&m.TextClean, &m.TextLength, &m.MediaType, &hasURL, &hasPrc, &hasCpn,
-			&price, &curr, &urgency, &posted, &procAt,
+			&price, &curr, &posted, &procAt,
 			&m.PriceOriginal, &m.PriceDiscount, &m.CouponCode, &m.PaymentMethod, &m.Shipping,
 			&m.Installments, &m.DiscountPct, &m.Merchant, &m.ProductName, &isDup); err != nil {
 			return nil, apperrors.Wrap("processor", "scan_processed_message", err)
@@ -302,9 +303,6 @@ func (r *Repository) ListProcessedMessages(ctx context.Context, channelID int64,
 		}
 		if curr.Valid {
 			m.PriceCurrency = curr.String
-		}
-		if urgency.Valid {
-			m.UrgencySignals = urgency.String
 		}
 		m.PostedAt = model.ParseDBTime(posted)
 		m.ProcessedAt = model.ParseDBTime(procAt)
@@ -416,4 +414,56 @@ func (r *Repository) PhotoMetadataStats(ctx context.Context) (model.PhotoStats, 
 		return model.PhotoStats{}, apperrors.Wrap("processor", "photo_metadata_stats", err)
 	}
 	return s, nil
+}
+// UpsertProcessed persiste uma mensagem normalizada, atualizando se já existir.
+func (r *Repository) UpsertProcessed(ctx context.Context, msg *NormalizedMessage) error {
+	var priceAmount any
+	if msg.PriceAmount > 0 { priceAmount = msg.PriceAmount }
+	_, err := r.stmtUpsertProcessed.ExecContext(ctx,
+		msg.RawMessageID, msg.ChannelID, msg.MessageID, msg.MessageType,
+		msg.Text, msg.TextLength, msg.MediaType, msg.PhotoID,
+		msg.Views, msg.Forwards, msg.ReplyToMsgID,
+		model.BoolToInt(msg.HasURL), model.BoolToInt(msg.HasPrice), model.BoolToInt(msg.HasCoupon),
+		priceAmount, "BRL", msg.URL,
+		msg.PostedAt.UTC().Format(model.DBTimeLayout), msg.ProcessedAt.UTC().Format(model.DBTimeLayout),
+		msg.PriceOriginal, msg.PriceDiscount, msg.CouponCode,
+		msg.PaymentMethod, msg.Shipping, msg.Installments, msg.DiscountPct,
+		model.BoolToInt(msg.ShippingFree), msg.InstallmentsN, msg.InstallmentsValue,
+		model.BoolToInt(msg.IsRecurring),
+		msg.URLHash, msg.Merchant, msg.ProductName, msg.Synthesis,
+		model.BoolToInt(msg.IsDuplicate), model.BoolToInt(msg.FeedEligible),
+		msg.PhotoAccessHash, msg.PhotoFileRef, msg.PhotoDCID, msg.InlineThumb,
+	)
+	if err != nil { return apperrors.Wrap("processor", "upsert_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err)) }
+	return nil
+}
+
+func (r *Repository) UpsertProcessedBatch(ctx context.Context, msgs []*NormalizedMessage) (saved, failed int) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil { return 0, len(msgs) }
+	defer func() { _ = tx.Rollback() }()
+	stmt := tx.StmtContext(ctx, r.stmtUpsertProcessed)
+	for _, msg := range msgs {
+		var priceAmount any
+		if msg.PriceAmount > 0 { priceAmount = msg.PriceAmount }
+		_, err := stmt.ExecContext(ctx,
+			msg.RawMessageID, msg.ChannelID, msg.MessageID, msg.MessageType,
+			msg.Text, msg.TextLength, msg.MediaType, msg.PhotoID,
+			msg.Views, msg.Forwards, msg.ReplyToMsgID,
+			model.BoolToInt(msg.HasURL), model.BoolToInt(msg.HasPrice), model.BoolToInt(msg.HasCoupon),
+			priceAmount, "BRL", msg.URL,
+			msg.PostedAt.UTC().Format(model.DBTimeLayout), msg.ProcessedAt.UTC().Format(model.DBTimeLayout),
+			msg.PriceOriginal, msg.PriceDiscount, msg.CouponCode,
+			msg.PaymentMethod, msg.Shipping, msg.Installments, msg.DiscountPct,
+			model.BoolToInt(msg.ShippingFree), msg.InstallmentsN, msg.InstallmentsValue,
+			model.BoolToInt(msg.IsRecurring),
+			msg.URLHash, msg.Merchant, msg.ProductName, msg.Synthesis,
+			model.BoolToInt(msg.IsDuplicate), model.BoolToInt(msg.FeedEligible),
+			msg.PhotoAccessHash, msg.PhotoFileRef, msg.PhotoDCID, msg.InlineThumb,
+		)
+		if err != nil { failed++; continue }
+		saved++
+	}
+	if err := tx.Commit(); err != nil { return 0, len(msgs) }
+	return saved, failed
 }

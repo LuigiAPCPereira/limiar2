@@ -2,12 +2,11 @@ package processor
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/viper"
-
-	"github.com/limiar/collector/internal/config"
 )
 
 // Defaults do processor.
@@ -34,7 +33,7 @@ func LoadConfig(v *viper.Viper) (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
-	if err := config.LoadDotEnv(); err != nil {
+	if err := loadDotEnv(); err != nil {
 		return nil, fmt.Errorf("processor: load .env: %w", err)
 	}
 
@@ -83,3 +82,35 @@ func (c *Config) Validate() error {
 }
 
 
+
+func loadDotEnv() error {
+	data, err := os.ReadFile(".env")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		idx := strings.Index(line, "=")
+		if idx <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:idx])
+		val := strings.TrimSpace(line[idx+1:])
+		if len(val) >= 2 {
+			first, last := val[0], val[len(val)-1]
+			if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+				val = val[1 : len(val)-1]
+			}
+		}
+		if _, exists := os.LookupEnv(key); !exists {
+			_ = os.Setenv(key, val)
+		}
+	}
+	return nil
+}

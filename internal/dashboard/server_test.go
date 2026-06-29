@@ -94,7 +94,7 @@ func newTestServer(repo *mockRepo, proc *mockProcessed, broker *Broker) *Server 
 	if proc != nil {
 		pr = proc
 	}
-	return NewServer(repo, pr, nil, 8080, broker)
+	return NewServer(repo, pr, nil, nil, 8080, broker)
 }
 
 func TestHandleHealthz_OK(t *testing.T) {
@@ -513,7 +513,7 @@ func TestHandleMessages_LimitClamping(t *testing.T) {
 
 func TestNewServer_NilLogger(t *testing.T) {
 	repo := &mockRepo{}
-	srv := NewServer(repo, nil, nil, 8080, nil)
+	srv := NewServer(repo, nil, nil, nil, 8080, nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")
 	}

@@ -2,7 +2,8 @@ package dashboard
 
 import (
 	"context"
-	_ "embed"
+	"embed"
+	"io/fs"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -69,7 +70,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 
 	secureMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		mux.ServeHTTP(w, r)
@@ -102,16 +103,10 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
+	if r.URL.Path == "/" {
+		r.URL.Path = "/index.html"
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprint(w, indexHTML)
+	distFileServer.ServeHTTP(w, r)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -314,5 +309,15 @@ func (s *Server) writeJSON(w http.ResponseWriter, v any) {
 	}
 }
 
-//go:embed index.html
-var indexHTML string
+//go:embed all:dist
+var distFS embed.FS
+
+var distFileServer http.Handler
+
+func init() {
+	sub, err := fs.Sub(distFS, "dist")
+	if err != nil {
+		panic(fmt.Sprintf("dashboard: fs.Sub: %v", err))
+	}
+	distFileServer = http.FileServer(http.FS(sub))
+}

@@ -3,92 +3,62 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/limiar/collector/internal/dashboard"
-	apperrors "github.com/limiar/collector/internal/errors"
-	"github.com/limiar/collector/internal/logger"
+	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/model"
+	"github.com/limiar/collector/internal/processor"
+	"github.com/limiar/collector/internal/storage"
 )
 
-// newRunCmd constrói o subcomando `run`: o serviço coletor não interativo.
-// Ele utiliza um logger no formato JSON, requer uma sessão autenticada e é
-// encerrado de forma graciosa (graceful shutdown) com SIGTERM/SIGINT dentro do tempo limite configurado.
 func newRunCmd(p Provider) *cobra.Command {
-	var withDashboard bool
-
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "Executar o serviço coletor (não interativo, pronto para produção)",
+		Short: "Executar o pipeline completo (collector + processor + dashboard)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := p.Config()
-
-			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
-			log := p.Logger(format)
+			log := p.Logger()
 			presenter := p.Presenter()
-
 			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
-
-			repo, closeStore, err := p.OpenStore(ctx, log)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = closeStore() }()
-
-			client := p.NewClient(log, repo)
-			col := p.NewCollector(client, repo, log)
-
-			if withDashboard {
-				broker := dashboard.NewBroker()
-				port := cfg.DashboardPort
-				srv := dashboard.NewServer(repo, nil, log, port, broker)
-				col.SetOnMessage(func(msg *model.RawMessage) {
-					data, err := json.Marshal(msg)
-					if err != nil {
-						return
-					}
-					broker.Publish(dashboard.Event{Type: "message", Data: data})
-				})
-
-				go func() {
-					if err := srv.ListenAndServe(ctx); err != nil {
-						log.Error("Dashboard encerrou com erro", "erro", err)
-					}
-				}()
-				presenter.Info(fmt.Sprintf("Dashboard: http://localhost:%d", port))
-			}
-
-			runErr := make(chan error, 1)
-			go func() { runErr <- col.Run(ctx) }()
-
-			select {
-			case err := <-runErr:
-				return err
-			case <-ctx.Done():
-				log.Info("🛑 Sinal de desligamento recebido; drenando buffers",
-					"timeout_segundos", cfg.ShutdownTimeout)
-				timeout := time.Duration(cfg.ShutdownTimeout) * time.Second
-				select {
-				case err := <-runErr:
-					log.Info("✅ Desligamento graceful completo")
-					return err
-				case <-time.After(timeout):
-					log.Error("⏰ Timeout de desligamento excedido; forçando saída",
-						"timeout_segundos", cfg.ShutdownTimeout)
-					return apperrors.Wrap("cli", "run", context.DeadlineExceeded)
-				}
-			}
+			db, err := storage.Open(ctx, cfg.DBPath, log.WithComponent("storage"))
+			if err != nil { return err }
+			defer func() { _ = db.Close() }()
+			collectorRepo, _ := storage.NewRepository(db.DB())
+			defer func() { _ = collectorRepo.Close() }()
+			procRepo, _ := processor.NewRepository(db.DB())
+			defer func() { _ = procRepo.Close() }()
+			client := p.NewTelegramClient(collectorRepo)
+			col := p.NewCollector(client, collectorRepo)
+			proc := processor.NewProcessor(procRepo, cfg.ProcessorConfig(), log.WithComponent("processor"))
+			broker := dashboard.NewBroker()
+			imageCache := p.NewImageCache()
+			mediaResolver := media.NewResolver(collectorRepo, imageCache, log.WithComponent("media"))
+			srv := dashboard.NewServer(collectorRepo, procRepo, mediaResolver, log.WithComponent("dashboard"), cfg.DashboardPort, broker)
+			col.SetOnMessage(func(msg *model.RawMessage) {
+				data, _ := json.Marshal(msg)
+				broker.Publish(dashboard.Event{Type: "message", Data: data})
+			})
+			g, gctx := errgroup.WithContext(ctx)
+			log.Info("🚀 Limiar orquestrador iniciado", "dashboard", fmt.Sprintf("http://localhost:%d", cfg.DashboardPort))
+			presenter.Info("Limiar orquestrador iniciado")
+			presenter.Step(fmt.Sprintf("Dashboard: http://localhost:%d", cfg.DashboardPort))
+			presenter.Step("Pressione Ctrl+C para encerrar")
+			g.Go(func() error { return col.Run(gctx) })
+			g.Go(func() error { return proc.Run(gctx) })
+			g.Go(func() error { return srv.ListenAndServe(gctx) })
+			if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) { return err }
+			log.Info("✅ Limiar encerrado gracefulmente")
+			return nil
 		},
 	}
-
-	cmd.Flags().BoolVar(&withDashboard, "dashboard", false, "Iniciar dashboard web em http://localhost:8080")
 	return cmd
 }
