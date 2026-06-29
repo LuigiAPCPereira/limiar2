@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	apperrors "github.com/limiar/collector/internal/errors"
-	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/processor"
 	"github.com/limiar/collector/internal/storage"
@@ -56,8 +55,7 @@ func runMediaSmoke(cmd *cobra.Command, p Provider, msgID int64) error {
 	ctx := cmd.Context()
 
 	cfg := p.Config()
-	format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
-	log := p.Logger(format)
+	log := p.Logger()
 	presenter := p.Presenter()
 
 	store, err := storage.Open(ctx, cfg.DBPath, log)
@@ -137,8 +135,7 @@ O --msg-id é o processed_messages.id (PK), não o message_id do Telegram.`,
 			}
 
 			cfg := p.Config()
-			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
-			log := p.Logger(format)
+			log := p.Logger()
 			presenter := p.Presenter()
 
 			store, err := storage.Open(ctx, cfg.DBPath, log)

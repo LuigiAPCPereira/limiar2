@@ -4,32 +4,37 @@ import "time"
 
 // ProcessedMessage representa uma mensagem normalizada e classificada pelo processor.
 type ProcessedMessage struct {
-	ID             int64     `json:"id"`
-	RawMessageID   int64     `json:"raw_message_id"`
-	ChannelID      int64     `json:"channel_id"`
-	MessageID      int64     `json:"message_id"`
-	MessageType    string    `json:"message_type"`
-	TextClean      string    `json:"text_clean"`
-	TextLength     int       `json:"text_length"`
-	MediaType      string    `json:"media_type"`
-	HasURL         bool      `json:"has_url"`
-	HasPrice       bool      `json:"has_price"`
-	HasCoupon      bool      `json:"has_coupon"`
-	PriceAmount    int64     `json:"price_amount"`
-	PriceCurrency  string    `json:"price_currency"`
-	UrgencySignals string    `json:"urgency_signals"`
-	PostedAt       time.Time `json:"posted_at"`
-	ProcessedAt    time.Time `json:"processed_at"`
-	PriceOriginal  int64     `json:"price_original"`
-	PriceDiscount  int       `json:"price_discount"`
-	CouponCode     string    `json:"coupon_code"`
-	PaymentMethod  string    `json:"payment_method"`
-	Shipping       string    `json:"shipping"`
-	Installments   string    `json:"installments"`
-	DiscountPct    int       `json:"discount_percent"`
-	Merchant       string    `json:"merchant"`
-	ProductName    string    `json:"product_name"`
-	IsDuplicate    bool      `json:"is_duplicate"`
+	ID               int64     `json:"id"`
+	RawMessageID     int64     `json:"raw_message_id"`
+	ChannelID        int64     `json:"channel_id"`
+	MessageID        int64     `json:"message_id"`
+	MessageType      string    `json:"message_type"`
+	TextClean        string    `json:"text_clean"`
+	TextLength       int       `json:"text_length"`
+	MediaType        string    `json:"media_type"`
+	PhotoID          int64     `json:"photo_id"`
+	HasURL           bool      `json:"has_url"`
+	HasPrice         bool      `json:"has_price"`
+	HasCoupon        bool      `json:"has_coupon"`
+	PriceAmount      int64     `json:"price_amount"`
+	PriceCurrency    string    `json:"price_currency"`
+	PostedAt         time.Time `json:"posted_at"`
+	ProcessedAt      time.Time `json:"processed_at"`
+	PriceOriginal    int64     `json:"price_original"`
+	PriceDiscount    int       `json:"price_discount"`
+	CouponCode       string    `json:"coupon_code"`
+	PaymentMethod    string    `json:"payment_method"`
+	Shipping         string    `json:"shipping"`
+	Installments     string    `json:"installments"`
+	ShippingFree     bool      `json:"shipping_free"`
+	InstallmentsN    int       `json:"installments_n"`
+	InstallmentsValue float64  `json:"installments_value"`
+	DiscountPct      int       `json:"discount_percent"`
+	Merchant         string    `json:"merchant"`
+	URL              string    `json:"url"`
+	ProductName      string    `json:"product_name"`
+	IsDuplicate      bool      `json:"is_duplicate"`
+	IsRecurring      bool      `json:"is_recurring"`
 }
 
 // ProcessedTypeStats contém contagem de mensagens processadas por tipo.

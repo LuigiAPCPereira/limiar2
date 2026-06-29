@@ -12,10 +12,9 @@ import (
 
 // Resolver resolve imagens de mensagens usando a cadeia de fallback:
 //
-//	1. cache.Get(photoID)    → full-res do Collector (se disponível)
-//	2. repo.GetInlineThumb   → thumbnail inline do DB (sempre disponível)
-//	3. ErrNoPhoto            → 404
-//
+//  1. cache.Get(photoID)    → full-res do Collector (se disponível)
+//  2. repo.GetInlineThumb   → thumbnail inline do DB (sempre disponível)
+//  3. ErrNoPhoto            → 404
 type Resolver struct {
 	repo  Repository
 	cache *Cache
@@ -73,6 +72,11 @@ func (r *Resolver) ResolveImage(ctx context.Context, processedMsgID int64) ([]by
 	thumb := v.([]byte) // safe: GetInlineThumb retorna []byte ou nil
 	if thumb != nil {
 		r.log.Debug("media: inline thumb hit", "photo_id", photoID, "bytes", len(thumb))
+		decompressed := decompressStrippedThumb(thumb)
+		if decompressed != nil {
+			r.log.Debug("media: decompressed thumb", "photo_id", photoID, "bytes", len(decompressed))
+			return decompressed, "inline-thumb", nil
+		}
 		return thumb, "inline-thumb", nil
 	}
 
@@ -86,4 +90,67 @@ func (r *Resolver) PutCache(photoID int64, data []byte) {
 	if r.cache != nil {
 		r.cache.Put(photoID, data)
 	}
+}
+
+// decompressStrippedThumb descomprime um thumbnail inline do Telegram (Type "i").
+// O formato PhotoStrippedSize é um JPEG comprimido usando um algoritmo específico
+// do Telegram. Veja https://core.telegram.org/api/files#stripped-thumbnails
+func decompressStrippedThumb(compressed []byte) []byte {
+	if len(compressed) == 0 {
+		return nil
+	}
+
+	// O formato PhotoStrippedSize é um JPEG comprimido com um algoritmo RLE específico.
+	// O primeiro byte indica o tipo (0x01 para stripped thumbnail).
+	// Os bytes seguintes são os dados comprimidos.
+
+	if len(compressed) < 1 {
+		return nil
+	}
+
+	// Verifica se é um PhotoStrippedSize válido (começa com 0x01)
+	if compressed[0] != 0x01 {
+		// Não é formato comprimido, retorna como está
+		return compressed
+	}
+
+	// Descomprime usando o algoritmo RLE do Telegram
+	// O formato é: [tipo][dados comprimidos]
+	// Cada byte 0 indica que o próximo byte é um contador de repetição
+	var decompressed []byte
+	i := 1 // Pula o byte de tipo
+	for i < len(compressed) {
+		b := compressed[i]
+		if b == 0 {
+			// Byte 0 indica que o próximo byte é um contador de repetição
+			if i+1 < len(compressed) {
+				count := int(compressed[i+1])
+				if count > 0 && i+2 < len(compressed) {
+					value := compressed[i+2]
+					for j := 0; j < count; j++ {
+						decompressed = append(decompressed, value)
+					}
+					i += 3
+				} else {
+					i += 2
+				}
+			} else {
+				i++
+			}
+		} else {
+			decompressed = append(decompressed, b)
+			i++
+		}
+	}
+
+	// Adiciona header JPEG se não estiver presente
+	if len(decompressed) >= 2 {
+		if decompressed[0] != 0xFF || decompressed[1] != 0xD8 {
+			// Adiciona header JPEG padrão
+			jpegHeader := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01}
+			decompressed = append(jpegHeader, decompressed...)
+		}
+	}
+
+	return decompressed
 }

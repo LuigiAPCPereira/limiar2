@@ -25,6 +25,9 @@ func valid() *config.Config {
 		DBWriterBufferSize:   512,
 		HistoryMax:           5000,
 		HistoryMaxDays:       30,
+		DashboardPort:        8080,
+		PollInterval:         5 * time.Second,
+		BatchSize:            50,
 	}
 }
 

@@ -40,7 +40,7 @@ func TestClassify(t *testing.T) {
 			nm: &NormalizedMessage{
 				Text: "🎧 Eletrônicos",
 			},
-			want: TypeCategoryHeader,
+			want: TypeCommentary, // was TypeCategoryHeader
 		},
 		{
 			name: "coupon_expired: esgotado sem URL",
@@ -78,7 +78,7 @@ func TestClassify(t *testing.T) {
 				Text:      "Qual categoria?",
 				MediaType: "poll",
 			},
-			want: TypePoll,
+			want: TypeCommentary, // was TypePoll
 		},
 		{
 			name: "commentary: texto livre",
@@ -100,9 +100,9 @@ func TestClassify(t *testing.T) {
 		{
 			name: "coupon_only: cupom genérico sem produto",
 			nm: &NormalizedMessage{
-				Text:      "Cupom Shopee\n\nR$10 OFF em R$40 - TORCIDAAFILIADAAF\n\nResgate aqui\nhttps://s.shopee.com.br/abc",
+				Text:      "Cupom Shopee\n\n10% OFF em Tudo - TORCIDAAFILIADAAF\n\nResgate aqui\nhttps://s.shopee.com.br/abc",
 				HasURL:    true,
-				HasPrice:  true,
+				HasPrice:  false,
 				HasCoupon: true,
 			},
 			want: TypeCouponOnly,

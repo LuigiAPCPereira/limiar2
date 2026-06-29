@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/limiar/collector/internal/logger"
+	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/processor"
 )
@@ -18,12 +19,13 @@ import (
 // Quando o broker não é nil, o endpoint SSE /api/events é habilitado para
 // atualizações em tempo real.
 type Server struct {
-	repo      dashboardRepo
-	processed processor.ProcessedReader
-	log       logger.Logger
-	port      int
-	broker    *Broker
-	startedAt time.Time
+	repo          dashboardRepo
+	processed     processor.ProcessedReader
+	mediaResolver *media.Resolver
+	log           logger.Logger
+	port          int
+	broker        *Broker
+	startedAt     time.Time
 }
 
 // dashboardRepo define as queries de leitura do storage consumidas pelo dashboard.
@@ -39,11 +41,12 @@ type dashboardRepo interface {
 // para desabilitar o SSE (o dashboard fará fallback para polling).
 // processed pode ser nil para desabilitar as queries de mensagens processadas
 // (usado pelo limiar-collector standalone que não tem acesso ao processor).
-func NewServer(repo dashboardRepo, processed processor.ProcessedReader, log logger.Logger, port int, broker *Broker) *Server {
+// mediaResolver pode ser nil para desabilitar o endpoint de imagens.
+func NewServer(repo dashboardRepo, processed processor.ProcessedReader, mediaResolver *media.Resolver, log logger.Logger, port int, broker *Broker) *Server {
 	if log == nil {
 		log = logger.NopLogger{}
 	}
-	return &Server{repo: repo, processed: processed, log: log, port: port, broker: broker, startedAt: time.Now()}
+	return &Server{repo: repo, processed: processed, mediaResolver: mediaResolver, log: log, port: port, broker: broker, startedAt: time.Now()}
 }
 
 // ListenAndServe inicia o servidor HTTP e bloqueia até que ctx seja cancelado.
@@ -56,6 +59,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/api/message/", s.handleMessage)
 	mux.HandleFunc("/api/processed", s.handleProcessed)
 	mux.HandleFunc("/api/processed/stats", s.handleProcessedStats)
+	if s.mediaResolver != nil {
+		mux.HandleFunc("/api/media/", s.handleMedia)
+	}
 	if s.broker != nil {
 		mux.HandleFunc("/api/events", s.handleEvents)
 	}
@@ -63,7 +69,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
 
 	secureMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js; style-src 'self' 'unsafe-inline'; connect-src 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		mux.ServeHTTP(w, r)
@@ -275,6 +281,27 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Path[len("/api/media/"):]
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	data, source, err := s.mediaResolver.ResolveImage(r.Context(), id)
+	if err != nil {
+		s.log.Error("Erro ao resolver imagem", "id", id, "erro", err)
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/webp")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("X-Source", source)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) writeJSON(w http.ResponseWriter, v any) {

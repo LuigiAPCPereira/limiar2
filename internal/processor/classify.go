@@ -25,7 +25,7 @@ var (
 		`|entre\s+no\s+grupo|grupo\s+de\s+ofertas|grupo\s+do\s+whatsapp` +
 		`|canal\s+de\s+ofertas|salvando\s+o\s+bolso|quase\s+\d+\s*mil` +
 		`|pessoas\s+somando|noss[oa]\s+grupo|noss[oa]\s+canal)`)
-	reCouponHeader = regexp.MustCompile(`(?i)^(?:🎟️?\s*)?(?:cup[ao]m|cupons|c[oó]digo|code)\b`)
+	reCouponHeader = regexp.MustCompile(`(?i)(?:🎟️?\s*)?(?:cup[ao]m|cupons|c[oó]digo|code)\b`)
 )
 
 // Classify aplica a cascata de checks para determinar o MessageType.
@@ -33,10 +33,6 @@ var (
 func Classify(nm *NormalizedMessage) MessageType {
 	text := nm.Text
 
-	// 1. Admin meta (regras do grupo, links de whatsapp, etc.)
-	if reAdminMeta.MatchString(text) {
-		return TypeAdminMeta
-	}
 
 	// 2. Cupom expirado (menciona esgotado/acabou, sem URL de produto)
 	if isExpired(text) && !nm.HasURL {
@@ -44,7 +40,7 @@ func Classify(nm *NormalizedMessage) MessageType {
 	}
 
 	// 3. Cupom sem produto (distribuição de cupom genérico, ex: "Cupom Shopee R$10 OFF - CODE")
-	if nm.HasCoupon && nm.HasURL && reCouponHeader.MatchString(text) {
+	if nm.HasCoupon && nm.HasURL && !nm.HasPrice && reCouponHeader.MatchString(text) {
 		return TypeCouponOnly
 	}
 
@@ -68,12 +64,17 @@ func Classify(nm *NormalizedMessage) MessageType {
 	case "document":
 		return TypeDocument
 	case "poll":
-		return TypePoll
+		return TypeCommentary
 	}
 
-	// 5. Category header (texto curto, sem URL/preço/esgotado)
+	// 5. Admin meta (regras do grupo, links de whatsapp, etc.)
+	if !nm.HasURL && !nm.HasPrice && reAdminMeta.MatchString(text) {
+		return TypeAdminMeta
+	}
+
+	// 6. Category header (texto curto, sem URL/preço/esgotado)
 	if len(text) < 50 && !nm.HasURL && !nm.HasPrice && !isExpired(text) {
-		return TypeCategoryHeader
+		return TypeCommentary
 	}
 
 	// 6. Fallback

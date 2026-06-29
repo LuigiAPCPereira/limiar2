@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -35,25 +34,22 @@ func withAuthenticatedStore(
 	fn func(repo *storage.Repository, log logger.Logger, presenter logger.Presenter) error,
 ) error {
 	ctx := cmd.Context()
-	cfg := p.Config()
-
-	format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
-	log := p.Logger(format)
+	log := p.Logger()
 	presenter := p.Presenter()
 
-	repo, closeStore, err := p.OpenStore(ctx, log)
+	repo, closeStore, err := p.OpenStore(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = closeStore() }()
 
-	client := p.NewClient(log, repo)
+	client := p.NewTelegramClient(repo)
 	authed, err := client.IsAuthenticated(ctx)
 	if err != nil {
 		return err
 	}
 	if !authed {
-		presenter.Warning("Sessão não autenticada. Execute 'limiar-collector auth' primeiro.")
+		presenter.Warning("Sessão não autenticada. Execute 'limiar auth' primeiro.")
 		return apperrors.Wrap("cli", "channels", apperrors.ErrNotAuthenticated)
 	}
 	return fn(repo, log, presenter)
@@ -103,13 +99,9 @@ func newChannelsAddCmd(p Provider) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cfg := p.Config()
-
-			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
-			log := p.Logger(format)
 			presenter := p.Presenter()
 
-			repo, closeStore, err := p.OpenStore(ctx, log)
+			repo, closeStore, err := p.OpenStore(ctx)
 			if err != nil {
 				return err
 			}
@@ -117,7 +109,7 @@ func newChannelsAddCmd(p Provider) *cobra.Command {
 
 			presenter.Step("Conectando ao Telegram...")
 
-			client := p.NewClient(log, repo)
+			client := p.NewTelegramClient(repo)
 			peer, err := client.ResolveChannelChecked(ctx, args[0])
 			if err != nil {
 				return err

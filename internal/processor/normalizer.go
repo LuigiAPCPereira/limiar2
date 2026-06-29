@@ -46,9 +46,13 @@ type NormalizedMessage struct {
 	CouponCode     string // código do cupom extraído (vazio se não há)
 	PaymentMethod  string // "pix" | ""
 	Shipping       string // "frete_gratis" | "frete_gratis_prime" | ""
-	Installments   string // "9x_sem_juros" | ""
+	Installments    string // "9x_sem_juros" | ""
+	InstallmentsN     int
+	InstallmentsValue float64
+	ShippingFree      bool
 	DiscountPct    int    // "20% OFF" → 20 (do texto, não-calculado)
 	IsCashback     bool   // cashback mencionado
+	IsRecurring     bool   // compra recorrente / assinatura
 	URLHash        string // SHA-256 da primeira URL normalizada
 	Merchant       string // merchant inferido do domínio da URL
 	ProductName    string // nome do produto (heurística)
@@ -56,6 +60,7 @@ type NormalizedMessage struct {
 	FeedEligible   bool   // elegível para o feed (deal_complete ou deal_no_coupon)
 	InlineThumb    []byte // thumbnail inline do Telegram (Type "i", ~230 bytes, sempre disponível)
 	UrgencySignals []string
+	URL             string // primeira URL extrau00edda do texto
 	MessageType    string // preenchido por Classify
 	Synthesis      string // JSON serializado de SynthesizedPromotion
 }
@@ -89,26 +94,26 @@ var (
 	rePrice  = regexp.MustCompile(`R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)`)
 	// rePriceAlt catches "POR: 425 REAIS", "POR 65,47", "por apenas 99,90" without R$
 	rePriceAlt = regexp.MustCompile(`(?i)(?:por|only|apenas)[:\s]+R?\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)\s*(?:reais|REAIS)?`)
+	rePriceReais = regexp.MustCompile(`(?i)\b([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)\s*reais\b`)
 	reCoupon = regexp.MustCompile(`(?i)(?:cup[ao]m|c[oó]digo|code)[\s:\n]+([A-Za-z0-9_]{3,25})`)
 
 	// Dual price: "De R$ 429 por R$ 208,92", "De: R$ 429 | Por: R$ 208", "R$ 50 OFF em R$ 250"
 	reDualPrice = regexp.MustCompile(
-		`(?i)(?:de[:\s]+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)[^\n]*?(?:por|à\s*vista|no\s*pix)[:\s]+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?))` +
-			`|(?:R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)\s*OFF\s+em\s+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?))`)
+		`(?i)(?:de|era)[:\s]+R?\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)[^\n]*?(?:por|agora|[àa]\s*vista|no\s*pix)[:\s]+R?\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)` +
+			`|(?:R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)\s*OFF\s+em\s+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?))`)
 
 	// Modifiers
 	rePix       = regexp.MustCompile(`(?i)no\s*pix|via\s*pix|pagamento\s+pix|[àa]\s+vista\s+no\s+pix`)
 	reFretePrime = regexp.MustCompile(`(?i)frete\s*gr[áa]tis\s*prime|prime.*frete\s*gr[áa]tis`)
+	reFreteFree  = regexp.MustCompile(`(?i)frete\s*gr[áa]tis|frete\s*free|sem\s*frete|entrega\s*gr[áa]tis|entrega\s*gratuita|frete\s*0|free\s*shipping`)
 	reFreteG    = regexp.MustCompile(`(?i)frete\s*gr[áa]tis`)
-	reInstall   = regexp.MustCompile(`(?i)(\d+)x\s*(?:sem\s*juros|s/\s*juros)`)
+	reInstall   = regexp.MustCompile(`(?i)(\d+)x\s*(?:sem\s*juros|s/\s*juros)?\s*(?:de\s*)?(?:R\$?\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)?`)
 	reCashback  = regexp.MustCompile(`(?i)cash\s*back|cashback`)
+	reRecurring  = regexp.MustCompile(`(?i)comprar\s+com\s+recorr[eê]ncia|compra\s+recorrente|com\s+recorr[eê]ncia|assine\s+e\s+economize|assinatura.*cancele|cancele\s+quando\s+quiser`)
 	reDiscPct   = regexp.MustCompile(`(?i)(\d+)\s*%\s*(?:de\s+)?(?:desconto|off|desc)`)
 
 	// Urgency
 	reExpired  = regexp.MustCompile(`(?i)(esgotado|acabou|encerrado|expirado)`)
-	reCorre    = regexp.MustCompile(`(?i)\b(corre|corram)\b`)
-	reUltima   = regexp.MustCompile(`(?i)[úu]ltima[s]?\s*unidade|acabando|esgotando`)
-	reNacional = regexp.MustCompile(`(?i)envio\s+(nacional|do\s+brasil)`)
 )
 
 // Normalize transforma um payload bruto (Shape A ou B) em NormalizedMessage.
@@ -156,7 +161,8 @@ func Normalize(raw *model.RawMessage) (*NormalizedMessage, error) {
 	extractPrices(nm.Text, nm)
 	extractCoupon(nm.Text, nm)
 	extractModifiers(nm.Text, nm)
-	nm.UrgencySignals = extractUrgency(nm.Text)
+
+	nm.URL = extractURL(nm.Text)
 
 	// Estágio 3: Síntese
 	syn := Synthesize(nm)
@@ -198,16 +204,15 @@ func extractPrices(text string, nm *NormalizedMessage) {
 			}
 		}
 		if origRaw != "" && finalRaw != "" {
-			nm.HasPrice = true
-			nm.PriceOriginal = parseBRL(origRaw)
-			nm.PriceAmount = parseBRL(finalRaw)
-			if nm.PriceOriginal > 0 && nm.PriceAmount > 0 {
+			origCents := parseBRL(origRaw)
+			finalCents := parseBRL(finalRaw)
+			if origCents > 0 && finalCents > 0 && origCents > finalCents {
+				nm.HasPrice = true
+				nm.PriceOriginal = origCents
+				nm.PriceAmount = finalCents
 				nm.PriceDiscount = int(math.Round((1.0 - float64(nm.PriceAmount)/float64(nm.PriceOriginal)) * 100))
-				if nm.PriceDiscount < 0 {
-					nm.PriceDiscount = 0
-				}
+				return
 			}
-			return
 		}
 	}
 
@@ -222,14 +227,45 @@ func extractPrices(text string, nm *NormalizedMessage) {
 	if match := rePriceAlt.FindStringSubmatch(text); match != nil {
 		nm.HasPrice = true
 		nm.PriceAmount = parseBRL(match[1])
+		return
 	}
+
+	// Fallback 2: valor seguido de REAIS ("A PARTIR DE: 61 REAIS", "620 REAIS")
+	if matches := rePriceReais.FindAllStringSubmatch(text, -1); len(matches) > 0 {
+		var minPrice int64 = -1
+		for _, match := range matches {
+			price := parseBRL(match[1])
+			if price > 0 && (minPrice == -1 || price < minPrice) {
+				minPrice = price
+			}
+		}
+		if minPrice > 0 {
+			nm.HasPrice = true
+			nm.PriceAmount = minPrice
+		}
+	}
+}
+
+// extractURL extrai a primeira URL do texto.
+func extractURL(text string) string {
+	return reURL.FindString(text)
 }
 
 // extractCoupon extrai código de cupom e seta HasCoupon + CouponCode.
 func extractCoupon(text string, nm *NormalizedMessage) {
 	if match := reCoupon.FindStringSubmatch(text); match != nil {
+		raw := match[1]
+		// Ignora capturas espúrias: URLs e palavras comuns em minúsculo
+		if strings.HasPrefix(strings.ToUpper(raw), "HTTP") {
+			return
+		}
+		// Cupons reais são UPPERCASE ou MIXED — palavras toda em minúsculo
+		// no texto original ("antes", "https") não são códigos de cupom.
+		if raw == strings.ToLower(raw) && len(raw) > 1 {
+			return
+		}
 		nm.HasCoupon = true
-		nm.CouponCode = strings.ToUpper(match[1])
+		nm.CouponCode = strings.ToUpper(raw)
 	}
 }
 
@@ -238,18 +274,41 @@ func extractModifiers(text string, nm *NormalizedMessage) {
 	if rePix.MatchString(text) {
 		nm.PaymentMethod = "pix"
 	}
-	if reFretePrime.MatchString(text) {
+	if match := reFreteFree.FindStringSubmatch(text); match != nil {
+		nm.ShippingFree = true
+		if reFretePrime.MatchString(text) {
+			nm.Shipping = "frete_gratis_prime"
+		} else {
+			nm.Shipping = "frete_gratis"
+		}
+	} else if reFretePrime.MatchString(text) {
+		nm.ShippingFree = true
 		nm.Shipping = "frete_gratis_prime"
 	} else if reFreteG.MatchString(text) {
+		nm.ShippingFree = true
 		nm.Shipping = "frete_gratis"
 	}
+
 	if match := reInstall.FindStringSubmatch(text); match != nil {
 		nm.Installments = match[1] + "x_sem_juros"
+		nm.InstallmentsN, _ = strconv.Atoi(match[1])
+		var valRaw string
+		if len(match) > 2 && match[2] != "" {
+			valRaw = match[2]
+		}
+		if valRaw != "" {
+			nm.InstallmentsValue = float64(parseBRL(valRaw)) / 100.0
+		}
 	}
 	if reCashback.MatchString(text) {
 		nm.IsCashback = true
 	}
-	if match := reDiscPct.FindStringSubmatch(text); match != nil {
+	if reRecurring.MatchString(text) {
+		nm.IsRecurring = true
+	}
+	if nm.PriceDiscount > 0 {
+		nm.DiscountPct = nm.PriceDiscount
+	} else if match := reDiscPct.FindStringSubmatch(text); match != nil {
 		n, _ := strconv.Atoi(match[1])
 		if n > 0 && n <= 100 {
 			nm.DiscountPct = n
@@ -432,22 +491,6 @@ func isExpired(text string) bool {
 	return reExpired.MatchString(text)
 }
 
-func extractUrgency(text string) []string {
-	var signals []string
-	if reCorre.MatchString(text) {
-		signals = append(signals, "corre")
-	}
-	if reFreteG.MatchString(text) {
-		signals = append(signals, "frete_gratis")
-	}
-	if reUltima.MatchString(text) {
-		signals = append(signals, "ultima_unidade")
-	}
-	if reNacional.MatchString(text) {
-		signals = append(signals, "envio_nacional")
-	}
-	return signals
-}
 
 // --- Conversão de tipos ---
 

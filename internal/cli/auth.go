@@ -1,11 +1,7 @@
 package cli
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
-
-	"github.com/limiar/collector/internal/logger"
 )
 
 // newAuthCmd constrói o subcomando `auth`: autenticação interativa e idempotente
@@ -19,19 +15,15 @@ func newAuthCmd(p Provider) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
-			cfg := p.Config()
-
-			format := logger.ResolveFormat(cfg.LogFormat, logger.IsTerminalWriter(os.Stdout))
-			log := p.Logger(format)
 			presenter := p.Presenter()
 
-			repo, closeStore, err := p.OpenStore(ctx, log)
+			repo, closeStore, err := p.OpenStore(ctx)
 			if err != nil {
 				return err
 			}
 			defer func() { _ = closeStore() }()
 
-			client := p.NewClient(log, repo)
+			client := p.NewTelegramClient(repo)
 
 			if err := client.Auth(ctx); err != nil {
 				return err

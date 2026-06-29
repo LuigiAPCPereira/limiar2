@@ -4,7 +4,6 @@
 *.dll
 *.so
 *.dyss
-/limiar-collector
 
 # Database
 *.db
@@ -39,4 +38,3 @@ vendor/
 .qoder/
 .kiro/
 .remember/
-limiar-processor

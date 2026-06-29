@@ -46,6 +46,11 @@ var merchantDomains = []struct {
 	{"tidd.ly", "tiddly"},
 	{"bit.ly", "bitly"},
 	{"eioferta.com.br", "eioferta"},
+	{"link.amazon", "amazon"},
+	{"ofertou.ai", "parceiro"},
+	{"aoferta.net", "kabum"},
+	{"p.lapromotion.com.br", "lapromotion"},
+	{"xetlinks.com", "agregador"},
 }
 
 // detectMerchant infere o merchant a partir da primeira URL no texto.

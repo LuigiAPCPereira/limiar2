@@ -1,0 +1,18 @@
+# 2026/06/28 19:24:29.095428 [TestProperty4ChannelCRUD] [rapid] draw usernames: []string{"a00"}
+# 2026/06/28 19:24:29.109722 [TestProperty4ChannelCRUD] openTempRepo: storage: migrate: exec 008_processor_new_fields.sql: turso: error: Parse error: duplicate column name: price_original
+# 
+v0.4.8#999321026190881588
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

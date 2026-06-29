@@ -13,9 +13,6 @@ import (
 // ErrNoSession indica que não há linha (row) de sessão presente no banco de dados.
 var ErrNoSession = stderrors.New("nenhuma sessão armazenada")
 
-
-
-
 // Repository centraliza toda instrução SQL contra o banco de dados Tursogo.
 // Escritas recorrentes usam prepared statements (instruções preparadas). Todos os marcadores (placeholders) são ?.
 type Repository struct {
@@ -233,7 +230,6 @@ func (r *Repository) GetChannel(ctx context.Context, id int64) (*model.Channel, 
 	return ch, nil
 }
 
-
 // UpdateChannelLastMessage avança o cursor de coleta de um canal.
 func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, messageID int64, collectedAt time.Time) error {
 	_, err := r.db.ExecContext(ctx, `
@@ -358,7 +354,6 @@ func (r *Repository) ListMessages(ctx context.Context, channelID int64, limit, o
 	return messages, nil
 }
 
-
 // CountMessagesByChannel retorna as contagens de mensagens agrupadas por canal.
 func (r *Repository) CountMessagesByChannel(ctx context.Context) ([]model.ChannelStats, error) {
 	rows, err := r.db.QueryContext(ctx, `
@@ -447,7 +442,37 @@ func scanMessage(s scanner) (*model.RawMessage, error) {
 	return &msg, nil
 }
 
+// --- Media Repository (satisfies media.Repository interface) ---
 
+// GetPhotoID retorna o photo_id (Telegram) de uma mensagem processada.
+// Retorna (0, nil) se a mensagem não existe ou não tem foto.
+func (r *Repository) GetPhotoID(ctx context.Context, processedMsgID int64) (int64, error) {
+	var photoID int64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT photo_id FROM processed_messages WHERE id = ?`, processedMsgID).Scan(&photoID)
+	if stderrors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, apperrors.Wrap("storage", "get_photo_id", err)
+	}
+	return photoID, nil
+}
+
+// GetInlineThumb retorna o thumbnail inline (Type "i") de uma mensagem
+// pelo photo_id. Retorna (nil, nil) se não encontrado.
+func (r *Repository) GetInlineThumb(ctx context.Context, photoID int64) ([]byte, error) {
+	var thumb []byte
+	err := r.db.QueryRowContext(ctx, `
+		SELECT inline_thumb FROM processed_messages WHERE photo_id = ? AND inline_thumb IS NOT NULL LIMIT 1`, photoID).Scan(&thumb)
+	if stderrors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, apperrors.Wrap("storage", "get_inline_thumb", err)
+	}
+	return thumb, nil
+}
 
 func nullString(s string) any {
 	if s == "" {
@@ -455,4 +480,3 @@ func nullString(s string) any {
 	}
 	return s
 }
-
