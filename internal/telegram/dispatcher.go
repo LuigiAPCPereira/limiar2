@@ -107,7 +107,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, update Update) {
 		case <-ctx.Done():
 			return
 		default:
-			if d.log.IsWarnEnabled() {
+			if _, isNop := d.log.(logger.NopLogger); !isNop && d.log.IsWarnEnabled() {
 				d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
 			}
 		}
