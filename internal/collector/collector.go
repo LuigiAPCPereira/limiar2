@@ -3,7 +3,6 @@ package collector
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
@@ -57,7 +56,7 @@ type Collector struct {
 	wg      sync.WaitGroup
 
 	// Observabilidade: contadores atômicos atualizados pelo dbWriter em cada gravação
-	// bem-sucedida. Leia com atomic.LoadInt64 para uma inspeção segura entre goroutines
+	// bem-sucedida. Leia com atomic_LoadInt64 para uma inspeção segura entre goroutines
 	// (ex: logs periódicos de estatísticas).
 	statsNew       int64
 	statsDuplicate int64
@@ -145,8 +144,8 @@ func (c *Collector) Run(ctx context.Context) error {
 	}
 
 	// Reseta os contadores de observabilidade para esta execução.
-	atomic.StoreInt64(&c.statsNew, 0)
-	atomic.StoreInt64(&c.statsDuplicate, 0)
+	atomic_StoreInt64(&c.statsNew, 0)
+	atomic_StoreInt64(&c.statsDuplicate, 0)
 
 	if err := c.backfill(ctx, channels); err != nil {
 		// A falha no backfill é registrada no log, mas não é fatal: a captura ao vivo ainda deve ser executada.
@@ -154,12 +153,12 @@ func (c *Collector) Run(ctx context.Context) error {
 	}
 
 	c.log.Info("📊 Backfill concluído",
-		"novas", atomic.LoadInt64(&c.statsNew),
-		"duplicatas", atomic.LoadInt64(&c.statsDuplicate))
+		"novas", atomic_LoadInt64(&c.statsNew),
+		"duplicatas", atomic_LoadInt64(&c.statsDuplicate))
 
 	// Reseta novamente para que as estatísticas da captura ao vivo comecem limpas (não poluídas pelo backfill).
-	atomic.StoreInt64(&c.statsNew, 0)
-	atomic.StoreInt64(&c.statsDuplicate, 0)
+	atomic_StoreInt64(&c.statsNew, 0)
+	atomic_StoreInt64(&c.statsDuplicate, 0)
 
 	// Constrói um conjunto (set) de IDs de canais monitorados para filtrar atualizações ao vivo
 	monitoredSet := make(map[int64]struct{}, len(channels))
@@ -204,8 +203,8 @@ func (c *Collector) statsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			n := atomic.LoadInt64(&c.statsNew)
-			d := atomic.LoadInt64(&c.statsDuplicate)
+			n := atomic_LoadInt64(&c.statsNew)
+			d := atomic_LoadInt64(&c.statsDuplicate)
 			if n == 0 && d == 0 {
 				continue
 			}

@@ -3,7 +3,6 @@ package telegram_test
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 
 // countingHandler registra quantas atualizações ele recebeu.
 type countingHandler struct {
-	count atomic.Int64
+	count atomic_Int64
 	got   chan struct{}
 }
 
