@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "turso.tech/database/tursogo"
@@ -187,7 +188,7 @@ func resolveAll(urls []string, workers int) []result {
 		go func() {
 			defer wg.Done()
 			for u := range jobs {
-				i := atomic_AddInt64(&idx, 1) - 1
+				i := atomic.AddInt64(&idx, 1) - 1
 				results[i] = resolve(u)
 			}
 		}()
