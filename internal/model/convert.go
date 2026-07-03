@@ -1,6 +1,46 @@
 package model
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
+
+// DecodePayloadMap desserializa payloads brutos preservando números como
+// json.Number. IDs MTProto são inteiros de 64 bits e não cabem com segurança no
+// mantissa de float64; usar json.Unmarshal direto em map[string]any arredonda
+// photo_id/access_hash e faz imagens de produtos diferentes colidirem.
+func DecodePayloadMap(data []byte) (map[string]any, error) {
+	var payload map[string]any
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(&payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+// ExtractPayloadMessage localiza o objeto Message em payloads brutos Shape A ou
+// Shape B. Retorna false quando o payload não contém uma mensagem Telegram.
+func ExtractPayloadMessage(payload map[string]any) (map[string]any, bool) {
+	if updates, ok := payload["Updates"]; ok {
+		arr, ok := updates.([]any)
+		if !ok || len(arr) == 0 {
+			return nil, false
+		}
+		first, ok := arr[0].(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if inner, ok := first["Message"].(map[string]any); ok {
+			return inner, true
+		}
+		return first, true
+	}
+	if _, hasID := payload["ID"]; hasID {
+		return payload, true
+	}
+	return nil, false
+}
 
 // BoolToInt converte bool para int (1/0) para persistência no SQLite/Turso.
 func BoolToInt(b bool) int {

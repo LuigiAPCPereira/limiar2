@@ -190,8 +190,6 @@ func (c *Collector) Run(ctx context.Context) error {
 	return nil
 }
 
-
-
 // statsLoop registra periodicamente contadores de observabilidade (mensagens novas vs. duplicadas
 // persistidas) para que os operadores possam observar a saúde da coleta sem
 // esperar pelo encerramento (shutdown). Retorna quando ctx é cancelado.
@@ -234,6 +232,8 @@ func (c *Collector) proactiveDownload(ctx context.Context, msg *model.RawMessage
 	if req == nil {
 		return // sem foto na mensagem
 	}
+	req.ChannelID = msg.ChannelID
+	req.MessageID = msg.MessageID
 	go func() {
 		data, err := c.mediaClient.DownloadPhoto(ctx, *req)
 		if err != nil {

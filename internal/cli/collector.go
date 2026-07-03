@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/limiar/collector/internal/dashboard"
-	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/model"
 )
 
@@ -52,9 +51,7 @@ func newCollectorRunCmd(p Provider) *cobra.Command {
 			// Dashboard embutido
 			broker := dashboard.NewBroker()
 			port := cfg.DashboardPort
-			imageCache := media.NewCache(500, 30*time.Minute)
-			mediaResolver := media.NewResolver(repo, imageCache, log)
-			srv := dashboard.NewServer(repo, nil, mediaResolver, log, port, broker)
+			srv := dashboard.NewServer(repo, nil, nil, log, port, broker)
 			col.SetOnMessage(func(msg *model.RawMessage) {
 				data, err := json.Marshal(msg)
 				if err != nil {

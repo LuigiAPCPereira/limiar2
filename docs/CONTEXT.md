@@ -115,7 +115,7 @@ processor.markDuplicates (dedup cross-channel via URL hash)
    ▼
 processor.Synthesize (NormalizedMessage → SynthesizedPromotion)
    ▼
-processor.Repository.SaveProcessedBatch (transação única)
+storage.ProcessorRepository.SaveProcessedBatch (transação única)
    ▼
 Tursogo (./limiar.db): processed_messages
 ```

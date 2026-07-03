@@ -4,6 +4,8 @@
 *.dll
 *.so
 *.dyss
+/limiar-collector
+/limiar
 
 # Database
 *.db
@@ -29,6 +31,7 @@ Thumbs.db
 # Go
 vendor/
 
+node_modules/
 # Temp
 /tmp/
 
@@ -38,3 +41,4 @@ vendor/
 .qoder/
 .kiro/
 .remember/
+limiar-processor

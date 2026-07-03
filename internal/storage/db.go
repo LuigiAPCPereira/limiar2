@@ -51,6 +51,8 @@ func Open(ctx context.Context, dbPath string, log logger.Logger) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage: open %q: %w", dbPath, err)
 	}
+	conn.SetMaxOpenConns(1)
+	conn.SetMaxIdleConns(1)
 	if err := conn.PingContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
@@ -59,6 +61,14 @@ func Open(ctx context.Context, dbPath string, log logger.Logger) (*DB, error) {
 	if _, err := conn.ExecContext(ctx, `PRAGMA journal_mode=WAL`); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("storage: wal mode: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `PRAGMA synchronous=NORMAL`); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("storage: synchronous: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `PRAGMA cache_size=-65536`); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("storage: cache_size: %w", err)
 	}
 	if _, err := conn.ExecContext(ctx, `PRAGMA busy_timeout=5000`); err != nil {
 		_ = conn.Close()

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/processor"
 )
@@ -78,6 +79,14 @@ func (m *mockProcessed) GetPhotoID(_ context.Context, _ int64) (int64, error) {
 
 func (m *mockProcessed) GetInlineThumb(_ context.Context, _ int64) ([]byte, error) {
 	return nil, nil
+}
+
+func (m *mockProcessed) GetPhotoData(_ context.Context, _ int64) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockProcessed) SavePhotoData(_ context.Context, _ int64, _ []byte) error {
+	return nil
 }
 
 func (m *mockProcessed) PhotoMetadataStats(_ context.Context) (model.PhotoStats, error) {
@@ -519,5 +528,105 @@ func TestNewServer_NilLogger(t *testing.T) {
 	}
 	if srv.log == nil {
 		t.Fatal("expected NopLogger, got nil")
+	}
+}
+
+// --- Spies de mídia para defender o invariante read-only do dashboard ---
+
+// spyMediaRepo é um media.Repository que registra escritas em photo_cache.
+// Usado para provar que o caminho HTTP do dashboard nunca persiste: nenhuma
+// requisição GET /api/media/{id} deve chamar SavePhotoData.
+type spyMediaRepo struct {
+	photoID   int64
+	photoData []byte
+	meta      *model.PhotoMetadata
+	thumb     []byte
+	saveCalls int
+}
+
+func (r *spyMediaRepo) GetPhotoID(context.Context, int64) (int64, error) {
+	return r.photoID, nil
+}
+func (r *spyMediaRepo) GetPhotoData(context.Context, int64) ([]byte, error) {
+	return r.photoData, nil
+}
+func (r *spyMediaRepo) GetPhotoMetadata(context.Context, int64) (*model.PhotoMetadata, error) {
+	return r.meta, nil
+}
+func (r *spyMediaRepo) GetInlineThumb(context.Context, int64) ([]byte, error) {
+	return r.thumb, nil
+}
+func (r *spyMediaRepo) SavePhotoData(_ context.Context, _ int64, _ []byte) error {
+	r.saveCalls++
+	return nil
+}
+
+// spyMediaClient é um media.Client que registra chamadas de DownloadPhoto.
+// Usado para provar que o dashboard não dispara download MTProto em requests
+// HTTP (AGENTS.md §8: "Dashboard → Telegram" é proibido).
+type spyMediaClient struct {
+	downloadCalls int
+	data          []byte
+	err           error
+}
+
+func (c *spyMediaClient) DownloadPhoto(context.Context, media.PhotoDownloadRequest) ([]byte, error) {
+	c.downloadCalls++
+	return c.data, c.err
+}
+func (c *spyMediaClient) DownloadPhotoBatch(_ context.Context, reqs []media.PhotoDownloadRequest, h func(int64, []byte, error)) error {
+	for _, req := range reqs {
+		c.downloadCalls++
+		h(req.PhotoID, c.data, c.err)
+	}
+	return nil
+}
+
+var (
+	_ media.Repository = (*spyMediaRepo)(nil)
+	_ media.Client     = (*spyMediaClient)(nil)
+)
+
+// TestHandleMedia_ReadOnlyResolverNeverWrites defende o invariante arquitetural
+// de que o dashboard é read-only (AGENTS.md §8): uma requisição
+// GET /api/media/{id} deve servir mídia pela cadeia do resolver SEM disparar
+// download MTProto (DownloadPhoto) e SEM persistir em photo_cache (SavePhotoData).
+//
+// O resolver é injetado SEM client (client == nil), que é o modo read-only
+// correto do dashboard. O CENÁRIO É PROPOSITALMENTE ARMADO: photo_cache ausente
+// (L2 miss) + metadados MTProto completos. Com client == nil o resolver cai em
+// inline_thumb (L4) e nada escreve; se o dashboard fosse (incorretamente) wired
+// com um resolver de client on-demand, este cenário dispararia L3 → DownloadPhoto
+// + SavePhotoData, e o teste FALHARIA em repo.saveCalls != 0.
+func TestHandleMedia_ReadOnlyResolverNeverWrites(t *testing.T) {
+	// Stripped thumbnail válido para thumbnail.Expand: exige len >= 3 e data[0] == 0x01.
+	strippedThumb := []byte{0x01, 0x00, 0x00}
+	repo := &spyMediaRepo{
+		photoID:   42,
+		photoData: nil, // L2 miss: força a cadeia além de photo_cache
+		// Metadados completos: um client on-demand faria L3 aqui.
+		meta:  &model.PhotoMetadata{PhotoID: 42, AccessHash: 123, DCID: 4},
+		thumb: strippedThumb,
+	}
+	// client == nil é o contrato read-only do dashboard.
+	resolver := media.NewResolver(repo, media.NewCache(8, 0), nil, nil)
+
+	srv := NewServer(&mockRepo{}, &mockProcessed{}, resolver, nil, 8080, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/media/100", nil)
+	w := httptest.NewRecorder()
+	srv.handleMedia(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%q", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Content-Type"); got != "image/jpeg" {
+		t.Errorf("Content-Type = %q, want image/jpeg", got)
+	}
+	if w.Body.Len() == 0 {
+		t.Error("corpo da resposta vazio; esperado JPEG expandido do inline_thumb")
+	}
+	if repo.saveCalls != 0 {
+		t.Errorf("SavePhotoData chamado %dx; GET /api/media deve ser read-only (AGENTS.md §8 proíbe Dashboard → escrita em banco)", repo.saveCalls)
 	}
 }

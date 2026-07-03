@@ -2,86 +2,163 @@ package media
 
 import (
 	"context"
-	"fmt"
-
-	"golang.org/x/sync/singleflight"
+	"encoding/base64"
 
 	apperrors "github.com/limiar/collector/internal/errors"
 	"github.com/limiar/collector/internal/logger"
+	"github.com/limiar/collector/internal/model"
 )
 
-// Resolver resolve imagens de mensagens usando a cadeia de fallback:
+// Resolver resolve imagens de mensagens usando a cadeia de fallback (ADR 011 v3):
 //
-//  1. cache.Get(photoID)    → full-res do Collector (se disponível)
-//  2. repo.GetInlineThumb   → thumbnail inline do DB (sempre disponível)
-//  3. ErrNoPhoto            → 404
+//	L1: cache in-memory (full-res)
+//	L2: repo.GetPhotoData (photo_cache — full-res persistida de download anterior)
+//	L3: client.DownloadPhoto (MTProto on-demand, apenas quando client != nil)
+//	L4: repo.GetInlineThumb (thumbnail inline do DB)
+//	 → ErrNoPhoto
 type Resolver struct {
-	repo  Repository
-	cache *Cache
-	sf    singleflight.Group // coalesce chamadas concorrentes ao mesmo photoID
-	log   logger.Logger
+	repo   Repository
+	cache  *Cache
+	client Client // pode ser nil (desabilita download on-demand — modo sem Telegram)
+	log    logger.Logger
 }
 
 // NewResolver constrói o resolver com suas dependências.
-// cache pode ser nil (desabilita cache, só DB).
+// cache pode ser nil (desabilita a camada L1).
+// client pode ser nil (desabilita o download on-demand L3 — usado no modo
+// `processor run` sem acesso ao Telegram).
 // log pode ser nil (usa NopLogger).
-func NewResolver(repo Repository, cache *Cache, log logger.Logger) *Resolver {
+func NewResolver(repo Repository, cache *Cache, client Client, log logger.Logger) *Resolver {
 	if log == nil {
 		log = logger.NopLogger{}
 	}
-	return &Resolver{repo: repo, cache: cache, log: log}
+	return &Resolver{repo: repo, cache: cache, client: client, log: log}
 }
 
 // ResolveImage retorna os bytes da foto da mensagem processada informada.
 // processedMsgID é o PK de processed_messages (não o photo_id do Telegram).
 //
-// Cadeia de fallback (ADR 011 v2):
-//  1. Cache in-memory (LRU + TTL) — full-res se Collector já baixou
-//  2. DB inline_thumb — thumbnail inline (~230 bytes, sempre disponível)
-//  3. ErrNoPhoto — mensagem sem foto
+// Cadeia de fallback (ADR 011 v3):
+//  1. Cache in-memory (L1) — full-res se já resolvida nesta sessão
+//  2. photo_cache no DB (L2) — full-res persistida de download anterior
+//  3. Download MTProto on-demand (L3) — somente se client configurado
+//  4. inline_thumb no DB (L4) — thumbnail inline (~230 bytes, quase sempre disponível)
+//  5. ErrNoPhoto — mensagem sem foto
 //
 // Retorna (data, source, error) onde source indica a origem dos bytes:
-// "collector-cache" ou "inline-thumb".
+// "cache", "photo-cache", "downloaded" ou "inline-thumb".
 func (r *Resolver) ResolveImage(ctx context.Context, processedMsgID int64) ([]byte, string, error) {
-	// Busca photo_id do Telegram a partir do processed_messages.id.
-	photoID, err := r.repo.GetPhotoID(ctx, processedMsgID)
-	if err != nil {
-		return nil, "", apperrors.Wrap("media", "get_photo_id", err)
+	// Preferir metadados derivados do raw payload: bancos processados antes da
+	// correção de DecodePayloadMap podem ter photo_id arredondado por float64.
+	meta, metaErr := r.repo.GetPhotoMetadata(ctx, processedMsgID)
+	if metaErr != nil {
+		r.log.Debug("media: get_photo_metadata falhou; usando photo_id persistido", "processed_msg_id", processedMsgID, "erro", metaErr)
 	}
-	if photoID == 0 {
-		return nil, "", apperrors.ErrNoPhoto
+	var photoID int64
+	if meta != nil && meta.PhotoID != 0 {
+		photoID = meta.PhotoID
+	} else {
+		var err error
+		photoID, err = r.repo.GetPhotoID(ctx, processedMsgID)
+		if err != nil {
+			return nil, "", apperrors.Wrap("media", "get_photo_id", err)
+		}
+		if photoID == 0 {
+			return nil, "", apperrors.ErrNoPhoto
+		}
 	}
 
-	// L1: cache in-memory (full-res do Collector).
+	// L1: cache in-memory (full-res).
 	if r.cache != nil {
 		if data, ok := r.cache.Get(photoID); ok {
 			r.log.Debug("media: cache hit", "photo_id", photoID, "bytes", len(data))
-			return data, "collector-cache", nil
+			return data, "cache", nil
 		}
 	}
 
-	// L2: DB inline_thumb com singleflight — coalesce chamadas concorrentes
-	// ao mesmo photoID em uma única query.
-	key := fmt.Sprintf("thumb:%d", photoID)
-	v, err, _ := r.sf.Do(key, func() (any, error) {
-		return r.repo.GetInlineThumb(ctx, photoID)
-	})
+	// L2: photo_cache no DB (full-res persistida).
+	data, err := r.repo.GetPhotoData(ctx, photoID)
+	if err != nil {
+		return nil, "", apperrors.Wrap("media", "get_photo_data", err)
+	}
+	if data != nil {
+		r.log.Debug("media: photo-cache hit", "photo_id", photoID, "bytes", len(data))
+		if r.cache != nil {
+			r.cache.Put(photoID, data)
+		}
+		return data, "photo-cache", nil
+	}
+
+	// L3: download MTProto on-demand (apenas se client configurado).
+	if r.client != nil {
+		if downloaded, ok := r.tryDownload(ctx, processedMsgID, photoID, meta); ok {
+			return downloaded, "downloaded", nil
+		}
+	}
+
+	// L4: inline_thumb no DB (thumbnail inline da mensagem processada).
+	thumb, err := r.repo.GetInlineThumb(ctx, processedMsgID)
 	if err != nil {
 		return nil, "", apperrors.Wrap("media", "get_inline_thumb", err)
 	}
-	thumb := v.([]byte) // safe: GetInlineThumb retorna []byte ou nil
 	if thumb != nil {
-		r.log.Debug("media: inline thumb hit", "photo_id", photoID, "bytes", len(thumb))
-		decompressed := decompressStrippedThumb(thumb)
-		if decompressed != nil {
-			r.log.Debug("media: decompressed thumb", "photo_id", photoID, "bytes", len(decompressed))
-			return decompressed, "inline-thumb", nil
-		}
+		r.log.Debug("media: inline thumb hit", "processed_msg_id", processedMsgID, "photo_id", photoID, "bytes", len(thumb))
 		return thumb, "inline-thumb", nil
 	}
 
-	// L3: não encontrado.
 	return nil, "", apperrors.ErrNoPhoto
+}
+
+// tryDownload tenta o download MTProto on-demand. Retorna (bytes, true) em caso
+// de sucesso; (nil, false) caso contrário (client ausente, metadados incompletos
+// ou falha de rede), para que o caller continue a cadeia de fallback. Bytes
+// bem-sucedidos são promovidos ao cache L1 e persistidos em photo_cache de forma
+// best-effort: falhas de persistência são apenas logadas, sem impedir o retorno
+// da imagem ao cliente.
+func (r *Resolver) tryDownload(ctx context.Context, processedMsgID, photoID int64, meta *model.PhotoMetadata) ([]byte, bool) {
+	if meta == nil {
+		var err error
+		meta, err = r.repo.GetPhotoMetadata(ctx, processedMsgID)
+		if err != nil {
+			r.log.Debug("media: get_photo_metadata falhou", "photo_id", photoID, "erro", err)
+			return nil, false
+		}
+	}
+	if meta == nil || meta.AccessHash == 0 || meta.DCID == 0 {
+		return nil, false
+	}
+
+	req := PhotoDownloadRequest{
+		PhotoID:    meta.PhotoID,
+		AccessHash: meta.AccessHash,
+		DCID:       meta.DCID,
+		ChannelID:  meta.ChannelID,
+		MessageID:  meta.MsgID,
+	}
+	// FileReference é persistido como base64 no DB; decodifica para bytes MTProto.
+	if meta.FileReference != "" {
+		if ref, derr := base64.StdEncoding.DecodeString(meta.FileReference); derr == nil {
+			req.FileReference = ref
+		}
+	}
+
+	data, derr := r.client.DownloadPhoto(ctx, req)
+	if derr != nil {
+		r.log.Warn("media: download on-demand falhou", "photo_id", photoID, "erro", derr)
+		return nil, false
+	}
+	if len(data) == 0 {
+		return nil, false
+	}
+
+	r.log.Debug("media: download on-demand ok", "photo_id", photoID, "bytes", len(data))
+	if r.cache != nil {
+		r.cache.Put(photoID, data)
+	}
+	if serr := r.repo.SavePhotoData(ctx, photoID, data); serr != nil {
+		r.log.Warn("media: save_photo_data falhou (best-effort)", "photo_id", photoID, "erro", serr)
+	}
+	return data, true
 }
 
 // PutCache armazena bytes no cache. Usado pelo Collector para entregar
@@ -90,67 +167,4 @@ func (r *Resolver) PutCache(photoID int64, data []byte) {
 	if r.cache != nil {
 		r.cache.Put(photoID, data)
 	}
-}
-
-// decompressStrippedThumb descomprime um thumbnail inline do Telegram (Type "i").
-// O formato PhotoStrippedSize é um JPEG comprimido usando um algoritmo específico
-// do Telegram. Veja https://core.telegram.org/api/files#stripped-thumbnails
-func decompressStrippedThumb(compressed []byte) []byte {
-	if len(compressed) == 0 {
-		return nil
-	}
-
-	// O formato PhotoStrippedSize é um JPEG comprimido com um algoritmo RLE específico.
-	// O primeiro byte indica o tipo (0x01 para stripped thumbnail).
-	// Os bytes seguintes são os dados comprimidos.
-
-	if len(compressed) < 1 {
-		return nil
-	}
-
-	// Verifica se é um PhotoStrippedSize válido (começa com 0x01)
-	if compressed[0] != 0x01 {
-		// Não é formato comprimido, retorna como está
-		return compressed
-	}
-
-	// Descomprime usando o algoritmo RLE do Telegram
-	// O formato é: [tipo][dados comprimidos]
-	// Cada byte 0 indica que o próximo byte é um contador de repetição
-	var decompressed []byte
-	i := 1 // Pula o byte de tipo
-	for i < len(compressed) {
-		b := compressed[i]
-		if b == 0 {
-			// Byte 0 indica que o próximo byte é um contador de repetição
-			if i+1 < len(compressed) {
-				count := int(compressed[i+1])
-				if count > 0 && i+2 < len(compressed) {
-					value := compressed[i+2]
-					for j := 0; j < count; j++ {
-						decompressed = append(decompressed, value)
-					}
-					i += 3
-				} else {
-					i += 2
-				}
-			} else {
-				i++
-			}
-		} else {
-			decompressed = append(decompressed, b)
-			i++
-		}
-	}
-
-	// Adiciona header JPEG se não estiver presente
-	if len(decompressed) >= 2 {
-		if decompressed[0] != 0xFF || decompressed[1] != 0xD8 {
-			// Adiciona header JPEG padrão
-			jpegHeader := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01}
-			decompressed = append(jpegHeader, decompressed...)
-		}
-	}
-
-	return decompressed
 }

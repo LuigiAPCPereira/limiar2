@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"math"
 	"net/url"
 	"regexp"
@@ -17,53 +18,9 @@ import (
 	"github.com/limiar/collector/internal/model"
 )
 
-// NormalizedMessage é a estrutura canônica produzida pelo Estágio 1 do
-// processor. Representa qualquer payload bruto (Shape A ou B) em formato
-// limpo e uniforme, pronto para classificação e persistência.
-type NormalizedMessage struct {
-	RawMessageID   int64
-	MessageID      int64
-	ChannelID      int64
-	PostedAt       time.Time
-	ReceivedAt     time.Time
-	ProcessedAt    time.Time
-	Text           string
-	TextLength     int
-	MediaType      string // "photo"|"video"|"document"|"poll"|"webpage"|"none"
-	PhotoID         int64
-	PhotoAccessHash int64  // MTProto access_hash para download sob demanda
-	PhotoFileRef    string // MTProto file_reference (base64, renovável)
-	PhotoDCID       int    // MTProto data center ID
-	Views          int
-	Forwards       int
-	ReplyToMsgID   int64
-	HasURL         bool
-	HasPrice       bool
-	HasCoupon      bool
-	PriceAmount    int64  // centavos BRL — preço final (o que o usuário paga)
-	PriceOriginal  int64  // centavos BRL — preço "De" (0 se não há dual price)
-	PriceDiscount  int    // percentual de desconto 0-100 (calculado se dual price)
-	CouponCode     string // código do cupom extraído (vazio se não há)
-	PaymentMethod  string // "pix" | ""
-	Shipping       string // "frete_gratis" | "frete_gratis_prime" | ""
-	Installments    string // "9x_sem_juros" | ""
-	InstallmentsN     int
-	InstallmentsValue float64
-	ShippingFree      bool
-	DiscountPct    int    // "20% OFF" → 20 (do texto, não-calculado)
-	IsCashback     bool   // cashback mencionado
-	IsRecurring     bool   // compra recorrente / assinatura
-	URLHash        string // SHA-256 da primeira URL normalizada
-	Merchant       string // merchant inferido do domínio da URL
-	ProductName    string // nome do produto (heurística)
-	IsDuplicate    bool   // mesma URL já processada em outro canal
-	FeedEligible   bool   // elegível para o feed (deal_complete ou deal_no_coupon)
-	InlineThumb    []byte // thumbnail inline do Telegram (Type "i", ~230 bytes, sempre disponível)
-	UrgencySignals []string
-	URL             string // primeira URL extrau00edda do texto
-	MessageType    string // preenchido por Classify
-	Synthesis      string // JSON serializado de SynthesizedPromotion
-}
+// NormalizedMessage preserva a API pública do pacote processor enquanto o modelo
+// canônico vive em internal/model para permitir persistência em internal/storage.
+type NormalizedMessage = model.NormalizedMessage
 
 // --- Estágio 1: Normalização de texto ---
 
@@ -90,36 +47,53 @@ func cleanText(s string) string {
 // --- Estágio 2: Pré-processamento (extração de sinais) ---
 
 var (
-	reURL    = regexp.MustCompile(`https?://[^\s<>"']+`)
-	rePrice  = regexp.MustCompile(`R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)`)
+	reURL   = regexp.MustCompile(`https?://[^\s<>"']+`)
+	rePrice = regexp.MustCompile(`R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)`)
+	// rePriceReais catches "A PARTIR DE: 61 REAIS", "A APARTIR DE: 64 REAIS", "620 REAIS em 8X"
+	rePriceReais = regexp.MustCompile(`(?i)\b([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)\s*reais\b`)
 	// rePriceAlt catches "POR: 425 REAIS", "POR 65,47", "por apenas 99,90" without R$
 	rePriceAlt = regexp.MustCompile(`(?i)(?:por|only|apenas)[:\s]+R?\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)\s*(?:reais|REAIS)?`)
-	rePriceReais = regexp.MustCompile(`(?i)\b([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)\s*reais\b`)
-	reCoupon = regexp.MustCompile(`(?i)(?:cup[ao]m|c[oó]digo|code)[\s:\n]+([A-Za-z0-9_]{3,25})`)
+	reCoupon   = regexp.MustCompile(`(?i)(?:cup[ao]m|c[oó]digo|code)[\s:\n]+([A-Za-z0-9_]{3,25})`)
 
 	// Dual price: "De R$ 429 por R$ 208,92", "De: R$ 429 | Por: R$ 208", "R$ 50 OFF em R$ 250"
 	reDualPrice = regexp.MustCompile(
-		`(?i)(?:de|era)[:\s]+R?\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)[^\n]*?(?:por|agora|[àa]\s*vista|no\s*pix)[:\s]+R?\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)` +
-			`|(?:R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)\s*OFF\s+em\s+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?))`)
+		`(?i)(?:de[:\s]+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)[^\n]*?(?:por|à\s*vista|no\s*pix)[:\s]+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?))` +
+			`|(?:R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)\s*OFF\s+em\s+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?))`)
 
 	// Modifiers
-	rePix       = regexp.MustCompile(`(?i)no\s*pix|via\s*pix|pagamento\s+pix|[àa]\s+vista\s+no\s+pix`)
+	rePix        = regexp.MustCompile(`(?i)no\s*pix|via\s*pix|pagamento\s+pix|[àa]\s+vista\s+no\s+pix`)
 	reFretePrime = regexp.MustCompile(`(?i)frete\s*gr[áa]tis\s*prime|prime.*frete\s*gr[áa]tis`)
-	reFreteFree  = regexp.MustCompile(`(?i)frete\s*gr[áa]tis|frete\s*free|sem\s*frete|entrega\s*gr[áa]tis|entrega\s*gratuita|frete\s*0|free\s*shipping`)
-	reFreteG    = regexp.MustCompile(`(?i)frete\s*gr[áa]tis`)
-	reInstall   = regexp.MustCompile(`(?i)(\d+)x\s*(?:sem\s*juros|s/\s*juros)?\s*(?:de\s*)?(?:R\$?\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)?`)
-	reCashback  = regexp.MustCompile(`(?i)cash\s*back|cashback`)
-	reRecurring  = regexp.MustCompile(`(?i)comprar\s+com\s+recorr[eê]ncia|compra\s+recorrente|com\s+recorr[eê]ncia|assine\s+e\s+economize|assinatura.*cancele|cancele\s+quando\s+quiser`)
-	reDiscPct   = regexp.MustCompile(`(?i)(\d+)\s*%\s*(?:de\s+)?(?:desconto|off|desc)`)
+	reFreteG     = regexp.MustCompile(`(?i)frete\s*gr[áa]tis`)
+	reInstall    = regexp.MustCompile(`(?i)(\d+)x\s*(?:sem\s*juros|s/\s*juros)`)
+	reCashback   = regexp.MustCompile(`(?i)cash\s*back|cashback`)
+	reDiscPct    = regexp.MustCompile(`(?i)(\d+)\s*%\s*(?:de\s+)?(?:desconto|off|desc)`)
+	reRecurring  = regexp.MustCompile(`(?i)toda\s+(?:semana|segunda(?:-feira)?|terça(?:-feira)?|terca(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sábado|sabado|domingo)|todo\s+(?:m[eê]s|dia)|recorrente|mensal|di[áa]rio|semanal|quinzenal|a\s+cada\s+15\s+dias`)
 
 	// Urgency
 	reExpired  = regexp.MustCompile(`(?i)(esgotado|acabou|encerrado|expirado)`)
+	reCorre    = regexp.MustCompile(`(?i)\b(corre|corram)\b`)
+	reUltima   = regexp.MustCompile(`(?i)[úu]ltima[s]?\s*unidade|acabando|esgotando`)
+	reNacional = regexp.MustCompile(`(?i)envio\s+(nacional|do\s+brasil)`)
+	// Temporalidade de promoções. Datas explícitas vencem sinais flash.
+	reDateDMY           = regexp.MustCompile(`\b([0-3]?\d)/([01]?\d)(?:/(\d{2,4}))?\b`)
+	reFlashTemporal     = regexp.MustCompile(`(?i)\b(corre|corram|rel[âa]mpago|tempo\s+limitado|s[oó]\s+hoje|apenas\s+hoje|24h|12h|oferta\s+do\s+dia|[úu]ltima[s]?\s+unidade[s]?|acabando|esgotando|agora)\b`)
+	reRecurringWeekday  = regexp.MustCompile(`(?i)\btod[ao]\s+(segunda|terça|terca|quarta|quinta|sexta|s[áa]bado|sabado|domingo)(?:-feira)?\b`)
+	reRecurringMonthly  = regexp.MustCompile(`(?i)\b(todo\s+m[eê]s|mensal)\b`)
+	reRecurringDaily    = regexp.MustCompile(`(?i)\b(todo\s+dia|di[áa]rio)\b`)
+	reRecurringBiweekly = regexp.MustCompile(`(?i)\b(a\s+cada\s+15\s+dias|quinzenal)\b`)
+	reRecurringWeekly   = regexp.MustCompile(`(?i)\b(toda\s+semana|semanal)\b`)
+	reSeasonBlackFriday = regexp.MustCompile(`(?i)\bblack\s+friday\b`)
+	reSeasonChristmas   = regexp.MustCompile(`(?i)\b(natal|christmas)\b`)
+	reSeasonMothersDay  = regexp.MustCompile(`(?i)\bdia\s+das\s+m[ãa]es\b`)
+	reSeasonFathersDay  = regexp.MustCompile(`(?i)\bdia\s+dos\s+pais\b`)
+	reSeasonConsumer    = regexp.MustCompile(`(?i)\bsemana\s+do\s+consumidor\b`)
+	reSeasonBackSchool  = regexp.MustCompile(`(?i)\bvolta\s+[àa]s\s+aulas\b`)
 )
 
 // Normalize transforma um payload bruto (Shape A ou B) em NormalizedMessage.
 func Normalize(raw *model.RawMessage) (*NormalizedMessage, error) {
-	var payload map[string]any
-	if err := json.Unmarshal(raw.Payload, &payload); err != nil {
+	payload, err := model.DecodePayloadMap(raw.Payload)
+	if err != nil {
 		return nil, fmt.Errorf("processor: normalize: unmarshal payload: %w", err)
 	}
 
@@ -161,12 +135,14 @@ func Normalize(raw *model.RawMessage) (*NormalizedMessage, error) {
 	extractPrices(nm.Text, nm)
 	extractCoupon(nm.Text, nm)
 	extractModifiers(nm.Text, nm)
-
-	nm.URL = extractURL(nm.Text)
+	extractTemporalSignals(nm.Text, nm.PostedAt, nm)
 
 	// Estágio 3: Síntese
 	syn := Synthesize(nm)
 	nm.Merchant = syn.Merchant
+	if nm.RecurrencePattern != "" {
+		nm.RecurrenceGroupID = recurrenceGroupID(nm)
+	}
 	synJSON, err := json.Marshal(syn)
 	if err == nil {
 		nm.Synthesis = string(synJSON)
@@ -204,15 +180,16 @@ func extractPrices(text string, nm *NormalizedMessage) {
 			}
 		}
 		if origRaw != "" && finalRaw != "" {
-			origCents := parseBRL(origRaw)
-			finalCents := parseBRL(finalRaw)
-			if origCents > 0 && finalCents > 0 && origCents > finalCents {
-				nm.HasPrice = true
-				nm.PriceOriginal = origCents
-				nm.PriceAmount = finalCents
+			nm.HasPrice = true
+			nm.PriceOriginal = parseBRL(origRaw)
+			nm.PriceAmount = parseBRL(finalRaw)
+			if nm.PriceOriginal > 0 && nm.PriceAmount > 0 {
 				nm.PriceDiscount = int(math.Round((1.0 - float64(nm.PriceAmount)/float64(nm.PriceOriginal)) * 100))
-				return
+				if nm.PriceDiscount < 0 {
+					nm.PriceDiscount = 0
+				}
 			}
+			return
 		}
 	}
 
@@ -227,15 +204,14 @@ func extractPrices(text string, nm *NormalizedMessage) {
 	if match := rePriceAlt.FindStringSubmatch(text); match != nil {
 		nm.HasPrice = true
 		nm.PriceAmount = parseBRL(match[1])
-		return
 	}
 
-	// Fallback 2: valor seguido de REAIS ("A PARTIR DE: 61 REAIS", "620 REAIS")
+	// Fallback: "XX REAIS" sem R$ - captura todos e seleciona o menor
 	if matches := rePriceReais.FindAllStringSubmatch(text, -1); len(matches) > 0 {
-		var minPrice int64 = -1
-		for _, match := range matches {
-			price := parseBRL(match[1])
-			if price > 0 && (minPrice == -1 || price < minPrice) {
+		var minPrice int64
+		for _, m := range matches {
+			price := parseBRL(m[1])
+			if price > 0 && (minPrice == 0 || price < minPrice) {
 				minPrice = price
 			}
 		}
@@ -246,26 +222,11 @@ func extractPrices(text string, nm *NormalizedMessage) {
 	}
 }
 
-// extractURL extrai a primeira URL do texto.
-func extractURL(text string) string {
-	return reURL.FindString(text)
-}
-
 // extractCoupon extrai código de cupom e seta HasCoupon + CouponCode.
 func extractCoupon(text string, nm *NormalizedMessage) {
 	if match := reCoupon.FindStringSubmatch(text); match != nil {
-		raw := match[1]
-		// Ignora capturas espúrias: URLs e palavras comuns em minúsculo
-		if strings.HasPrefix(strings.ToUpper(raw), "HTTP") {
-			return
-		}
-		// Cupons reais são UPPERCASE ou MIXED — palavras toda em minúsculo
-		// no texto original ("antes", "https") não são códigos de cupom.
-		if raw == strings.ToLower(raw) && len(raw) > 1 {
-			return
-		}
 		nm.HasCoupon = true
-		nm.CouponCode = strings.ToUpper(raw)
+		nm.CouponCode = strings.ToUpper(match[1])
 	}
 }
 
@@ -274,46 +235,172 @@ func extractModifiers(text string, nm *NormalizedMessage) {
 	if rePix.MatchString(text) {
 		nm.PaymentMethod = "pix"
 	}
-	if match := reFreteFree.FindStringSubmatch(text); match != nil {
-		nm.ShippingFree = true
-		if reFretePrime.MatchString(text) {
-			nm.Shipping = "frete_gratis_prime"
-		} else {
-			nm.Shipping = "frete_gratis"
-		}
-	} else if reFretePrime.MatchString(text) {
-		nm.ShippingFree = true
+	if reFretePrime.MatchString(text) {
 		nm.Shipping = "frete_gratis_prime"
-	} else if reFreteG.MatchString(text) {
 		nm.ShippingFree = true
+	} else if reFreteG.MatchString(text) {
 		nm.Shipping = "frete_gratis"
+		nm.ShippingFree = true
 	}
-
 	if match := reInstall.FindStringSubmatch(text); match != nil {
 		nm.Installments = match[1] + "x_sem_juros"
-		nm.InstallmentsN, _ = strconv.Atoi(match[1])
-		var valRaw string
-		if len(match) > 2 && match[2] != "" {
-			valRaw = match[2]
-		}
-		if valRaw != "" {
-			nm.InstallmentsValue = float64(parseBRL(valRaw)) / 100.0
+		n, _ := strconv.Atoi(match[1])
+		nm.InstallmentsN = n
+		// Calcular valor da parcela se tiver preço
+		if nm.PriceAmount > 0 && n > 0 {
+			nm.InstallmentsValue = nm.PriceAmount / int64(n)
 		}
 	}
 	if reCashback.MatchString(text) {
 		nm.IsCashback = true
 	}
-	if reRecurring.MatchString(text) {
-		nm.IsRecurring = true
-	}
-	if nm.PriceDiscount > 0 {
-		nm.DiscountPct = nm.PriceDiscount
-	} else if match := reDiscPct.FindStringSubmatch(text); match != nil {
+	if match := reDiscPct.FindStringSubmatch(text); match != nil {
 		n, _ := strconv.Atoi(match[1])
 		if n > 0 && n <= 100 {
 			nm.DiscountPct = n
 		}
 	}
+	if reRecurring.MatchString(text) {
+		nm.IsRecurring = true
+	}
+}
+
+func extractTemporalSignals(text string, postedAt time.Time, nm *NormalizedMessage) {
+	nm.ValidFrom, nm.ValidUntil = extractExplicitValidity(text, postedAt)
+	nm.RecurrencePattern = extractRecurrencePattern(text)
+	nm.SeasonalTag = extractSeasonalTag(text)
+	if nm.RecurrencePattern != "" {
+		nm.IsRecurring = true
+	}
+	if nm.ValidFrom.IsZero() && nm.ValidUntil.IsZero() && reFlashTemporal.MatchString(text) {
+		nm.Flash = true
+	}
+}
+
+func extractExplicitValidity(text string, postedAt time.Time) (time.Time, time.Time) {
+	matches := reDateDMY.FindAllStringSubmatch(text, -1)
+	if len(matches) == 0 {
+		return time.Time{}, time.Time{}
+	}
+	dates := make([]time.Time, 0, len(matches))
+	for _, match := range matches {
+		dt, ok := parseTemporalDate(match[1], match[2], match[3], postedAt)
+		if ok {
+			dates = append(dates, dt)
+		}
+	}
+	if len(dates) == 0 {
+		return time.Time{}, time.Time{}
+	}
+	if len(dates) >= 2 {
+		return dates[0], dates[1]
+	}
+	return time.Time{}, dates[0]
+}
+
+func parseTemporalDate(dayRaw, monthRaw, yearRaw string, postedAt time.Time) (time.Time, bool) {
+	day, err := strconv.Atoi(dayRaw)
+	if err != nil {
+		return time.Time{}, false
+	}
+	month, err := strconv.Atoi(monthRaw)
+	if err != nil {
+		return time.Time{}, false
+	}
+	year := 0
+	if yearRaw != "" {
+		year, err = strconv.Atoi(yearRaw)
+		if err != nil {
+			return time.Time{}, false
+		}
+		if year < 100 {
+			year += 2000
+		}
+	} else if !postedAt.IsZero() {
+		year = postedAt.UTC().Year()
+	} else {
+		year = time.Now().UTC().Year()
+	}
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return time.Time{}, false
+	}
+	dt := time.Date(year, time.Month(month), day, 23, 59, 59, 0, time.UTC)
+	if dt.Day() != day || int(dt.Month()) != month {
+		return time.Time{}, false
+	}
+	if yearRaw == "" && !postedAt.IsZero() && dt.Before(postedAt.UTC().AddDate(0, 0, -1)) {
+		dt = dt.AddDate(1, 0, 0)
+	}
+	return dt, true
+}
+
+func extractRecurrencePattern(text string) string {
+	if match := reRecurringWeekday.FindStringSubmatch(text); match != nil {
+		switch strings.ToLower(match[1]) {
+		case "segunda":
+			return "weekly/monday"
+		case "terça", "terca":
+			return "weekly/tuesday"
+		case "quarta":
+			return "weekly/wednesday"
+		case "quinta":
+			return "weekly/thursday"
+		case "sexta":
+			return "weekly/friday"
+		case "sábado", "sabado":
+			return "weekly/saturday"
+		case "domingo":
+			return "weekly/sunday"
+		}
+	}
+	switch {
+	case reRecurringMonthly.MatchString(text):
+		return "monthly"
+	case reRecurringDaily.MatchString(text):
+		return "daily"
+	case reRecurringBiweekly.MatchString(text):
+		return "biweekly"
+	case reRecurringWeekly.MatchString(text):
+		return "weekly"
+	case reRecurring.MatchString(text):
+		return "recurring"
+	default:
+		return ""
+	}
+}
+
+func extractSeasonalTag(text string) string {
+	switch {
+	case reSeasonBlackFriday.MatchString(text):
+		return "black_friday"
+	case reSeasonChristmas.MatchString(text):
+		return "christmas"
+	case reSeasonMothersDay.MatchString(text):
+		return "mothers_day"
+	case reSeasonFathersDay.MatchString(text):
+		return "fathers_day"
+	case reSeasonConsumer.MatchString(text):
+		return "consumer_week"
+	case reSeasonBackSchool.MatchString(text):
+		return "back_to_school"
+	default:
+		return ""
+	}
+}
+
+func recurrenceGroupID(nm *NormalizedMessage) int64 {
+	if nm.RecurrencePattern == "" {
+		return 0
+	}
+	key := strings.ToLower(strings.Join([]string{
+		nm.RecurrencePattern,
+		nm.Merchant,
+		nm.CouponCode,
+		nm.URLHash,
+	}, "|"))
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(key))
+	return int64(h.Sum64() & 0x7fffffffffffffff)
 }
 
 // computeURLHash retorna SHA-256 da primeira URL normalizada no texto.
@@ -490,7 +577,6 @@ func hasURL(text string) bool {
 func isExpired(text string) bool {
 	return reExpired.MatchString(text)
 }
-
 
 // --- Conversão de tipos ---
 

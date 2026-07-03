@@ -108,6 +108,9 @@ func (c *Collector) flush(ctx context.Context, batch []WriteJob) {
 						}
 					}
 				}
+				if c.mediaClient != nil && c.imageCache != nil {
+					c.proactiveDownload(ctx, job.Message)
+				}
 			} else {
 				atomic.AddInt64(&c.statsDuplicate, 1)
 			}
@@ -178,8 +181,6 @@ func (c *Collector) writeWithRetry(ctx context.Context, job WriteJob) {
 		if c.onMessage != nil {
 			c.onMessage(job.Message)
 		}
-		// Download proativo de imagem full-res (assíncrono).
-		// O file_reference MTProto é válido apenas na janela de chegada da mensagem.
 		if c.mediaClient != nil && c.imageCache != nil {
 			c.proactiveDownload(ctx, job.Message)
 		}

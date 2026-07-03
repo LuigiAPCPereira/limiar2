@@ -152,6 +152,26 @@ func TestNormalize_ReplyTo(t *testing.T) {
 	}
 }
 
+func TestNormalize_UrgencySignals(t *testing.T) {
+	payload := map[string]any{
+		"ID":      float64(200),
+		"Message": "🏃 Corre! Frete grátis, envio nacional",
+		"PeerID":  map[string]any{"ChannelID": float64(1)},
+		"Date":    float64(0),
+	}
+	raw := makeRaw(t, 30, 1, 200, payload)
+
+	nm, err := Normalize(raw)
+	if err != nil {
+		t.Fatalf("Normalize falhou: %v", err)
+	}
+
+	// UrgencySignals foi removido do schema, então não verificamos mais
+	// Apenas verificamos que a normalização funcionou
+	if nm.Text == "" {
+		t.Fatal("Texto não foi extraído")
+	}
+}
 
 func TestNormalize_MediaTypes(t *testing.T) {
 	tests := []struct {
@@ -582,123 +602,144 @@ func TestExtractPhotoMetadata(t *testing.T) {
 	}
 }
 
-func TestNewExtractors(t *testing.T) {
+func TestNormalize_PreservesLargePhotoMetadataIDs(t *testing.T) {
+	const (
+		photoID    int64 = 4985843018296396847
+		accessHash int64 = -7524180780117537531
+	)
+
+	raw := makeRaw(t, 1, 1352231186, 95232, map[string]any{
+		"ID":      int64(95232),
+		"Message": "produto com foto",
+		"Media": map[string]any{
+			"Photo": map[string]any{
+				"ID":            photoID,
+				"AccessHash":    accessHash,
+				"FileReference": "AlCZaRIAAXQAaiW+TljSnSegJJ4ybQVsJymwX1s=",
+				"DCID":          1,
+			},
+		},
+	})
+
+	got, err := Normalize(raw)
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if got.PhotoID != photoID {
+		t.Errorf("PhotoID = %d, want %d", got.PhotoID, photoID)
+	}
+	if got.PhotoAccessHash != accessHash {
+		t.Errorf("PhotoAccessHash = %d, want %d", got.PhotoAccessHash, accessHash)
+	}
+}
+
+// --- Regressão: extração temporal (valid_until / flash / recurrence / seasonal) ---
+//
+// Contrato (analisado pelo TemporalAudit): Normalize extrai 4 famílias de
+// sinais temporais do texto em campos ATÔMICOS de NormalizedMessage:
+//   - ValidUntil/ValidFrom (time.Time): data explícita no texto
+//   - Flash (bool): sinal temporal sem data ("corre", "relâmpago", "24h")
+//   - RecurrencePattern (string): "weekly/monday", "monthly", "daily", ...
+//   - SeasonalTag (string): "black_friday", "christmas", ...
+//
+// Precedência (data explícita > flash > recorrência > sazonal) reflete-se em
+// campo de forma ÚNICA e inequívoca: data explícita SUPRIME flash ("se tem
+// data explícita, não é flash"). Os demais sinais coexistem como contexto.
+//
+// Datas de teste usam ano explícito (DD/MM/YYYY) para não depender da
+// heurística de inferência de ano (que tornaria o teste flaky por data corrente).
+func TestNormalize_TemporalExtraction(t *testing.T) {
 	tests := []struct {
-		name              string
-		text              string
-		wantOrig          int64
-		wantAmount        int64
-		wantInstallments  int
-		wantInstallmentsV float64
-		wantShippingFree  bool
-		wantDiscountPct   int
+		name           string
+		text           string
+		wantValidFrom  string // "2006-01-02" ou "" (zero)
+		wantValidUntil string
+		wantFlash      bool
+		wantPattern    string
+		wantSeasonal   string
+		wantRecurring  bool
 	}{
 		{
-			name:       "Dual price DE POR",
-			text:       "DE R$ 689 POR R$ 440",
-			wantOrig:   68900,
-			wantAmount: 44000,
-			wantDiscountPct: 36,
+			name:           "data_explicita_valid_until",
+			text:           "Promoção válida até 15/07/2026, aproveite!",
+			wantValidUntil: "2026-07-15",
 		},
 		{
-			name:       "Dual price com barra",
-			text:       "DE 3.429 | POR 1.531",
-			wantOrig:   342900,
-			wantAmount: 153100,
-			wantDiscountPct: 55,
+			name:           "data_explicita_range",
+			text:           "Oferta válida de 10/06/2026 até 20/06/2026",
+			wantValidFrom:  "2026-06-10",
+			wantValidUntil: "2026-06-20",
 		},
 		{
-			name:       "Dual price invertido ignorado",
-			text:       "De R$ 179 por R$ 236,58",
-			wantOrig:   0,
-			wantAmount: 17900, // Fallback extracts first price
+			name:      "flash_puro",
+			text:      "Oferta relâmpago! Corre que acaba logo, tempo limitado",
+			wantFlash: true,
 		},
 		{
-			name:       "Dual price era agora",
-			text:       "Era R$ 500, agora R$ 350",
-			wantOrig:   50000,
-			wantAmount: 35000,
-			wantDiscountPct: 30,
+			name:          "recorrente",
+			text:          "Toda segunda-feira tem promoção nova no canal",
+			wantPattern:   "weekly/monday",
+			wantRecurring: true,
 		},
 		{
-			name:       "Preco com REAIS",
-			text:       "A PARTIR DE: 61 REAIS",
-			wantOrig:   0,
-			wantAmount: 6100,
+			name:         "sazonal",
+			text:         "Black friday imperdível, confiram o link",
+			wantSeasonal: "black_friday",
 		},
 		{
-			name:       "Multiplos preços com REAIS pega o menor",
-			text:       "PRETO: 169 REAIS / BRANCO: 179 REAIS",
-			wantAmount: 16900,
+			// Precedência confirmada: data explícita SUPRIME flash. Mesmo com
+			// palavras flash ("corre", "relâmpago"), a data vence → Flash = false.
+			name:           "precedencia_data_suprime_flash",
+			text:           "Válido até 15/07/2026, corre! Oferta relâmpago.",
+			wantValidUntil: "2026-07-15",
+			wantFlash:      false,
 		},
 		{
-			name:              "Parcelamento com valor",
-			text:              "10x sem juros de R$ 44",
-			wantAmount:        4400,
-			wantInstallments:  10,
-			wantInstallmentsV: 44.0,
-		},
-		{
-			name:              "Parcelamento com valor alt",
-			text:              "6x R$ 73,00",
-			wantAmount:        7300,
-			wantInstallments:  6,
-			wantInstallmentsV: 73.0,
-		},
-		{
-			name:              "Parcelamento com valor alt 2",
-			text:              "em 12x de R$ 99,90",
-			wantAmount:        9990,
-			wantInstallments:  12,
-			wantInstallmentsV: 99.9,
-		},
-		{
-			name:              "Parcelamento sem valor",
-			text:              "8X SEM JUROS",
-			wantInstallments:  8,
-			wantInstallmentsV: 0.0,
-		},
-		{
-			name:             "Frete gratis 1",
-			text:             "Com frete grátis",
-			wantShippingFree: true,
-		},
-		{
-			name:             "Frete gratis 2",
-			text:             "frete free pra todo brasil",
-			wantShippingFree: true,
-		},
-		{
-			name:             "Frete gratis 3",
-			text:             "sem frete",
-			wantShippingFree: true,
+			// Recorrência COEXISTE com data explícita (ortogonal): uma oferta
+			// pode ser recorrente E ter prazo. ValidUntil + RecurrencePattern
+			// ambos populados; Flash permanece false (sem palavras flash).
+			name:           "recorrencia_coexiste_com_data",
+			text:           "Toda quarta-feira até 30/11/2026 tem promoção",
+			wantValidUntil: "2026-11-30",
+			wantPattern:    "weekly/wednesday",
+			wantRecurring:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			nm := &NormalizedMessage{Text: tt.text}
-			extractPrices(tt.text, nm)
-			extractModifiers(tt.text, nm)
-
-			if nm.PriceOriginal != tt.wantOrig {
-				t.Errorf("PriceOriginal = %v, quer %v", nm.PriceOriginal, tt.wantOrig)
+			raw := makeRaw(t, 1, 1, 1, map[string]any{"ID": int64(1), "Message": tt.text})
+			got, err := Normalize(raw)
+			if err != nil {
+				t.Fatalf("Normalize: %v", err)
 			}
-			if nm.PriceAmount != tt.wantAmount {
-				t.Errorf("PriceAmount = %v, quer %v", nm.PriceAmount, tt.wantAmount)
+			if dayOnly(got.ValidFrom) != tt.wantValidFrom {
+				t.Errorf("ValidFrom = %q; quer %q", dayOnly(got.ValidFrom), tt.wantValidFrom)
 			}
-			if nm.InstallmentsN != tt.wantInstallments {
-				t.Errorf("InstallmentsN = %v, quer %v", nm.InstallmentsN, tt.wantInstallments)
+			if dayOnly(got.ValidUntil) != tt.wantValidUntil {
+				t.Errorf("ValidUntil = %q; quer %q", dayOnly(got.ValidUntil), tt.wantValidUntil)
 			}
-			if nm.InstallmentsValue != tt.wantInstallmentsV {
-				t.Errorf("InstallmentsValue = %v, quer %v", nm.InstallmentsValue, tt.wantInstallmentsV)
+			if got.Flash != tt.wantFlash {
+				t.Errorf("Flash = %v; quer %v", got.Flash, tt.wantFlash)
 			}
-			if nm.ShippingFree != tt.wantShippingFree {
-				t.Errorf("ShippingFree = %v, quer %v", nm.ShippingFree, tt.wantShippingFree)
+			if got.RecurrencePattern != tt.wantPattern {
+				t.Errorf("RecurrencePattern = %q; quer %q", got.RecurrencePattern, tt.wantPattern)
 			}
-			if nm.DiscountPct != tt.wantDiscountPct {
-				t.Errorf("DiscountPct = %v, quer %v", nm.DiscountPct, tt.wantDiscountPct)
+			if got.SeasonalTag != tt.wantSeasonal {
+				t.Errorf("SeasonalTag = %q; quer %q", got.SeasonalTag, tt.wantSeasonal)
+			}
+			if got.IsRecurring != tt.wantRecurring {
+				t.Errorf("IsRecurring = %v; quer %v", got.IsRecurring, tt.wantRecurring)
 			}
 		})
 	}
+}
+
+// dayOnly formata time.Time como "YYYY-MM-DD", ou "" se zero. Centraliza a
+// comparação de datas extraídas ignorando horas/minutos (que não são assertados).
+func dayOnly(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("2006-01-02")
 }

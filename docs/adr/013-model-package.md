@@ -2,7 +2,12 @@
 
 ## Status
 
-Proposto (não implementado)
+Parcialmente superado pela implementação vigente. `internal/model` foi adotado,
+mas o SQL do processor foi consolidado em `internal/storage/processor_repository.go`
+para respeitar a regra atual de ownership físico do Turso (`internal/storage` contém
+todo acesso `database/sql`). O pacote `internal/processor` expõe interfaces
+(`Store`, `ProcessedReader`) e permanece sem SQL. As seções abaixo registram o
+contexto histórico da decisão original.
 
 ## Contexto
 

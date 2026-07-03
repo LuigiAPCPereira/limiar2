@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/limiar/collector/internal/processor"
 	"github.com/limiar/collector/internal/storage"
 )
 
@@ -37,7 +36,7 @@ func newStatsCmd(p Provider) *cobra.Command {
 			}
 			defer func() { _ = collectorRepo.Close() }()
 
-			procRepo, err := processor.NewRepository(db.DB())
+			procRepo, err := storage.NewProcessorRepository(db.DB())
 			if err != nil {
 				return fmt.Errorf("stats: criar processor repository: %w", err)
 			}
@@ -123,7 +122,7 @@ func newStatsCmd(p Provider) *cobra.Command {
 
 // printCompleteness amostra mensagens processadas dos tipos deal e imprime
 // a completude de cada campo relevante para o frontend.
-func printCompleteness(ctx context.Context, out interface{ Write([]byte) (int, error) }, repo *processor.Repository) {
+func printCompleteness(ctx context.Context, out interface{ Write([]byte) (int, error) }, repo *storage.ProcessorRepository) {
 	dealTypes := []string{"deal_complete", "deal_no_coupon"}
 
 	fmt.Fprintln(out, "  COMPLETUDE DE CAMPOS (tipos deal)")

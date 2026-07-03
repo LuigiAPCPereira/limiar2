@@ -129,7 +129,7 @@ manual de dependências conectada apenas nas raízes de composição
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        camada storage                                  │
 │  db.go (Open/Close/Conn)   migrations.go (embed.FS)                    │
-│  repository.go (todo SQL, placeholders ?, prepared statements)         │
+│  repository.go + processor_repository.go (todo SQL, ?, prepared stmts) │
 │                          │                                             │
 │                   ┌──────┴───────┐                                     │
 │                   │ Tursogo "turso"│  database/sql, sem CGO            │
@@ -167,9 +167,9 @@ manual de dependências conectada apenas nas raízes de composição
                           │          │          │
                           └──────────┼──────────┘
                                      ▼
-                          processor.Repository
+                          storage.ProcessorRepository
                           (FetchUnprocessed, SaveProcessedBatch,
-                           ExistsURLHashes, CountUnprocessed)
+                           CrossChannelDuplicates, CountUnprocessed)
                                      │
                                      ▼
                               Tursogo ./limiar.db
@@ -185,17 +185,16 @@ manual de dependências conectada apenas nas raízes de composição
 - **`internal/cli`** — Árvore de comandos Cobra (`NewRootCmd`, `newAuthCmd`, `newChannelsCmd`, `newRunCmd`, `newDashboardCmd`). Depende apenas da interface `Provider`; nunca constrói dependências concretas.
 - **`internal/collector`** — orquestração e adaptação. `Collector` executa a única goroutine `dbWriter`, realiza o backfill inicial e conduz `client.Run`. `MessageHandler` adapta bytes brutos do update para `storage.RawMessage`. `Classifier`/`NoopClassifier` é o Strategy plugável.
 - **`internal/telegram`** — a Fachada sobre o gotd/td. `TelegramClient` expõe `Auth`, `IsAuthenticated`, `AddUpdateHandler`, `ResolveChannel`, `ResolveChannelChecked`, `FetchHistory`, `LoadPeers`, `Run`. `Client` é o único tipo que importa gotd/td. `Dispatcher` faz fan-out; `PeerStore` cache com RWMutex; `TursoSessionStorage` satisfaz `session.Storage`; `terminalAuthenticator` satisfaz `auth.UserAuthenticator`.
-- **`internal/storage`** — toda a persistência do collector. `DB` (open/close/conn), `migrate` (`migrations/*.sql` embutidas) e `Repository` (todas as instruções SQL).
-- **`internal/dashboard`** — servidor HTTP + Broker SSE. Read-only: consulta `raw_messages` via `storage.Repository`. Nunca escreve no BD e nunca importa `internal/telegram`.
+- **`internal/storage`** — toda a persistência física. `DB` (open/close/conn), `migrate` (`migrations/*.sql` embutidas), `Repository` (collector/sessão/peers/dashboard raw) e `ProcessorRepository` (raw → processed, queries processadas, `photo_cache`). Todas as instruções SQL de produção ficam aqui.
+- **`internal/dashboard`** — servidor HTTP + Broker SSE. Read-only: consulta `raw_messages` via `storage.Repository` e `processed_messages`/mídia via interfaces de leitura. Nunca escreve no BD, nunca importa `internal/telegram` e não dispara download MTProto em request HTTP.
 
 ### Processor (Fase 2)
 
-- **`cmd/limiar-processor/main.go`** — raiz de composição standalone. Usa `flag` (não Cobra). Abre o banco, constrói `processor.Repository`, instancia `Processor`, e opcionalmente inicia o dashboard.
+- **`cmd/limiar-processor/main.go` / `internal/cli/processor_cmd.go`** — raízes de composição do processor. Abrem o banco, constroem `storage.ProcessorRepository`, instanciam `Processor` via interface `processor.Store` e opcionalmente iniciam dashboard read-only.
 - **`internal/processor/config.go`** — carrega variáveis `LIMIAR_*` via Viper + `.env`.
-- **`internal/processor/normalizer.go`** — `Normalize(raw *storage.RawMessage) (*NormalizedMessage, error)`. Detecta Shape A/B, extrai texto limpo, preços (centavos BRL), cupons, URLs, mídia, merchants, modifiers.
+- **`internal/processor/normalizer.go`** — `Normalize(raw *model.RawMessage) (*NormalizedMessage, error)`. Detecta Shape A/B, extrai texto limpo, preços (centavos BRL), cupons, URLs, mídia, merchants, modifiers.
 - **`internal/processor/classify.go`** — `Classify(nm *NormalizedMessage) MessageType`. Cascata de 11 tipos exclusivos por ordem de especificidade.
 - **`internal/processor/synthesize.go`** — `Synthesize(nm *NormalizedMessage) SynthesizedPromotion`. Detecta merchant do domínio da URL e produz struct para o feed.
-- **`internal/processor/repository.go`** — `FetchUnprocessed`, `SaveProcessedBatch`, `ExistsURLHashes`, `CountUnprocessed`. Usa prepared statements. `ON CONFLICT DO NOTHING` para idempotência.
 - **`internal/processor/processor.go`** — `Processor.Run(ctx)`. Poll loop com drain mode: se batch encheu, continua imediatamente (drena backlog). Batch processing: normalize → classify → markDuplicates → save em transação única.
 
 ### Infraestrutura transversal
@@ -262,9 +261,9 @@ O processor é **single-threaded** por design — sem goroutines internas:
 
 ## Modelo de dados
 
-### Tabelas (4 migrations)
+### Tabelas (schema consolidado)
 
-**001_initial.sql** — tabelas do collector:
+**001_initial.sql** — schema completo para banco novo:
 
 ```sql
 sessions       (id=1, data BLOB, updated_at)          -- sessão MTProto (single-row)
@@ -272,20 +271,11 @@ peers          (id PK, access_hash, type, username)    -- cache de access_hash
 channels       (id PK, username UNIQUE, title, active) -- canais monitorados
 raw_messages   (id AUTO, channel_id FK, message_id, payload JSON, schema_version=1)
                UNIQUE(channel_id, message_id)          -- dedup persistente segura
-```
 
-**002_dashboard_indexes.sql:**
-
-```sql
-idx_raw_messages_channel_received_at ON raw_messages(channel_id, received_at DESC)
-```
-
-**003_processor_tables.sql** — tabela do processor:
-
-```sql
 processed_messages (
     id AUTO, raw_message_id FK, channel_id, message_id,
-    message_type, text_clean, text_length, media_type, photo_id,
+    message_type, text_clean, text_length, media_type,
+    photo_id, photo_access_hash, photo_file_ref, photo_dcid, inline_thumb,
     views, forwards, reply_to_msg_id,
     has_url, has_price, has_coupon, price_amount, price_currency,
     urgency_signals, posted_at, processed_at,
@@ -293,15 +283,33 @@ processed_messages (
     payment_method, shipping, installments, discount_percent,
     url_hash, merchant, product_name, synthesis,
     is_duplicate, feed_eligible,
+    shipping_free, installments_n, installments_value,
+    is_recurring, valid_from, valid_until, flash,
+    recurrence_pattern, recurrence_group_id, seasonal_tag,
     UNIQUE(channel_id, message_id)
 )
--- 7 indexes: channel, type, posted, url_hash, merchant, feed
+
+photo_cache (
+    photo_id PRIMARY KEY, data BLOB, updated_at, expires_at
+)
+
+schema_migrations (version PRIMARY KEY, applied_at)
 ```
 
-**004_dashboard_index.sql:**
+Índices principais:
 
 ```sql
-idx_raw_messages_received_at ON raw_messages(received_at DESC)
+raw_messages(channel_id, received_at DESC)
+raw_messages(received_at DESC)
+processed_messages(channel_id)
+processed_messages(message_type)
+processed_messages(posted_at DESC)
+processed_messages(url_hash) WHERE url_hash != ''
+processed_messages(merchant) WHERE merchant != ''
+processed_messages(feed_eligible, posted_at DESC) WHERE feed_eligible = 1
+processed_messages(is_recurring) WHERE is_recurring = 1
+processed_messages(photo_id) WHERE photo_id > 0
+photo_cache(expires_at) WHERE expires_at IS NOT NULL
 ```
 
 ### Structs internas (collector)
@@ -449,8 +457,8 @@ internal/
 ├── errors/         — Sentinels + helper Wrap
 ├── logger/         — Interface Logger + Presenter, SlogLogger, PrettyHandler,
 │                     TerminalPresenter, ResolveFormat, redactAttr, NopLogger
-├── processor/      — Config, Normalize, Classify, Synthesize, Repository, Processor
-├── storage/        — Abertura/fechamento do BD, migrações (embed.FS), Repository (todo SQL)
+├── processor/      — Config, Normalize, Classify, Synthesize, Store, Processor
+├── storage/        — DB, migrações, Repository e ProcessorRepository (todo SQL)
 ├── telegram/       — Facade TelegramClient, Dispatcher, PeerStore,
 │                     TursoSessionStorage, helpers de codificação/extração
 └── terminal/       — ReadPasswordMasked (golang.org/x/term, raw mode)

@@ -6,19 +6,17 @@ toca no `database/sql`. Siga estas regras ao estender esta camada.
 
 ## Regras
 
-1. **Todo SQL reside em `repository.go`.** Adicione novas consultas (queries) como métodos de `Repository`.
-   Nunca escreva SQL nas camadas `telegram`, `collector`, ou `cli`.
+1. **Todo SQL reside em `internal/storage`.** Use `repository.go` para collector/sessão/peers/dashboard raw, `processor_repository.go` para processor, mensagens processadas e `photo_cache`, e `migrations.go`/`migrations/*.sql` apenas para criação ou evolução de schema.
+   Nunca escreva SQL nas camadas `telegram`, `collector`, `processor`, `dashboard` ou `cli`.
 2. **Os marcadores de posição (placeholders) são apenas `?`.** Nunca use `$1` ou placeholders nomeados.
-3. **Escritas recorrentes usam prepared statements** criadas no `NewRepository` e
-   fechadas no `Close`.
+3. **Escritas recorrentes usam prepared statements** criadas nos construtores (`NewRepository`, `NewProcessorRepository`) e fechadas no `Close`.
 4. **`context.Context` é o primeiro argumento** de todo método de consulta; use as
    variantes `...Context` (`ExecContext`, `QueryContext`, `QueryRowContext`).
 5. **Encapsule (Wrap) os erros** com `apperrors.Wrap("storage", "<op>", err)` e mapeie
    casos de "linha faltando" para um sentinel (ex: `sql.ErrNoRows` → `ErrNoSession` ou
    `apperrors.ErrChannelNotFound`).
-6. **Apenas o DBWriter escreve em tempo de execução.** Os métodos de escrita do Repository existem,
-   mas no serviço `run` eles são chamados exclusivamente pelo `Collector.dbWriter`.
-7. **Alterações de schema vão em um novo arquivo de migração** em `migrations/`. O sistema executa as migrations em ordem lexical e registra cada execução na tabela `schema_migrations`, garantindo que cada arquivo seja executado apenas uma vez. As migrations são executadas dentro de uma transação.
+6. **Escrita em runtime respeita o dono da camada.** `raw_messages` é escrito apenas pelo `Collector.dbWriter`; `processed_messages` é escrito apenas pelo processor via `ProcessorRepository`; dashboard é read-only e não dispara writes ou downloads MTProto.
+7. **Alterações de schema vão em um novo arquivo de migração** em `migrations/`. O sistema executa as migrations em ordem lexical e registra cada execução na tabela `schema_migrations`, garantindo que cada arquivo seja executado apenas uma vez. As migrations são executadas dentro de uma transação. Compatibilidade com bancos legados pode usar checagens condicionais em `migrations.go` quando o SQL isolado não for idempotente com Turso/Tursogo.
 8. **As datas e horas (Datetimes) são texto em UTC** no formato `2006-01-02 15:04:05` (a constante `storage.DBTimeLayout`), correspondendo aos padrões `datetime('now')` do schema.
 
 ## Correto
@@ -74,6 +72,7 @@ go func() { repo.SaveRawMessage(ctx, msg) }()   // quebra o invariante single-wr
 ## O que nunca fazer
 
 - Adicionar dependência do SQLite, `mattn`, GORM, ou qualquer ORM (ADR 001).
-- Escrever no `*sql.DB` a partir de qualquer outro lugar que não seja a única goroutine DBWriter (ADR 003).
+- Escrever no `*sql.DB` fora de `internal/storage`.
+- Fazer o dashboard escrever no banco ou disparar download MTProto sob demanda.
 - Vazar tipos do `database/sql` ou SQL puro para fora de `internal/storage`.
 - Introduzir funções `init()` ou estado mutável a nível de pacote.

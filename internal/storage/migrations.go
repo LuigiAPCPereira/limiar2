@@ -38,8 +38,92 @@ func migrationApplied(ctx context.Context, db *sql.DB, version string) (bool, er
 	return count > 0, nil
 }
 
+type schemaColumn struct {
+	table      string
+	name       string
+	definition string
+}
+
+var currentSchemaColumns = []schemaColumn{
+	{table: "processed_messages", name: "valid_from", definition: "TEXT"},
+	{table: "processed_messages", name: "valid_until", definition: "TEXT"},
+	{table: "processed_messages", name: "flash", definition: "INTEGER DEFAULT 0"},
+	{table: "processed_messages", name: "recurrence_pattern", definition: "TEXT DEFAULT ''"},
+	{table: "processed_messages", name: "recurrence_group_id", definition: "INTEGER DEFAULT 0"},
+	{table: "processed_messages", name: "seasonal_tag", definition: "TEXT DEFAULT ''"},
+	{table: "photo_cache", name: "expires_at", definition: "TEXT"},
+}
+
+var currentSchemaIndexes = []string{
+	`CREATE INDEX IF NOT EXISTS idx_processed_flash
+		ON processed_messages(flash) WHERE flash = 1`,
+	`CREATE INDEX IF NOT EXISTS idx_processed_valid_until
+		ON processed_messages(valid_until) WHERE valid_until IS NOT NULL`,
+	`CREATE INDEX IF NOT EXISTS idx_processed_recurrence_group
+		ON processed_messages(recurrence_group_id) WHERE recurrence_group_id != 0`,
+	`CREATE INDEX IF NOT EXISTS idx_photo_cache_expires
+		ON photo_cache(expires_at) WHERE expires_at IS NOT NULL`,
+}
+
+func columnExists(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`PRAGMA table_info("%s")`, table))
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notnull   int
+			dfltValue any
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func ensureCurrentSchemaCompatibility(ctx context.Context, db *sql.DB, log logger.Logger) error {
+	added := 0
+	for _, col := range currentSchemaColumns {
+		ok, err := columnExists(ctx, db, col.table, col.name)
+		if err != nil {
+			return fmt.Errorf("check column %s.%s: %w", col.table, col.name, err)
+		}
+		if ok {
+			continue
+		}
+		stmt := fmt.Sprintf(`ALTER TABLE "%s" ADD COLUMN "%s" %s`, col.table, col.name, col.definition)
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("add column %s.%s: %w", col.table, col.name, err)
+		}
+		added++
+	}
+
+	for _, stmt := range currentSchemaIndexes {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("ensure current schema index: %w", err)
+		}
+	}
+	if added > 0 {
+		log.Info("✅ Schema legado atualizado", "colunas_adicionadas", added)
+	}
+	return nil
+}
+
 // migrate aplica toda migration embutida na ordem lexical do nome do arquivo.
-// Cada migration é executada dentro de uma transação. Migrations já registradas
+// Cada migration é executada dentro de uma transação; versões já registradas são puladas.
 func migrate(ctx context.Context, db *sql.DB, log logger.Logger) error {
 	if log == nil {
 		log = logger.NopLogger{}
@@ -101,6 +185,10 @@ func migrate(ctx context.Context, db *sql.DB, log logger.Logger) error {
 			return fmt.Errorf("commit %s: %w", name, err)
 		}
 		executed++
+	}
+
+	if err := ensureCurrentSchemaCompatibility(ctx, db, log); err != nil {
+		return err
 	}
 
 	log.Info("✅ Migrações concluídas", "já_aplicadas", preExisting, "executadas", executed)

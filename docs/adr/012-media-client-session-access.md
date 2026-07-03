@@ -2,15 +2,15 @@
 
 ## Status
 
-Aceito (decisão registrada; implementação adiada para a Wave 4 — limiar-api).
+Aceito. Implementação operacional atual usa `runOnce` serializado para CLI e backfill; o dashboard interno passa `client=nil` ao resolver e permanece read-only. Accessor de sessão persistente permanece decisão para a API pública concorrente.
 
 ## Contexto
 
-O ADR 011 definiu o subsistema de resolução de imagens: um `MediaResolver` (pacote
-`internal/media`) que baixa fotos sob demanda via MTProto, com cache LRU+TTL e
-singleflight. O resolver depende de uma implementação concreta de `MediaClient`
-que faça as chamadas MTProto (`upload.GetFile`, `messages.getMessages`,
-`FetchHistory`).
+O ADR 011 define o subsistema de resolução de imagens: um `Resolver` (pacote
+`internal/media`) que tenta cache RAM, `photo_cache`, download MTProto sob demanda
+quando recebe um `media.Client`, e `inline_thumb`. A implementação concreta do
+client faz `upload.GetFile` e, quando possível, renova `file_reference` via
+`messages.getMessages`/histórico.
 
 Dois invariantes do projeto (AGENTS.md) criam uma tensão que precisa ser resolvida:
 
@@ -29,34 +29,34 @@ Este ADR registra **como** essa lacuna será fechada e **quando**.
 
 ## Decisão
 
-### Abordagem escolhida: Opção A — accessor à sessão persistente
+### Abordagem escolhida: `runOnce` serializado para CLI/backfill; dashboard read-only
 
-Adicionar ao `telegram.Client` um mecanismo que expõe a `*tg.Client` viva durante
-o ciclo de `Run()` — renovado a cada reconexão — de forma que o `MediaClient`
-concreto (em `internal/telegram`) possa disparar `upload.GetFile` reutilizando a
-sessão autenticada do collector, sem segunda conexão.
+Usar o `MediaClient` concreto em `internal/telegram` com `runOnce` serializado para
+os caminhos operacionais autenticados (`limiar media resolve`, `limiar media backfill`
+e download proativo do Collector). O dashboard interno não recebe `MediaClient`;
+serve apenas cache RAM, `photo_cache` e `inline_thumb`.
 
-Detalhes de implementação (a definir na Wave 4): o accessor provavelmente tomará a
-forma de um callback/channel registrado antes de `Run()`, ou de um campo `api`
-preenchido dentro do closure de `tg.Run` e invalidado na saída, com tratamento
-explícito das janelas de reconexão (a conexão pode estar temporariamente
-indisponível entre tentativas).
+O accessor persistente, se necessário na API pública, provavelmente tomará a forma
+de um callback/channel registrado antes de `Run()`, ou de um campo `api` preenchido
+dentro do closure de `tg.Run` e invalidado na saída, com tratamento explícito das
+janelas de reconexão.
 
-### Diferimento para a Wave 4
+### Diferimento parcial para a API pública
 
-A implementação do `MediaClient` concreto e do endpoint `GET /api/media/:id/photo`
-pertence à **Wave 4 (limiar-api)**, que ainda não começou (AGENTS.md §6: Fase 4 é a
-API pública de consulta). A Wave 2 (processor) está completa; o próximo passo do
-projeto é **validar o processor em produção** antes de avançar para a API.
+A implementação concreta do `MediaClient` já existe em `internal/telegram/media.go`.
+Ela usa `runOnce` com mutex interno, suficiente para comandos CLI e backfill em lote.
+O dashboard interno evita `runOnce` em request HTTP: recebe `client=nil` e consulta
+somente caches já preenchidos. Um accessor para a sessão persistente continua
+reservado para uma API pública concorrente, se a latência/carga tornar `runOnce` inadequado.
 
 ## Alternativas consideradas
 
-1. **Opção B — `runOnce` por download**: cada download abre uma conexão MTProto nova.
-   **Rejeitada para o resolver em produção (HTTP concorrente)** — adiciona overhead de
-   (re)conexão/re-autenticação por imagem e desvia da premissa do ADR 011 ("sessão
-   compartilhada"). **Mas usada legitimamente no comando CLI one-shot `media resolve`**
-   (item 6): sendo um processo isolado, `runOnce` é apropriado para validar o download
-   real sem exigir o accessor persistente. A Opção A só fará falta na Wave 4 (HTTP).
+1. **Opção B — `runOnce` para comandos CLI one-shot**: o comando abre uma conexão
+   MTProto temporária, executa uma operação finita e encerra. **Aceita para
+   `media resolve` e `media backfill`** porque são comandos operacionais isolados,
+   não endpoints HTTP concorrentes. O backfill usa uma única conexão `runOnce` para
+   o lote inteiro e limita o download a poucas goroutines de I/O, mantendo o handler
+   serial para não paralelizar escrita no banco.
 2. **Opção C — expor `*tg.Client` diretamente**: rejeitada: viola explicitamente o
    invariante §14.2 (tipos do gotd não vazam da facade).
 
@@ -75,19 +75,18 @@ projeto é **validar o processor em produção** antes de avançar para a API.
 
 ## Verificação (Wave 4)
 
-- O `MediaClient` concreto implementa `media.MediaClient` e vive em `internal/media`? **Não** — em `internal/telegram` (§14.2).
+- O `MediaClient` concreto implementa `media.Client` e vive em `internal/telegram`.
 - Nenhum tipo do gotd aparece em `internal/media` (grep de `github.com/gotd` em `internal/media` retorna vazio).
-- `upload.GetFile` é disparado na mesma sessão do collector (não há segunda `telegram.NewClient`).
+- Dashboard interno usa resolver sem `MediaClient`; API pública concorrente deve reavaliar accessor de sessão persistente antes de habilitar download em request HTTP.
 - Testes do resolver seguem passando com mock (a adição do cliente real não quebra os testes existentes).
 
 ## Estado atual
 
-- **Itens 5 e 7** (pacote `internal/media`: `ImageCache` LRU+TTL, `MediaResolver` com
-  singleflight + renovação L1/L2/L3): completos, 15 testes `-race`.
-- **Item 6** (`MediaClient` concreto sobre gotd/td): **implementado** em
-  `internal/telegram/media.go`, exposto via `limiar-collector media resolve` (Opção B /
-  `runOnce`, apropriada para CLI one-shot). Valida o download real (`upload.GetFile`
-  via downloader com transferência de DC e renovação L3) sem depender da Wave 4.
-- **Wave 4 (restante)**: endpoint `GET /api/media/:id/photo` envolvendo o MESMO
-  resolver, mas wired com a **Opção A** (sessão persistente do collector) para servir
-  HTTP concorrente — `runOnce` quebraria sob concorrência (muta o campo `c.tg`).
+- `internal/media`: `Cache` LRU+TTL, `Resolver` com fallback L1/L2/L3 opcional/L4 e testes `-race`.
+- `internal/telegram/media.go`: `MediaClient` concreto sobre gotd/td, exposto via
+  `limiar media resolve`, `limiar media backfill` e download proativo do Collector.
+- `limiar run`: Collector e Dashboard recebem o mesmo `media.Cache`; downloads
+  proativos populam o cache que o endpoint `/api/media/{processed_messages.id}` consulta sem abrir MTProto.
+- **Futuro (API pública)**: se o endpoint público tiver concorrência/carga alta,
+  implementar accessor da sessão persistente descrito neste ADR em vez de múltiplos
+  `runOnce` concorrentes.

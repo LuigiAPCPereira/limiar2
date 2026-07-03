@@ -27,6 +27,20 @@ func newTestRepo(t *testing.T) *storage.Repository {
 	return repo
 }
 
+func TestOpenUsesSinglePhysicalConnection(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	db, err := storage.Open(ctx, filepath.Join(dir, "test.db"), nil)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	stats := db.DB().Stats()
+	if stats.MaxOpenConnections != 1 {
+		t.Fatalf("MaxOpenConnections = %d, want 1", stats.MaxOpenConnections)
+	}
+}
 
 // openTempRepo abre um Repository apoiado por um banco de dados novo num diretório temporário sem
 // requerer *testing.T, para que seja utilizável dentro das closures de propriedades do rapid. O
@@ -505,7 +519,7 @@ func TestSavePeersBatch(t *testing.T) {
 		if err := repo.SavePeersBatch(ctx, nil); err != nil {
 			t.Fatalf("SavePeersBatch(nil): %v", err)
 		}
-	if err := repo.SavePeersBatch(ctx, []*model.Peer{}); err != nil {
+		if err := repo.SavePeersBatch(ctx, []*model.Peer{}); err != nil {
 			t.Fatalf("SavePeersBatch(empty): %v", err)
 		}
 	})

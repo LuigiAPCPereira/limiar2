@@ -10,6 +10,7 @@ import (
 
 	"github.com/limiar/collector/internal/dashboard"
 	"github.com/limiar/collector/internal/media"
+	"github.com/limiar/collector/internal/storage"
 )
 
 // newDashboardCmd constrói o subcomando `dashboard`: inicia um servidor HTTP para
@@ -32,17 +33,28 @@ func newDashboardCmd(p Provider) *cobra.Command {
 			log := p.Logger()
 			presenter := p.Presenter()
 
-			repo, closeStore, err := p.OpenStore(ctx)
+			db, err := storage.Open(ctx, cfg.DBPath, log.WithComponent("storage"))
 			if err != nil {
 				return err
 			}
-			defer func() { _ = closeStore() }()
+			defer func() { _ = db.Close() }()
 
-			// Criar cache e resolver de mídia para preview de imagens
+			collectorRepo, err := storage.NewRepository(db.DB())
+			if err != nil {
+				return fmt.Errorf("dashboard: criar collector repository: %w", err)
+			}
+			defer func() { _ = collectorRepo.Close() }()
+
+			procRepo, err := storage.NewProcessorRepository(db.DB())
+			if err != nil {
+				return fmt.Errorf("dashboard: criar processor repository: %w", err)
+			}
+			defer func() { _ = procRepo.Close() }()
+
 			imageCache := media.NewCache(500, 30*time.Minute)
-			mediaResolver := media.NewResolver(repo, imageCache, log)
+			mediaResolver := media.NewResolver(procRepo, imageCache, nil, log.WithComponent("media"))
 
-			srv := dashboard.NewServer(repo, nil, mediaResolver, log, port, nil)
+			srv := dashboard.NewServer(collectorRepo, procRepo, mediaResolver, log, port, nil)
 			presenter.Info(fmt.Sprintf("Dashboard: http://localhost:%d", port))
 			presenter.Step("Pressione Ctrl+C para encerrar")
 			return srv.ListenAndServe(ctx)

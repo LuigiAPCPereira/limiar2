@@ -11,13 +11,13 @@ import (
 // periódico de raw_messages não processadas, normaliza, classifica e
 // persiste em processed_messages.
 type Processor struct {
-	repo *Repository
+	repo Store
 	cfg  *Config
 	log  logger.Logger
 }
 
 // NewProcessor constrói um Processor com as dependências injetadas.
-func NewProcessor(repo *Repository, cfg *Config, log logger.Logger) *Processor {
+func NewProcessor(repo Store, cfg *Config, log logger.Logger) *Processor {
 	if log == nil {
 		log = logger.NopLogger{}
 	}
@@ -31,6 +31,11 @@ func (p *Processor) Run(ctx context.Context) error {
 	p.log.Info("🔄 Processor iniciado",
 		"poll_interval", p.cfg.PollInterval,
 		"batch_size", p.cfg.BatchSize)
+	if deleted, err := p.repo.CleanExpiredPhotoCache(ctx); err != nil {
+		p.log.Warn("⚠️ Limpeza do cache de imagens falhou", "erro", err)
+	} else if deleted > 0 {
+		p.log.Info("🧹 Cache de imagens expiradas limpo", "removidas", deleted)
+	}
 
 	for {
 		full := p.processBatch(ctx)

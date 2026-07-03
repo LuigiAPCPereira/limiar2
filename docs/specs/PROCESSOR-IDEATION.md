@@ -46,8 +46,8 @@ raw_messages (collector)
           │
           ▼
 ┌─────────────────────┐
-│ 4. IMAGENS          │  Construir URL da imagem via CDN público
-│                     │  do Telegram (telesco.pe), sem hosting
+│ 4. IMAGENS          │  Extrair inline thumb + metadados MTProto
+│                     │  para resolver via cache/download autenticado
 └─────────┬───────────┘
           │
           ▼
@@ -299,102 +299,44 @@ Isso evita que o pipeline inteiro fique bloqueado esperando o Playwright.
 
 ---
 
-## 6. Estágio 4: Imagens via CDN Público do Telegram
+## 6. Estágio 4: Imagens via MTProto + cache local
+
+> Atualização: a proposta antiga de CDN público (`telesco.pe`/`og:image`) foi
+> superada por [MEDIA-TD v3](MEDIA-TD.md) e ADR 011. O projeto não faz scraping de
+> páginas públicas do Telegram para resolver imagens.
 
 ### Objetivo
 
-Obter URLs de imagem de alta qualidade sem hospedar arquivos, usando o CDN
-público do Telegram (`cdn{1..4}.telesco.pe`).
+Entregar imagem de produto com qualidade aceitável sem duplicar fotos entre
+produtos e sem criar arquivos soltos no filesystem.
 
 ### Como funciona
 
-Canais públicos do Telegram expõem preview de mensagens em
-`https://t.me/{channel_username}/{message_id}`. O embed serve a imagem
-original via CDN:
+- O Processor extrai `inline_thumb` e metadados MTProto (`photo_id`,
+  `access_hash`, `file_reference`, `dc_id`) do payload bruto.
+- O Collector baixa proativamente uma variante ~800px enquanto o
+  `file_reference` ainda está fresco e popula o cache RAM compartilhado.
+- O Resolver do dashboard recebe `processed_messages.id` e tenta, nessa ordem:
+  cache RAM, `photo_cache`, `inline_thumb`, 404. Download MTProto sob demanda é restrito ao Collector/CLI.
+- `photo_cache` persiste bytes JPEG no Turso com TTL de 30 dias.
 
-```
-https://cdn1.telesco.pe/file/{file_token}.jpg
-```
+### Por que não CDN público
 
-### Investigação técnica (2026-06-09)
+- Scraping de preview público misturava responsabilidades de fase e dependeria de
+  HTML externo instável.
+- Canais privados ou previews indisponíveis quebrariam a resolução.
+- O payload MTProto já contém os metadados necessários para download autenticado.
+- Endereçar por `processed_messages.id` evita colisão visual entre produtos que
+  tinham `photo_id` arredondado em bancos antigos.
 
-**Testado empiricamente** em 4 canais reais (`gatunopromos`, `lobaopromo`,
-`xetdaspromocoes`, `LaPromotion`):
-
-- ✅ **GET `t.me/{channel}/{message_id}` + extração da `<meta property="og:image">` funciona** — 4/4 canais testados retornaram URLs válidas do CDN
-- ✅ **Resolução completa** (~1280x1280 para produtos, não thumbnail)
-- ✅ **CORS liberado** — `Access-Control-Allow-Origin: *`, frontend pode usar direto
-- ✅ **Sem autenticação** — canais públicos permitem acesso direto
-- ⚠️ **Cache NÃO é permanente:**
-  - `Cache-Control: max-age=10800` (**3 horas**)
-  - `ETag` presente — revalidação condicional funciona (304 Not Modified)
-  - `Expires` confirma 3h
-
-**Implicação de design:**
-
-- **Processor:** resolve URL no momento da normalização (1 GET por mensagem).
-- **Cache do processor:** armazena `(url, etag, resolved_at)`; a cada 3h faz
-  HEAD request com `If-None-Match: {ETag}` para revalidar (custo: 1 request
-  barato, sem transferência de body).
-- **Frontend:** consome URL + ETag; se receber 304, continua usando imagem.
-- **Fallback:** se `t.me` falhar (canal virou privado, HTTP 404), usar `Photo.ID
-  + AccessHash + FileReference` **via MTProto** (requer auth do collector,
-  fallback caro).
-
-### Sobre `Photo.ID + AccessHash + FileReference`
-
-Esses 3 campos existem no payload do `tg.Message` e são **insuficientes** para
-construir URL do CDN sem autenticação. Eles servem apenas para baixar via MTProto
-direto (auth necessária). A única forma sem auth é via `t.me` preview
-(o caminho do RSSHub é o correto).
-
-### Referência: Como o RSSHub faz
-
-O RSSHub usa exatamente essa técnica para gerar feeds RSS de canais do
-Telegram. Ele acessa o preview público da mensagem e extrai a URL da imagem
-do CDN. A imagem é servida em resolução completa (não thumbnail).
-
-### Implementação proposta
+### Implementação atual
 
 ```go
-// Dado channel_username e message_id:
-// 1. GET https://t.me/{channel_username}/{message_id}
-// 2. Parsear HTML, extrair <meta property="og:image" content="...">
-// 3. URL extraída = imagem em alta resolução no CDN do Telegram
-// 4. HEAD request na URL para capturar ETag
-// 5. Persistir (url, etag, resolved_at) para revalidação futura
-
-func ResolveImageURL(ctx context.Context, channelUsername string, messageID int64) (ImageRef, error) {
-    url := fmt.Sprintf("https://t.me/%s/%d", channelUsername, messageID)
-    // GET + parse og:image meta tag
-    // HEAD + capture ETag
-    // Retorna ImageRef{URL, ETag, ResolvedAt}
-}
-
-type ImageRef struct {
-    URL        string
-    ETag       string
-    ResolvedAt time.Time
-}
+// GET /api/media/{processed_messages.id}
+data, source, err := resolver.ResolveImage(ctx, processedMessageID)
 ```
 
-### Vantagens
-
-- **Sem hosting de imagens** — CDN do Telegram serve o arquivo
-- **Sem autenticação** — canais públicos permitem acesso direto
-- **Alta qualidade** — imagem original, não thumbnail
-- **ETag-based revalidation** — cheap 304 revalidations, no re-download
-
-### Limitações
-
-- **Canal privado:** Se um canal mudar para privado, URLs quebram. Mitigação:
-  canais de promoção são quase sempre públicos.
-- **Cache de 3h:** URLs precisam de revalidação periódica via ETag. Não é
-  "set-and-forget".
-- **Rate limiting do t.me:** Não abusar de requests ao t.me. Batch requests
-  com backoff, cachear URLs resolvidas (imutáveis por mensagem).
-- **Disponibilidade:** Dependência do CDN do Telegram. Se cair, imagens ficam
-  indisponíveis (aceitável para MVP).
+`source` pode ser `cache`, `photo-cache`, `downloaded` ou `inline-thumb`.
 
 ### Dados de suporte (análise de 6674 mensagens)
 
@@ -534,7 +476,7 @@ type Product struct {
     CurrentPrice    int64     // Preço mais recente (centavos)
     LowestPrice     int64     // Menor preço histórico (centavos)
     AffiliateURL    string    // URL com affiliate ID do Limiar
-    ImageURL        string    // URL do CDN do Telegram
+    ImageRef        int64     // processed_messages.id usado por /api/media/{id}
     FirstSeenAt     time.Time
     LastSeenAt      time.Time
     OfferCount      int       // Quantas vezes apareceu (cross-channel)
@@ -707,18 +649,17 @@ CREATE TABLE url_resolutions (
 
 CREATE INDEX idx_url_resolutions_canonical ON url_resolutions(canonical_url);
 
--- Cache de resolução de imagens (com ETag para revalidação a cada 3h)
-CREATE TABLE image_resolutions (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    channel_username TEXT NOT NULL,
-    message_id       INTEGER NOT NULL,
-    image_url        TEXT NOT NULL,
-    etag             TEXT,
-    resolved_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(channel_username, message_id)
+-- Cache persistente de fotos baixadas via MTProto (JPEG ~800px)
+CREATE TABLE photo_cache (
+    photo_id   INTEGER PRIMARY KEY,
+    data       BLOB NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT
 );
 
-CREATE INDEX idx_image_resolutions_resolved ON image_resolutions(resolved_at);
+CREATE INDEX idx_photo_cache_expires
+    ON photo_cache(expires_at)
+    WHERE expires_at IS NOT NULL;
 ```
 
 ### Relação entre tabelas
@@ -906,7 +847,7 @@ O processor segue as mesmas regras fundamentais do collector, com extensões:
 - **Não implementar classificação semântica (LLM)** — isso é Fase 3
 - **Não implementar REST/SSE** — isso é Fase 4 (limiar-api)
 - **Não resolver deduplicação fuzzy por nome** — apenas por URL canônica
-- **Não hospedar imagens** — apenas referenciar CDN do Telegram
+- **Não hospedar arquivos soltos de imagem** — bytes persistentes ficam no Turso (`photo_cache`)
 - **Não construir UI de admin** — processor é headless, observável via logs
 
 ---
@@ -922,7 +863,7 @@ Sprint 1: Fundação
 
 Sprint 2: URLs
 ├── Estágio 2: Resolução de URLs (HTTP follow redirects, cache)
-├── Estágio 4: Imagens via CDN (og:image extraction)
+├── Estágio 4: Imagens via MTProto/cache local (MEDIA-TD v3)
 └── Tabela url_resolutions + products (criação básica)
 
 Sprint 3: Deduplicação + Preço
@@ -1008,7 +949,7 @@ scheduler de notificação push às 20:30.
 
 1. ~~**Dados suficientes?**~~ — Sim, 6674 msgs em 70 dias, 16 canais, distribuição real.
    Regex de preço/cupom calibrado em §10.3.
-2. ~~**CDN do Telegram é estável?**~~ — Sim, mas com cache de 3h + ETag (não imutável). Ver §6.
+2. ~~**CDN do Telegram é estável?**~~ — A proposta de CDN público foi superada; usar MTProto + cache local. Ver §6 e MEDIA-TD v3.
 3. ~~**Entities como fonte de URLs?**~~ — Não. Só 30 entities com URL vs 5788 no texto.
    Regex no texto é fonte primária; Entities é backup.
 4. ~~**GroupedID / álbuns?**~~ — Zero ocorrências. Não precisa lidar.

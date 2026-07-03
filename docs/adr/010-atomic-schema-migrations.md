@@ -18,6 +18,9 @@ O fluxo atualizado na inicialização do repositório é:
 3. Filtra arquivos cuja versão já conste na tabela `schema_migrations`.
 4. Para cada arquivo pendente, executa seu conteúdo em uma transação (`BeginTx`). Se o SQL for bem sucedido, um `INSERT` correspondente é feito em `schema_migrations`. Se ocorrer erro, a transação realiza o `Rollback`.
 
+
+Para bancos legados que já registraram versões antigas removidas do repositório, a abertura do banco também executa uma etapa de compatibilidade condicionada por introspecção (`PRAGMA table_info`) dentro de `internal/storage/migrations.go`. Essa etapa só adiciona colunas ausentes e índices `IF NOT EXISTS`, preservando a regra *append-only* das migrations SQL e evitando que `001_initial.sql` seja reexecutada em bancos existentes.
+
 ## Consequências
 
 - **Vantagem:** Permite refatorações destrutivas e alterações de schema (`ALTER TABLE`) de forma segura, garantindo a execução de cada instrução *exactly-once*.

@@ -30,18 +30,21 @@ func newRunCmd(p Provider) *cobra.Command {
 			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM, syscall.SIGINT)
 			defer stop()
 			db, err := storage.Open(ctx, cfg.DBPath, log.WithComponent("storage"))
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			defer func() { _ = db.Close() }()
 			collectorRepo, _ := storage.NewRepository(db.DB())
 			defer func() { _ = collectorRepo.Close() }()
-			procRepo, _ := processor.NewRepository(db.DB())
+			procRepo, _ := storage.NewProcessorRepository(db.DB())
 			defer func() { _ = procRepo.Close() }()
 			client := p.NewTelegramClient(collectorRepo)
 			col := p.NewCollector(client, collectorRepo)
 			proc := processor.NewProcessor(procRepo, cfg.ProcessorConfig(), log.WithComponent("processor"))
 			broker := dashboard.NewBroker()
 			imageCache := p.NewImageCache()
-			mediaResolver := media.NewResolver(collectorRepo, imageCache, log.WithComponent("media"))
+			col.SetMediaDownload(p.NewMediaClient(collectorRepo), imageCache)
+			mediaResolver := media.NewResolver(procRepo, imageCache, nil, log.WithComponent("media"))
 			srv := dashboard.NewServer(collectorRepo, procRepo, mediaResolver, log.WithComponent("dashboard"), cfg.DashboardPort, broker)
 			col.SetOnMessage(func(msg *model.RawMessage) {
 				data, _ := json.Marshal(msg)
@@ -55,7 +58,9 @@ func newRunCmd(p Provider) *cobra.Command {
 			g.Go(func() error { return col.Run(gctx) })
 			g.Go(func() error { return proc.Run(gctx) })
 			g.Go(func() error { return srv.ListenAndServe(gctx) })
-			if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) { return err }
+			if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+				return err
+			}
 			log.Info("✅ Limiar encerrado gracefulmente")
 			return nil
 		},

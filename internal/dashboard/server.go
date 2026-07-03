@@ -3,13 +3,14 @@ package dashboard
 import (
 	"context"
 	"embed"
-	"io/fs"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/gotd/td/telegram/thumbnail"
 	"github.com/limiar/collector/internal/logger"
 	"github.com/limiar/collector/internal/media"
 	"github.com/limiar/collector/internal/model"
@@ -103,8 +104,20 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 	if r.URL.Path == "/" {
-		r.URL.Path = "/index.html"
+		data, err := distFS.ReadFile("dist/index.html")
+		if err != nil {
+			s.log.Error("Erro ao servir index do dashboard", "erro", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(data)
+		return
 	}
 	distFileServer.ServeHTTP(w, r)
 }
@@ -279,6 +292,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+
 	idStr := r.URL.Path[len("/api/media/"):]
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -293,10 +311,21 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "image/webp")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	jpeg := data
+	if source == "inline-thumb" {
+		expanded, err := thumbnail.Expand(data)
+		if err != nil {
+			s.log.Warn("Erro ao expandir inline_thumb", "processed_msg_id", id, "erro", err)
+			http.NotFound(w, r)
+			return
+		}
+		jpeg = expanded
+	}
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
 	w.Header().Set("X-Source", source)
-	_, _ = w.Write(data)
+	_, _ = w.Write(jpeg)
 }
 
 func (s *Server) writeJSON(w http.ResponseWriter, v any) {

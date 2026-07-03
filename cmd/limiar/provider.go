@@ -106,14 +106,8 @@ func (p *provider) NewImageCache() *media.Cache {
 // NewCollector monta o coletor com um NoopClassifier (Fase 1).
 func (p *provider) NewCollector(client telegram.TelegramClient, repo *storage.Repository) *collector.Collector {
 	log := p.log
-	c := collector.NewCollector(
+	return collector.NewCollector(
 		client, repo, collector.NoopClassifier{}, log.WithComponent("collector"),
 		p.cfg.DBWriterBufferSize, p.cfg.MaxRetries, p.cfg.HistoryMax, p.cfg.HistoryMaxDays,
 	)
-	// Download proativo: imagens full-res são baixadas na chegada (janela
-	// onde file_reference é válido) e armazenadas no cache compartilhado.
-	mediaClient := p.NewMediaClient(repo)
-	cache := p.NewImageCache()
-	c.SetMediaDownload(mediaClient, cache)
-	return c
 }

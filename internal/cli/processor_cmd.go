@@ -50,7 +50,7 @@ func newProcessorRunCmd(p Provider) *cobra.Command {
 			}
 			defer func() { _ = db.Close() }()
 
-			procRepo, err := processor.NewRepository(db.DB())
+			procRepo, err := storage.NewProcessorRepository(db.DB())
 			if err != nil {
 				return fmt.Errorf("limiar: criar processor repository: %w", err)
 			}
@@ -66,7 +66,7 @@ func newProcessorRunCmd(p Provider) *cobra.Command {
 			defer func() { _ = collectorRepo.Close() }()
 
 			imageCache := media.NewCache(500, 30*time.Minute)
-			mediaResolver := media.NewResolver(collectorRepo, imageCache, log.WithComponent("media"))
+			mediaResolver := media.NewResolver(procRepo, imageCache, nil, log.WithComponent("media"))
 			srv := dashboard.NewServer(collectorRepo, procRepo, mediaResolver, log.WithComponent("dashboard"), cfg.DashboardPort, nil)
 
 			go func() { _ = srv.ListenAndServe(ctx) }()
@@ -131,7 +131,7 @@ Modos:
 			}
 			defer func() { _ = db.Close() }()
 
-			procRepo, err := processor.NewRepository(db.DB())
+			procRepo, err := storage.NewProcessorRepository(db.DB())
 			if err != nil {
 				return fmt.Errorf("limiar: criar processor repository: %w", err)
 			}
@@ -181,7 +181,7 @@ Modos:
 func reprocessSingle(
 	ctx context.Context,
 	collectorRepo *storage.Repository,
-	procRepo *processor.Repository,
+	procRepo *storage.ProcessorRepository,
 	rawID int64,
 	presenter interface{ Step(string) },
 ) (processed, failed int, err error) {
@@ -195,9 +195,9 @@ func reprocessSingle(
 		presenter.Step(fmt.Sprintf("❌ Falha ao normalizar msg %d: %v", rawID, err))
 		return 0, 1, nil
 	}
-		nm.MessageType = string(processor.Classify(nm))
+	nm.MessageType = string(processor.Classify(nm))
 
-	if err := procRepo.UpsertProcessed(ctx, nm); err != nil {
+	if err := procRepo.SaveProcessed(ctx, nm); err != nil {
 		presenter.Step(fmt.Sprintf("❌ Falha ao salvar msg %d: %v", rawID, err))
 		return 0, 1, nil
 	}
@@ -210,7 +210,7 @@ func reprocessSingle(
 func reprocessChannel(
 	ctx context.Context,
 	collectorRepo *storage.Repository,
-	procRepo *processor.Repository,
+	procRepo *storage.ProcessorRepository,
 	username string,
 	presenter interface{ Step(string) },
 ) (processed, failed int, err error) {
@@ -237,7 +237,7 @@ func reprocessChannel(
 func reprocessAllMsgs(
 	ctx context.Context,
 	collectorRepo *storage.Repository,
-	procRepo *processor.Repository,
+	procRepo *storage.ProcessorRepository,
 	presenter interface{ Step(string) },
 ) (processed, failed int, err error) {
 	return reprocessByQuery(ctx, collectorRepo, procRepo, 0, presenter)
@@ -249,7 +249,7 @@ const reprocessBatchSize = 100
 func reprocessByQuery(
 	ctx context.Context,
 	collectorRepo *storage.Repository,
-	procRepo *processor.Repository,
+	procRepo *storage.ProcessorRepository,
 	channelID int64,
 	presenter interface{ Step(string) },
 ) (totalProcessed, totalFailed int, err error) {
@@ -284,7 +284,10 @@ func reprocessByQuery(
 			normalized = append(normalized, nm)
 		}
 
-	saved, saveFailed := procRepo.UpsertProcessedBatch(ctx, normalized)
+		saved, saveFailed, err := procRepo.SaveProcessedBatch(ctx, normalized)
+		if err != nil {
+			return totalProcessed, totalFailed, err
+		}
 		totalProcessed += saved
 		totalFailed += saveFailed
 
