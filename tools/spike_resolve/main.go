@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	_ "turso.tech/database/tursogo"
@@ -181,6 +180,7 @@ func resolveAll(urls []string, workers int) []result {
 	jobs := make(chan string, len(urls))
 	results := make([]result, len(urls))
 	var idx int64
+	var mu sync.Mutex
 
 	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
@@ -188,7 +188,10 @@ func resolveAll(urls []string, workers int) []result {
 		go func() {
 			defer wg.Done()
 			for u := range jobs {
-				i := atomic.AddInt64(&idx, 1) - 1
+				mu.Lock()
+				i := idx
+				idx++
+				mu.Unlock()
 				results[i] = resolve(u)
 			}
 		}()
