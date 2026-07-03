@@ -57,18 +57,18 @@ func newStatsCmd(p Provider) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 			presenter.Info("📊 Relatório Limiar")
-			fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 
 			// Volume
-			fmt.Fprintln(out, "  VOLUME")
+			_, _ = fmt.Fprintln(out, "  VOLUME")
 			fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
-			fmt.Fprintf(out, "  Mensagens raw:         %d\n", rawCount)
-			fmt.Fprintf(out, "  Mensagens processadas: %d\n", procCount)
+			_, _ = fmt.Fprintf(out, "  Mensagens raw:         %d\n", rawCount)
+			_, _ = fmt.Fprintf(out, "  Mensagens processadas: %d\n", procCount)
 			if rawCount > 0 {
 				pct := 100 * float64(procCount) / float64(rawCount)
-				fmt.Fprintf(out, "  Taxa de conversão:     %.1f%%\n", pct)
+				_, _ = fmt.Fprintf(out, "  Taxa de conversão:     %.1f%%\n", pct)
 			}
 			fmt.Fprintln(out)
 

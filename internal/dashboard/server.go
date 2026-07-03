@@ -103,9 +103,6 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/" {
-		r.URL.Path = "/index.html"
-	}
 	distFileServer.ServeHTTP(w, r)
 }
 
