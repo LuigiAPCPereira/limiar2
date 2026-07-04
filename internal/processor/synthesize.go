@@ -6,8 +6,8 @@ import (
 )
 
 // SynthesizedPromotion é o resumo estruturado de uma promoção, pronto para
-// consumo pelo limiar-api e frontend. Produzido pelo Estágio 3 do pipeline.
-// ProductName NÃO é extraído aqui — requer LLM (Fase 3).
+// consumo pelo limiar-api e frontend. ProductName é extraído pelo CRE em
+// Normalize; este resumo mantém apenas sinais comerciais e URL.
 type SynthesizedPromotion struct {
 	Merchant        string `json:"merchant,omitempty"`
 	PriceOriginal   int64  `json:"price_original,omitempty"`

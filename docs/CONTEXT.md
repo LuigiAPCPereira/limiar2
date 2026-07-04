@@ -72,7 +72,7 @@ Funcionalidades implementadas:
 E, especificamente, **não faz (ainda)**:
 
 - classificação semântica via LLM (Fase 3);
-- extração de `ProductName` (requer LLM);
+- fallback/enriquecimento de `ProductName` via LLM (Fase 3);
 - REST API ou SSE para frontend (Fase 4);
 - discovery automático de canais (Fase 5);
 - orquestrador `limiar run` (Fase 6).

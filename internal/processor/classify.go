@@ -20,6 +20,16 @@ const (
 	TypeAdminMeta      MessageType = "admin_meta"
 )
 
+// IsPromotionalMessageType indica tipos deal_* que devem alimentar is_promotional.
+func IsPromotionalMessageType(messageType string) bool {
+	switch MessageType(messageType) {
+	case TypeDealComplete, TypeDealNoCoupon, TypeDealNoPrice:
+		return true
+	default:
+		return false
+	}
+}
+
 var (
 	reAdminMeta = regexp.MustCompile(`(?i)(regras_grupo|cupons_hoje|grupos_whatsapp|canal_telegram` +
 		`|entre\s+no\s+grupo|grupo\s+de\s+ofertas|grupo\s+do\s+whatsapp` +
@@ -32,7 +42,6 @@ var (
 // A ordem importa: checks mais específicos primeiro, genéricos por último.
 func Classify(nm *NormalizedMessage) MessageType {
 	text := nm.Text
-
 
 	// 2. Cupom expirado (menciona esgotado/acabou, sem URL de produto)
 	if isExpired(text) && !nm.HasURL {

@@ -224,6 +224,13 @@ func TestOpenUpgradesLegacySchemaForProcessorRepository(t *testing.T) {
 		"recurrence_pattern",
 		"recurrence_group_id",
 		"seasonal_tag",
+		"coupon_codes",
+		"modifiers",
+		"virtual_currency",
+		"webpage_url",
+		"webpage_title",
+		"webpage_desc",
+		"is_promotional",
 	} {
 		if !columnPresent(t, db.DB(), "processed_messages", col) {
 			t.Errorf("processed_messages.%s missing after Open on legacy db", col)
@@ -232,5 +239,41 @@ func TestOpenUpgradesLegacySchemaForProcessorRepository(t *testing.T) {
 
 	if !columnPresent(t, db.DB(), "photo_cache", "expires_at") {
 		t.Errorf("photo_cache.expires_at missing after Open on legacy db")
+	}
+}
+
+// TestOpenUpgradesLegacySchemaAddsProductNameConfidence garante que um banco
+// legado (criado pelas migrações antigas até 006_photo_cache.sql, sem
+// product_name_confidence) recebe a coluna ao reabrir com storage.Open. O
+// upgrade vem de ensureCurrentSchemaCompatibility/currentSchemaColumns, não de
+// uma migration versionada (Turso/SQLite não aceita ALTER TABLE ADD COLUMN
+// duplicado). Sem esse reparo, o CRE do Sprint 2 não persiste o score em bancos
+// de campo já existentes.
+func TestOpenUpgradesLegacySchemaAddsProductNameConfidence(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "legacy-cre.db")
+	createLegacyTursogoDB(t, dbPath)
+
+	// Premissa: o banco legado realmente nasce sem product_name_confidence.
+	dbRaw, err := sql.Open("turso", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open legacy raw: %v", err)
+	}
+	if columnPresent(t, dbRaw, "processed_messages", "product_name_confidence") {
+		_ = dbRaw.Close()
+		t.Fatalf("premissa violada: banco legado já possui product_name_confidence")
+	}
+	if err := dbRaw.Close(); err != nil {
+		t.Fatalf("close raw legacy db: %v", err)
+	}
+
+	db, err := storage.Open(ctx, dbPath, nil)
+	if err != nil {
+		t.Fatalf("storage.Open on legacy db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if !columnPresent(t, db.DB(), "processed_messages", "product_name_confidence") {
+		t.Errorf("processed_messages.product_name_confidence missing after Open on legacy db")
 	}
 }

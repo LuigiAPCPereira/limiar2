@@ -45,6 +45,14 @@ type schemaColumn struct {
 }
 
 var currentSchemaColumns = []schemaColumn{
+	{table: "processed_messages", name: "coupon_codes", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "processed_messages", name: "modifiers", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "processed_messages", name: "product_name_confidence", definition: "REAL NOT NULL DEFAULT 0.0"},
+	{table: "processed_messages", name: "virtual_currency", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "processed_messages", name: "webpage_url", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "processed_messages", name: "webpage_title", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "processed_messages", name: "webpage_desc", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "processed_messages", name: "is_promotional", definition: "INTEGER NOT NULL DEFAULT 0"},
 	{table: "processed_messages", name: "valid_from", definition: "TEXT"},
 	{table: "processed_messages", name: "valid_until", definition: "TEXT"},
 	{table: "processed_messages", name: "flash", definition: "INTEGER DEFAULT 0"},

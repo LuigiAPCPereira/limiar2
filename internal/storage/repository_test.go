@@ -100,6 +100,49 @@ func TestOpenRunsMigrations(t *testing.T) {
 	}
 }
 
+func TestOpenCreatesSprint1ExtractionColumns(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "sprint1.db")
+	db, err := storage.Open(ctx, dbPath, nil)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	for _, col := range []string{
+		"coupon_codes",
+		"modifiers",
+		"virtual_currency",
+		"webpage_url",
+		"webpage_title",
+		"webpage_desc",
+		"is_promotional",
+	} {
+		if !columnPresent(t, db.DB(), "processed_messages", col) {
+			t.Errorf("processed_messages.%s missing in fresh schema", col)
+		}
+	}
+}
+
+// TestOpenCreatesSprint2ProductNameConfidenceColumn garante que o schema novo
+// criado por storage.Open já contém processed_messages.product_name_confidence
+// (REAL NOT NULL DEFAULT 0.0), onde o CRE do Sprint 2 persiste o score do
+// ProductName (ADR 014, EXTRACTION-CRE.md §2.6). Sem essa coluna, SaveProcessed
+// não consegue gravar o confidence e a Fase 3 (LLM) não sabe quando intervir.
+func TestOpenCreatesSprint2ProductNameConfidenceColumn(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "sprint2-cre.db")
+	db, err := storage.Open(ctx, dbPath, nil)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if !columnPresent(t, db.DB(), "processed_messages", "product_name_confidence") {
+		t.Errorf("processed_messages.product_name_confidence missing in fresh schema")
+	}
+}
+
 // TestMigrationTrackingIdempotent garante que reabrir o banco não re-executa
 // migrações e não duplica registros em schema_migrations.
 func TestMigrationTrackingIdempotent(t *testing.T) {

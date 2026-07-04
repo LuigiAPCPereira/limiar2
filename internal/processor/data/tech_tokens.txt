@@ -1,0 +1,20 @@
+# Regexes simples para sinais técnicos de produto.
+(?i)\b\d+\s?gb\b
+(?i)\b\d+\s?tb\b
+(?i)\b\d+\s?hz\b
+(?i)\b\d+(?:[.,]\d+)?\s?pol\b
+(?i)\bram\b
+(?i)\bssd\b
+(?i)\bnvme\b
+(?i)\bbluetooth\b
+(?i)\bwi-?fi\b
+(?i)\busb-?c\b
+(?i)\b4k\b
+(?i)\bfull\s?hd\b
+(?i)\boled\b
+(?i)\bqled\b
+(?i)\bips\b
+(?i)\bcurvo\b
+(?i)\biphone\b
+(?i)\bandroid\b
+(?i)\bselect\s?\d+\b

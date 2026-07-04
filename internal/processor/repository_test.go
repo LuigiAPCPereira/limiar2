@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/limiar/collector/internal/model"
 	"github.com/limiar/collector/internal/storage"
 )
 
@@ -293,6 +294,212 @@ func TestSaveProcessedBatch_CommitsValidBatch(t *testing.T) {
 	}
 	if failed != 0 {
 		t.Errorf("failed = %d; quer 0", failed)
+	}
+}
+
+func TestSaveProcessed_RoundTripsSprint1ExtractionFields(t *testing.T) {
+	repo, db, cleanup, err := openTempProcessorRepo()
+	if err != nil {
+		t.Fatalf("openTempProcessorRepo: %v", err)
+	}
+	defer cleanup()
+	ctx := context.Background()
+
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.DB().ExecContext(ctx, q, args...); err != nil {
+			t.Fatalf("seed exec %q: %v", q, err)
+		}
+	}
+	mustExec(`INSERT INTO channels (id, username, title, active) VALUES (1, 'c1', 'C', 1)`)
+	mustExec(`INSERT INTO raw_messages (id, channel_id, message_id, payload) VALUES (1, 1, 101, '{}')`)
+
+	postedAt := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	msg := &NormalizedMessage{
+		RawMessageID: 1,
+		ChannelID:    1,
+		MessageID:    101,
+		MessageType:  "deal_complete",
+		Text:         "Produto R$ 99 no pix Cupom: AEBR2 ou IFPL90V1",
+		PostedAt:     postedAt,
+		ProcessedAt:  postedAt,
+		HasCoupon:    true,
+		CouponCode:   "AEBR2",
+		CouponCodes: []model.Coupon{
+			{Code: "AEBR2", DiscountType: "code_only"},
+			{Code: "IFPL90V1", DiscountType: "code_only"},
+		},
+		Modifiers: []model.Modifier{
+			{Type: "payment", Value: "pix"},
+			{Type: "shipping", Value: "frete_gratis"},
+		},
+		VirtualCurrency: &model.VirtualCurrency{Platform: "shopee", Amount: 1853, Type: "discount"},
+		WebpageURL:      "https://s.shopee.com.br/produto",
+		WebpageTitle:    "Produto Shopee",
+		WebpageDesc:     "Descrição do card",
+		IsPromotional:   true,
+	}
+	if err := repo.SaveProcessed(ctx, msg); err != nil {
+		t.Fatalf("SaveProcessed: %v", err)
+	}
+
+	got, err := repo.ListProcessedMessages(ctx, 0, "", 10, 0)
+	if err != nil {
+		t.Fatalf("ListProcessedMessages: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, quer 1", len(got))
+	}
+	pm := got[0]
+	if pm.CouponCode != "AEBR2" {
+		t.Fatalf("CouponCode = %q, quer AEBR2", pm.CouponCode)
+	}
+	if len(pm.CouponCodes) != 2 || pm.CouponCodes[1].Code != "IFPL90V1" {
+		t.Fatalf("CouponCodes = %#v, quer dois códigos estruturados", pm.CouponCodes)
+	}
+	if len(pm.Modifiers) != 2 || pm.Modifiers[0] != (model.Modifier{Type: "payment", Value: "pix"}) {
+		t.Fatalf("Modifiers = %#v", pm.Modifiers)
+	}
+	if pm.VirtualCurrency == nil || pm.VirtualCurrency.Amount != 1853 || pm.VirtualCurrency.Platform != "shopee" {
+		t.Fatalf("VirtualCurrency = %#v", pm.VirtualCurrency)
+	}
+	if pm.WebpageURL != msg.WebpageURL || pm.WebpageTitle != msg.WebpageTitle || pm.WebpageDesc != msg.WebpageDesc {
+		t.Fatalf("webpage = (%q,%q,%q), quer (%q,%q,%q)", pm.WebpageURL, pm.WebpageTitle, pm.WebpageDesc, msg.WebpageURL, msg.WebpageTitle, msg.WebpageDesc)
+	}
+	if !pm.IsPromotional {
+		t.Fatal("IsPromotional = false, quer true")
+	}
+}
+
+// TestSaveProcessed_RoundTripsProductNameAndConfidence garante que SaveProcessed
+// persiste ProductNameConfidence (score 0.0–1.0 do CRE do Sprint 2, ADR 014)
+// junto com ProductName, e que ListProcessedMessages devolve ambos sem perda.
+// O CRE exige que o score viaje do normalizer até a leitura: abaixo do
+// threshold o nome vem vazio, mas o score é preservado para a Fase 3 (LLM)
+// saber quando intervir.
+func TestSaveProcessed_RoundTripsProductNameAndConfidence(t *testing.T) {
+	repo, db, cleanup, err := openTempProcessorRepo()
+	if err != nil {
+		t.Fatalf("openTempProcessorRepo: %v", err)
+	}
+	defer cleanup()
+	ctx := context.Background()
+
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.DB().ExecContext(ctx, q, args...); err != nil {
+			t.Fatalf("seed exec %q: %v", q, err)
+		}
+	}
+	mustExec(`INSERT INTO channels (id, username, title, active) VALUES (1, 'c1', 'C', 1)`)
+	mustExec(`INSERT INTO raw_messages (id, channel_id, message_id, payload) VALUES (1, 1, 101, '{}')`)
+
+	postedAt := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	msg := &NormalizedMessage{
+		RawMessageID:          1,
+		ChannelID:             1,
+		MessageID:             101,
+		MessageType:           "deal_complete",
+		Text:                  "Anker Caixa de Som Soundcore Select 4 go",
+		PostedAt:              postedAt,
+		ProcessedAt:           postedAt,
+		ProductName:           "Anker Caixa de Som Soundcore Select 4 go",
+		ProductNameConfidence: 0.85,
+	}
+	if err := repo.SaveProcessed(ctx, msg); err != nil {
+		t.Fatalf("SaveProcessed: %v", err)
+	}
+
+	got, err := repo.ListProcessedMessages(ctx, 0, "", 10, 0)
+	if err != nil {
+		t.Fatalf("ListProcessedMessages: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, quer 1", len(got))
+	}
+	pm := got[0]
+	if pm.ProductName != msg.ProductName {
+		t.Fatalf("ProductName = %q, quer %q", pm.ProductName, msg.ProductName)
+	}
+	if pm.ProductNameConfidence != msg.ProductNameConfidence {
+		t.Fatalf("ProductNameConfidence = %v, quer %v", pm.ProductNameConfidence, msg.ProductNameConfidence)
+	}
+}
+
+// TestSaveProcessedBatch_PreservesProductNameConfidence garante que
+// SaveProcessedBatch persiste ProductNameConfidence para múltiplas mensagens de
+// uma vez, sem zerar ou trocar o score entre linhas. Cada mensagem carrega seu
+// próprio ProductName + Confidence — incluindo o caso abaixo do threshold
+// (nome vazio, score preservado para a Fase 3).
+func TestSaveProcessedBatch_PreservesProductNameConfidence(t *testing.T) {
+	repo, db, cleanup, err := openTempProcessorRepo()
+	if err != nil {
+		t.Fatalf("openTempProcessorRepo: %v", err)
+	}
+	defer cleanup()
+	ctx := context.Background()
+
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.DB().ExecContext(ctx, q, args...); err != nil {
+			t.Fatalf("seed exec %q: %v", q, err)
+		}
+	}
+	mustExec(`INSERT INTO channels (id, username, title, active) VALUES (1, 'c1', 'C', 1)`)
+	mustExec(`INSERT INTO raw_messages (id, channel_id, message_id, payload) VALUES (1, 1, 101, '{}')`)
+	mustExec(`INSERT INTO raw_messages (id, channel_id, message_id, payload) VALUES (2, 1, 102, '{}')`)
+	mustExec(`INSERT INTO raw_messages (id, channel_id, message_id, payload) VALUES (3, 1, 103, '{}')`)
+
+	// postedAt distinto por mensagem para ordem determinística em posted_at DESC.
+	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	msgs := []*NormalizedMessage{
+		{
+			RawMessageID: 1, ChannelID: 1, MessageID: 101, MessageType: "deal_complete",
+			Text: "Anker Soundcore Select 4 go", PostedAt: base.Add(2 * time.Second), ProcessedAt: base,
+			ProductName: "Anker Soundcore Select 4 go", ProductNameConfidence: 0.85,
+		},
+		{
+			RawMessageID: 2, ChannelID: 1, MessageID: 102, MessageType: "deal_complete",
+			Text: "Apple iPhone 16 (128 GB)", PostedAt: base.Add(1 * time.Second), ProcessedAt: base,
+			ProductName: "Apple iPhone 16 (128 GB)", ProductNameConfidence: 0.62,
+		},
+		{
+			RawMessageID: 3, ChannelID: 1, MessageID: 103, MessageType: "commentary",
+			Text: "NOVO CUPOM AMAZON", PostedAt: base, ProcessedAt: base,
+			// Abaixo do threshold (0.45): nome vazio, score persistido para a Fase 3.
+			ProductName: "", ProductNameConfidence: 0.28,
+		},
+	}
+	saved, failed, err := repo.SaveProcessedBatch(ctx, msgs)
+	if err != nil {
+		t.Fatalf("SaveProcessedBatch: %v", err)
+	}
+	if saved != len(msgs) || failed != 0 {
+		t.Fatalf("saved=%d failed=%d, quer saved=%d failed=0", saved, failed, len(msgs))
+	}
+
+	got, err := repo.ListProcessedMessages(ctx, 0, "", 10, 0)
+	if err != nil {
+		t.Fatalf("ListProcessedMessages: %v", err)
+	}
+	if len(got) != len(msgs) {
+		t.Fatalf("len(got) = %d, quer %d", len(got), len(msgs))
+	}
+
+	// Ordem de List é posted_at DESC; mapeamos por ProductName para ficar
+	// independente da ordem de retorno (cada nome é único no corpus abaixo).
+	wantByName := make(map[string]float64, len(msgs))
+	for _, m := range msgs {
+		wantByName[m.ProductName] = m.ProductNameConfidence
+	}
+	for _, pm := range got {
+		wantConf, ok := wantByName[pm.ProductName]
+		if !ok {
+			t.Fatalf("ProductName inesperado no round-trip: %q", pm.ProductName)
+		}
+		if pm.ProductNameConfidence != wantConf {
+			t.Fatalf("ProductNameConfidence de %q = %v, quer %v", pm.ProductName, pm.ProductNameConfidence, wantConf)
+		}
 	}
 }
 

@@ -66,7 +66,7 @@ var (
 	reFreteG     = regexp.MustCompile(`(?i)frete\s*gr[áa]tis`)
 	reInstall    = regexp.MustCompile(`(?i)(\d+)x\s*(?:sem\s*juros|s/\s*juros)`)
 	reCashback   = regexp.MustCompile(`(?i)cash\s*back|cashback`)
-	reDiscPct    = regexp.MustCompile(`(?i)(\d+)\s*%\s*(?:de\s+)?(?:desconto|off|desc)`)
+	reDiscPct    = regexp.MustCompile(`(?i)(\d+)\s*%\s*(?:de\s+)?(?:desconto|off|desc|cash\s*back|cashback)`)
 	reRecurring  = regexp.MustCompile(`(?i)toda\s+(?:semana|segunda(?:-feira)?|terça(?:-feira)?|terca(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sábado|sabado|domingo)|todo\s+(?:m[eê]s|dia)|recorrente|mensal|di[áa]rio|semanal|quinzenal|a\s+cada\s+15\s+dias`)
 
 	// Urgency
@@ -121,25 +121,33 @@ func Normalize(raw *model.RawMessage) (*NormalizedMessage, error) {
 	nm.ReplyToMsgID = extractReplyTo(msg)
 
 	// Extração de sinais
+	webpage := extractWebpageInfo(msg)
+	nm.WebpageURL = webpage.URL
+	nm.WebpageTitle = webpage.Title
+	nm.WebpageDesc = webpage.Description
 	nm.HasURL = hasURL(nm.Text)
 	nm.URLHash = computeURLHash(nm.Text)
 
-	// 2.4: Fallback — URL de Media.Webpage quando texto não tem URL
-	if !nm.HasURL {
-		if wpURL := extractWebpageURL(msg); wpURL != "" {
-			nm.HasURL = true
-			nm.URLHash = computeURLHash(wpURL)
-		}
+	// Fallback: URL de Media.Webpage quando texto não tem URL.
+	if !nm.HasURL && nm.WebpageURL != "" {
+		nm.HasURL = true
+		nm.URLHash = computeURLHash(nm.WebpageURL)
 	}
 
 	extractPrices(nm.Text, nm)
-	extractCoupon(nm.Text, nm)
-	extractModifiers(nm.Text, nm)
+	applyCoupons(nm.Text, nm)
+	applyModifiers(nm.Text, nm)
+	pn := ExtractProductName(nm)
+	nm.ProductName = pn.Name
+	nm.ProductNameConfidence = pn.Confidence
 	extractTemporalSignals(nm.Text, nm.PostedAt, nm)
 
 	// Estágio 3: Síntese
 	syn := Synthesize(nm)
 	nm.Merchant = syn.Merchant
+	// Modifiers preservam o sinal bruto de moedas/cashback; VirtualCurrency
+	// extrai plataforma/valor/teto após a síntese do merchant.
+	nm.VirtualCurrency = extractVirtualCurrency(nm.Text, nm.Merchant)
 	if nm.RecurrencePattern != "" {
 		nm.RecurrenceGroupID = recurrenceGroupID(nm)
 	}
@@ -222,47 +230,69 @@ func extractPrices(text string, nm *NormalizedMessage) {
 	}
 }
 
-// extractCoupon extrai código de cupom e seta HasCoupon + CouponCode.
-func extractCoupon(text string, nm *NormalizedMessage) {
-	if match := reCoupon.FindStringSubmatch(text); match != nil {
-		nm.HasCoupon = true
-		nm.CouponCode = strings.ToUpper(match[1])
+// applyCoupons mantém campos flat legados e preenche cupons estruturados.
+func applyCoupons(text string, nm *NormalizedMessage) {
+	nm.CouponCodes = extractCoupons(text)
+	nm.HasCoupon = len(nm.CouponCodes) > 0
+	nm.CouponCode = ""
+	for _, coupon := range nm.CouponCodes {
+		if coupon.Code != "" {
+			nm.CouponCode = coupon.Code
+			return
+		}
 	}
 }
 
-// extractModifiers detecta Pix, frete grátis, parcelamento, cashback, % desconto.
-func extractModifiers(text string, nm *NormalizedMessage) {
-	if rePix.MatchString(text) {
-		nm.PaymentMethod = "pix"
-	}
-	if reFretePrime.MatchString(text) {
-		nm.Shipping = "frete_gratis_prime"
-		nm.ShippingFree = true
-	} else if reFreteG.MatchString(text) {
-		nm.Shipping = "frete_gratis"
-		nm.ShippingFree = true
-	}
-	if match := reInstall.FindStringSubmatch(text); match != nil {
-		nm.Installments = match[1] + "x_sem_juros"
-		n, _ := strconv.Atoi(match[1])
-		nm.InstallmentsN = n
-		// Calcular valor da parcela se tiver preço
-		if nm.PriceAmount > 0 && n > 0 {
-			nm.InstallmentsValue = nm.PriceAmount / int64(n)
+// applyModifiers mantém campos flat legados e preenche modifiers estruturados.
+func applyModifiers(text string, nm *NormalizedMessage) {
+	nm.Modifiers = extractModifiers(text)
+	for _, modifier := range nm.Modifiers {
+		switch modifier.Type {
+		case "payment":
+			if modifier.Value == "pix" {
+				nm.PaymentMethod = "pix"
+			}
+		case "shipping":
+			nm.Shipping = modifier.Value
+			if modifier.Value == "frete_gratis" || modifier.Value == "frete_gratis_prime" {
+				nm.ShippingFree = true
+			}
+		case "installments":
+			nm.Installments = modifier.Value
+			if n, ok := parseInstallmentsCount(modifier.Value); ok {
+				nm.InstallmentsN = n
+				if nm.PriceAmount > 0 {
+					nm.InstallmentsValue = nm.PriceAmount / int64(n)
+				}
+			}
+		case "cashback":
+			nm.IsCashback = true
+		case "discount":
+			if pct, ok := parseDiscountPercentModifier(modifier.Value); ok {
+				nm.DiscountPct = pct
+			}
+		case "recurring":
+			nm.IsRecurring = true
 		}
 	}
-	if reCashback.MatchString(text) {
-		nm.IsCashback = true
+}
+
+func parseInstallmentsCount(value string) (int, bool) {
+	raw, _, ok := strings.Cut(value, "x_")
+	if !ok {
+		return 0, false
 	}
-	if match := reDiscPct.FindStringSubmatch(text); match != nil {
-		n, _ := strconv.Atoi(match[1])
-		if n > 0 && n <= 100 {
-			nm.DiscountPct = n
-		}
+	n, err := strconv.Atoi(raw)
+	return n, err == nil && n > 0
+}
+
+func parseDiscountPercentModifier(value string) (int, bool) {
+	raw, _, ok := strings.Cut(value, "_percent")
+	if !ok {
+		return 0, false
 	}
-	if reRecurring.MatchString(text) {
-		nm.IsRecurring = true
-	}
+	n, err := strconv.Atoi(raw)
+	return n, err == nil && n > 0 && n <= 100
 }
 
 func extractTemporalSignals(text string, postedAt time.Time, nm *NormalizedMessage) {
@@ -554,20 +584,6 @@ func extractReplyTo(msg map[string]any) int64 {
 		return 0
 	}
 	return model.JSONToInt64(reply["ReplyToMsgID"])
-}
-
-// extractWebpageURL extrai URL de Media.Webpage quando presente.
-func extractWebpageURL(msg map[string]any) string {
-	media, ok := msg["Media"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	wp, ok := media["Webpage"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	u, _ := wp["URL"].(string)
-	return u
 }
 
 func hasURL(text string) bool {

@@ -16,7 +16,25 @@ toca no `database/sql`. Siga estas regras ao estender esta camada.
    casos de "linha faltando" para um sentinel (ex: `sql.ErrNoRows` → `ErrNoSession` ou
    `apperrors.ErrChannelNotFound`).
 6. **Escrita em runtime respeita o dono da camada.** `raw_messages` é escrito apenas pelo `Collector.dbWriter`; `processed_messages` é escrito apenas pelo processor via `ProcessorRepository`; dashboard é read-only e não dispara writes ou downloads MTProto.
-7. **Alterações de schema vão em um novo arquivo de migração** em `migrations/`. O sistema executa as migrations em ordem lexical e registra cada execução na tabela `schema_migrations`, garantindo que cada arquivo seja executado apenas uma vez. As migrations são executadas dentro de uma transação. Compatibilidade com bancos legados pode usar checagens condicionais em `migrations.go` quando o SQL isolado não for idempotente com Turso/Tursogo.
+7. **Alterações de schema usam a estratégia consolidada + reparo (não ALTER TABLE direto).**
+   O Turso/Tursogo rejeita `ALTER TABLE ADD COLUMN` em banco que já possui a coluna
+   (erro `duplicate column name`). Como o `001_initial.sql` é o schema consolidado completo
+   para bancos novos, qualquer `ALTER TABLE` em uma migration `NNN_*.sql` posterior causaria
+   falha em banco novo. Por isso, o projeto adota três camadas:
+
+   - **Schema consolidado** (`001_initial.sql`): toda coluna nova é adicionada aqui. Bancos
+     novos nascem completos.
+   - **Reparo condicional** (`currentSchemaColumns` em `migrations.go`): para bancos legados,
+     o Go checa via `PRAGMA table_info` quais colunas faltam e adiciona com `ALTER TABLE ADD
+     COLUMN` apenas as ausentes. É idempotente.
+   - **Marcador SQL** (`NNN_*.sql`): cada alteração de schema cria um arquivo de migration que
+     serve como marcador — tipicamente apenas `CREATE TABLE IF NOT EXISTS schema_migrations`.
+     Isso registra a versão na tabela de controle sem tentar `ALTER TABLE` que falharia.
+
+   Nunca escreva `ALTER TABLE ADD COLUMN` direto num arquivo `NNN_*.sql` se a coluna também
+   foi adicionada ao `001_initial.sql`. Registre a coluna em `currentSchemaColumns` e no
+   `001_initial.sql`, e deixe o `NNN_*.sql` como marcador. Ver exemplos em `007_legacy_schema_compat.sql`
+   e `008_extraction_enhancements.sql`.
 8. **As datas e horas (Datetimes) são texto em UTC** no formato `2006-01-02 15:04:05` (a constante `storage.DBTimeLayout`), correspondendo aos padrões `datetime('now')` do schema.
 
 ## Correto

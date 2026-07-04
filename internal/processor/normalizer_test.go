@@ -63,6 +63,47 @@ func TestNormalize_ShapeA(t *testing.T) {
 	}
 }
 
+func TestNormalize_Sprint1ExtractionFields(t *testing.T) {
+	payload := map[string]any{
+		"ID":      float64(12346),
+		"Message": "Produto teste R$ 99 no pix\nCupom: AEBR2 ou IFPL90V1",
+		"PeerID":  map[string]any{"ChannelID": float64(999)},
+		"Date":    float64(1717891200),
+		"Media": map[string]any{
+			"Webpage": map[string]any{
+				"URL":         "https://www.amazon.com.br/produto",
+				"Title":       "Produto Teste - Amazon",
+				"Description": "Descrição gold standard",
+			},
+		},
+	}
+	raw := makeRaw(t, 11, 999, 12346, payload)
+
+	nm, err := Normalize(raw)
+	if err != nil {
+		t.Fatalf("Normalize falhou: %v", err)
+	}
+
+	if nm.CouponCode != "AEBR2" {
+		t.Fatalf("CouponCode = %q, quer primeiro cupom AEBR2", nm.CouponCode)
+	}
+	if len(nm.CouponCodes) != 2 {
+		t.Fatalf("len(CouponCodes) = %d, quer 2: %#v", len(nm.CouponCodes), nm.CouponCodes)
+	}
+	if nm.WebpageURL != "https://www.amazon.com.br/produto" {
+		t.Errorf("WebpageURL = %q", nm.WebpageURL)
+	}
+	if nm.WebpageTitle != "Produto Teste - Amazon" {
+		t.Errorf("WebpageTitle = %q", nm.WebpageTitle)
+	}
+	if nm.WebpageDesc != "Descrição gold standard" {
+		t.Errorf("WebpageDesc = %q", nm.WebpageDesc)
+	}
+	if len(nm.Modifiers) == 0 || nm.Modifiers[0].Type != "payment" || nm.Modifiers[0].Value != "pix" {
+		t.Fatalf("Modifiers = %#v, quer payment/pix", nm.Modifiers)
+	}
+}
+
 func TestNormalize_ShapeB(t *testing.T) {
 	payload := map[string]any{
 		"Updates": []any{
@@ -311,7 +352,7 @@ func TestCouponExtraction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			nm := &NormalizedMessage{}
-			extractCoupon(tt.text, nm)
+			applyCoupons(tt.text, nm)
 			if nm.HasCoupon != tt.wantHas {
 				t.Errorf("HasCoupon = %v, quer %v", nm.HasCoupon, tt.wantHas)
 			}
@@ -379,7 +420,7 @@ func TestModifiers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			nm := &NormalizedMessage{}
-			extractModifiers(tt.text, nm)
+			applyModifiers(tt.text, nm)
 			if nm.PaymentMethod != tt.wantPay {
 				t.Errorf("PaymentMethod = %q, quer %q", nm.PaymentMethod, tt.wantPay)
 			}
@@ -742,4 +783,93 @@ func dayOnly(t time.Time) string {
 		return ""
 	}
 	return t.Format("2006-01-02")
+}
+
+// --- Sprint 2: Candidate Ranking Engine (ProductName) ---
+//
+// Contrato (docs/specs/EXTRACTION-CRE.md §2, ADR 014): o CRE determinístico
+// extrai ProductName de (1) linha limpa próxima ao preço no texto e (2) do
+// título da webpage (Media.Webpage.Title), atribuindo ProductNameConfidence em
+// [0.0, 1.0]. Threshold 0.45: abaixo dele o ProductName fica vazio (não inventa
+// nome). Os testes abaixo cobrem as três famílias de comportamento pelo caminho
+// público Normalize.
+
+// TestNormalize_CRE_TextHeuristic defende o caso dominante do corpus: o nome do
+// produto é a linha limpa imediatamente acima do preço. O CRE deve extraí-la e
+// atribuir confidence >= 0.45.
+func TestNormalize_CRE_TextHeuristic(t *testing.T) {
+	payload := map[string]any{
+		"ID":      float64(50001),
+		"Message": "PARCELADO🔥🔥🔥🔥\n\nAnker Caixa de Som Soundcore Select 4 go\n\nPOR: 154 REAIS E FRETE GRÁTIS PRIME\nhttps://amzn.to/abc",
+		"PeerID":  map[string]any{"ChannelID": float64(999)},
+		"Date":    float64(1717891200),
+		"Media":   nil,
+	}
+	raw := makeRaw(t, 1, 999, 50001, payload)
+
+	nm, err := Normalize(raw)
+	if err != nil {
+		t.Fatalf("Normalize falhou: %v", err)
+	}
+
+	if nm.ProductName != "Anker Caixa de Som Soundcore Select 4 go" {
+		t.Errorf("ProductName = %q, quer \"Anker Caixa de Som Soundcore Select 4 go\"", nm.ProductName)
+	}
+	if nm.ProductNameConfidence < 0.45 {
+		t.Errorf("ProductNameConfidence = %v, quer >= 0.45", nm.ProductNameConfidence)
+	}
+}
+
+// TestNormalize_CRE_WebpageTitle prova que, quando o texto só traz preço e link,
+// o título da webpage (Media.Webpage.Title) é a fonte de ProductName — com o
+// sufixo de merchant ("- Amazon.com.br") normalizado para fora.
+func TestNormalize_CRE_WebpageTitle(t *testing.T) {
+	payload := map[string]any{
+		"ID":      float64(50002),
+		"Message": "R$ 7.599,99 à vista\nhttps://amzn.to/xyz",
+		"PeerID":  map[string]any{"ChannelID": float64(999)},
+		"Date":    float64(1717891200),
+		"Media": map[string]any{
+			"Webpage": map[string]any{
+				"URL":   "https://www.amazon.com.br/iphone-16/dp/B0DGFP9XQN",
+				"Title": "Apple iPhone 16 (128 GB) - Amazon.com.br",
+			},
+		},
+	}
+	raw := makeRaw(t, 2, 999, 50002, payload)
+
+	nm, err := Normalize(raw)
+	if err != nil {
+		t.Fatalf("Normalize falhou: %v", err)
+	}
+
+	if nm.ProductName != "Apple iPhone 16 (128 GB)" {
+		t.Errorf("ProductName = %q, quer \"Apple iPhone 16 (128 GB)\"", nm.ProductName)
+	}
+}
+
+// TestNormalize_CRE_NoProduct_MetaCoupon defende o invariante "não inventa nome":
+// um meta-anúncio de cupom genérico, sem produto real, deve deixar ProductName
+// vazio e ProductNameConfidence abaixo do threshold 0.45.
+func TestNormalize_CRE_NoProduct_MetaCoupon(t *testing.T) {
+	payload := map[string]any{
+		"ID":      float64(50003),
+		"Message": "NOVO CUPOM AMAZON\nCupom: AMAZON10\nVálido só hoje",
+		"PeerID":  map[string]any{"ChannelID": float64(999)},
+		"Date":    float64(1717891200),
+		"Media":   nil,
+	}
+	raw := makeRaw(t, 3, 999, 50003, payload)
+
+	nm, err := Normalize(raw)
+	if err != nil {
+		t.Fatalf("Normalize falhou: %v", err)
+	}
+
+	if nm.ProductName != "" {
+		t.Errorf("ProductName = %q, quer vazio (sem produto real)", nm.ProductName)
+	}
+	if nm.ProductNameConfidence >= 0.45 {
+		t.Errorf("ProductNameConfidence = %v, quer < 0.45 (abaixo do threshold)", nm.ProductNameConfidence)
+	}
 }

@@ -85,6 +85,7 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 			continue
 		}
 		nm.MessageType = string(Classify(nm))
+		nm.IsPromotional = IsPromotionalMessageType(nm.MessageType)
 		nm.FeedEligible = nm.MessageType == string(TypeDealComplete) || nm.MessageType == string(TypeDealNoCoupon)
 		normalized = append(normalized, nm)
 	}

@@ -5,6 +5,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"time"
@@ -31,13 +32,15 @@ func NewProcessorRepository(db *sql.DB) (*ProcessorRepository, error) {
 			views, forwards, reply_to_msg_id,
 			has_url, has_price, has_coupon, price_amount, price_currency,
 			posted_at, processed_at,
-			price_original, price_discount, coupon_code,
-			payment_method, shipping, installments, discount_percent,
-			url_hash, merchant, product_name, synthesis, is_duplicate, feed_eligible,
+			price_original, price_discount, coupon_code, coupon_codes,
+			payment_method, shipping, installments, discount_percent, modifiers,
+			url_hash, merchant, product_name, product_name_confidence, synthesis,
+			virtual_currency, webpage_url, webpage_title, webpage_desc, is_promotional,
+			is_duplicate, feed_eligible,
 			photo_access_hash, photo_file_ref, photo_dcid, inline_thumb,
 			shipping_free, installments_n, installments_value, is_recurring,
 			valid_from, valid_until, flash, recurrence_pattern, recurrence_group_id, seasonal_tag
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(channel_id, message_id) DO UPDATE SET
 			message_type = excluded.message_type,
 			text_clean = excluded.text_clean,
@@ -57,14 +60,22 @@ func NewProcessorRepository(db *sql.DB) (*ProcessorRepository, error) {
 			price_original = excluded.price_original,
 			price_discount = excluded.price_discount,
 			coupon_code = excluded.coupon_code,
+			coupon_codes = excluded.coupon_codes,
 			payment_method = excluded.payment_method,
 			shipping = excluded.shipping,
 			installments = excluded.installments,
 			discount_percent = excluded.discount_percent,
+			modifiers = excluded.modifiers,
 			url_hash = excluded.url_hash,
 			merchant = excluded.merchant,
 			product_name = excluded.product_name,
+			product_name_confidence = excluded.product_name_confidence,
 			synthesis = excluded.synthesis,
+			virtual_currency = excluded.virtual_currency,
+			webpage_url = excluded.webpage_url,
+			webpage_title = excluded.webpage_title,
+			webpage_desc = excluded.webpage_desc,
+			is_promotional = excluded.is_promotional,
 			is_duplicate = excluded.is_duplicate,
 			feed_eligible = excluded.feed_eligible,
 			photo_access_hash = excluded.photo_access_hash,
@@ -156,7 +167,40 @@ func dbTimeOrNil(t time.Time) any {
 	return t.UTC().Format(model.DBTimeLayout)
 }
 
-func processedInsertArgs(msg *model.NormalizedMessage) []any {
+func encodeCoupons(coupons []model.Coupon) (string, error) {
+	if len(coupons) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(coupons)
+	if err != nil {
+		return "", fmt.Errorf("coupon_codes: %w", err)
+	}
+	return string(data), nil
+}
+
+func encodeModifiers(modifiers []model.Modifier) (string, error) {
+	if len(modifiers) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(modifiers)
+	if err != nil {
+		return "", fmt.Errorf("modifiers: %w", err)
+	}
+	return string(data), nil
+}
+
+func encodeVirtualCurrency(vc *model.VirtualCurrency) (string, error) {
+	if vc == nil {
+		return "", nil
+	}
+	data, err := json.Marshal(vc)
+	if err != nil {
+		return "", fmt.Errorf("virtual_currency: %w", err)
+	}
+	return string(data), nil
+}
+
+func processedInsertArgs(msg *model.NormalizedMessage) ([]any, error) {
 	var priceAmount any
 	if msg.PriceAmount > 0 {
 		priceAmount = msg.PriceAmount
@@ -165,6 +209,18 @@ func processedInsertArgs(msg *model.NormalizedMessage) []any {
 	var installmentsValue any
 	if msg.InstallmentsValue > 0 {
 		installmentsValue = msg.InstallmentsValue
+	}
+	couponCodes, err := encodeCoupons(msg.CouponCodes)
+	if err != nil {
+		return nil, err
+	}
+	modifiers, err := encodeModifiers(msg.Modifiers)
+	if err != nil {
+		return nil, err
+	}
+	virtualCurrency, err := encodeVirtualCurrency(msg.VirtualCurrency)
+	if err != nil {
+		return nil, err
 	}
 	validFrom := dbTimeOrNil(msg.ValidFrom)
 	validUntil := dbTimeOrNil(msg.ValidUntil)
@@ -191,14 +247,22 @@ func processedInsertArgs(msg *model.NormalizedMessage) []any {
 		msg.PriceOriginal,
 		msg.PriceDiscount,
 		msg.CouponCode,
+		couponCodes,
 		msg.PaymentMethod,
 		msg.Shipping,
 		msg.Installments,
 		msg.DiscountPct,
+		modifiers,
 		msg.URLHash,
 		msg.Merchant,
 		msg.ProductName,
+		msg.ProductNameConfidence,
 		msg.Synthesis,
+		virtualCurrency,
+		msg.WebpageURL,
+		msg.WebpageTitle,
+		msg.WebpageDesc,
+		model.BoolToInt(msg.IsPromotional),
 		model.BoolToInt(msg.IsDuplicate),
 		model.BoolToInt(msg.FeedEligible),
 		msg.PhotoAccessHash,
@@ -215,13 +279,17 @@ func processedInsertArgs(msg *model.NormalizedMessage) []any {
 		msg.RecurrencePattern,
 		msg.RecurrenceGroupID,
 		msg.SeasonalTag,
-	}
+	}, nil
 }
 
 // SaveProcessed persiste uma mensagem normalizada em processed_messages.
 // Idempotente via ON CONFLICT DO NOTHING.
 func (r *ProcessorRepository) SaveProcessed(ctx context.Context, msg *model.NormalizedMessage) error {
-	_, err := r.stmtInsertProcessed.ExecContext(ctx, processedInsertArgs(msg)...)
+	args, err := processedInsertArgs(msg)
+	if err != nil {
+		return apperrors.Wrap("processor", "save_processed_encode", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
+	}
+	_, err = r.stmtInsertProcessed.ExecContext(ctx, args...)
 	if err != nil {
 		return apperrors.Wrap("processor", "save_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
 	}
@@ -284,7 +352,11 @@ func (r *ProcessorRepository) SaveProcessedBatch(ctx context.Context, msgs []*mo
 	stmt := tx.StmtContext(ctx, r.stmtInsertProcessed)
 
 	for _, msg := range msgs {
-		_, execErr := stmt.ExecContext(ctx, processedInsertArgs(msg)...)
+		args, err := processedInsertArgs(msg)
+		if err != nil {
+			return 0, len(msgs), apperrors.Wrap("processor", "save_processed_batch_encode", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
+		}
+		_, execErr := stmt.ExecContext(ctx, args...)
 		if execErr != nil {
 			return 0, len(msgs), apperrors.Wrap("processor", "save_processed_batch_exec", fmt.Errorf("msg_id=%d: %w", msg.MessageID, execErr))
 		}
@@ -301,14 +373,55 @@ func (r *ProcessorRepository) SaveProcessedBatch(ctx context.Context, msgs []*mo
 // Processed Messages — queries de leitura sobre dados processados.
 // ═══════════════════════════════════════════════════════════════════
 
+func decodeCoupons(raw sql.NullString) ([]model.Coupon, error) {
+	if !raw.Valid || raw.String == "" {
+		return nil, nil
+	}
+	var coupons []model.Coupon
+	if err := json.Unmarshal([]byte(raw.String), &coupons); err != nil {
+		return nil, fmt.Errorf("coupon_codes: %w", err)
+	}
+	return coupons, nil
+}
+
+func decodeModifiers(raw sql.NullString) ([]model.Modifier, error) {
+	if !raw.Valid || raw.String == "" {
+		return nil, nil
+	}
+	var modifiers []model.Modifier
+	if err := json.Unmarshal([]byte(raw.String), &modifiers); err != nil {
+		return nil, fmt.Errorf("modifiers: %w", err)
+	}
+	return modifiers, nil
+}
+
+func decodeVirtualCurrency(raw sql.NullString) (*model.VirtualCurrency, error) {
+	if !raw.Valid || raw.String == "" {
+		return nil, nil
+	}
+	var vc model.VirtualCurrency
+	if err := json.Unmarshal([]byte(raw.String), &vc); err != nil {
+		return nil, fmt.Errorf("virtual_currency: %w", err)
+	}
+	return &vc, nil
+}
+
+func nullStringValue(raw sql.NullString) string {
+	if !raw.Valid {
+		return ""
+	}
+	return raw.String
+}
+
 // ListProcessedMessages retorna mensagens processadas com paginação e filtro
 // opcional por tipo e canal. Resultados ordenados por posted_at DESC.
 func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channelID int64, msgType string, limit, offset int) ([]*model.ProcessedMessage, error) {
 	query := `SELECT id, raw_message_id, channel_id, message_id, message_type,
 		text_clean, text_length, media_type, has_url, has_price, has_coupon,
 		price_amount, price_currency, posted_at, processed_at,
-		price_original, price_discount, coupon_code, payment_method, shipping,
-		installments, discount_percent, merchant, product_name, is_duplicate,
+		price_original, price_discount, coupon_code, coupon_codes, payment_method, shipping,
+		installments, discount_percent, modifiers, merchant, product_name, product_name_confidence,
+		virtual_currency, webpage_url, webpage_title, webpage_desc, is_promotional, is_duplicate,
 		photo_id, shipping_free, installments_n, installments_value, is_recurring,
 		valid_from, valid_until, flash, recurrence_pattern, recurrence_group_id, seasonal_tag
 		FROM processed_messages`
@@ -341,38 +454,59 @@ func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channel
 	var msgs []*model.ProcessedMessage
 	for rows.Next() {
 		var (
-			m          model.ProcessedMessage
-			posted     string
-			procAt     string
-			hasURL     int
-			hasPrc     int
-			hasCpn     int
-			isDup      int
-			shipFr     int
-			instN      int
-			isRec      int
-			price      sql.NullInt64
-			curr       sql.NullString
-			instVal    sql.NullInt64
-			validFrom  sql.NullString
-			validUntil sql.NullString
-			flash      int
-			recPattern sql.NullString
-			recGroup   sql.NullInt64
-			seasonal   sql.NullString
+			m               model.ProcessedMessage
+			posted          string
+			procAt          string
+			hasURL          int
+			hasPrc          int
+			hasCpn          int
+			isPromo         int
+			isDup           int
+			shipFr          int
+			instN           int
+			isRec           int
+			price           sql.NullInt64
+			curr            sql.NullString
+			couponCodesText sql.NullString
+			modifiersText   sql.NullString
+			virtualCurrency sql.NullString
+			webpageURL      sql.NullString
+			webpageTitle    sql.NullString
+			webpageDesc     sql.NullString
+			instVal         sql.NullInt64
+			validFrom       sql.NullString
+			validUntil      sql.NullString
+			flash           int
+			recPattern      sql.NullString
+			recGroup        sql.NullInt64
+			seasonal        sql.NullString
 		)
 		if err := rows.Scan(&m.ID, &m.RawMessageID, &m.ChannelID, &m.MessageID, &m.MessageType,
 			&m.TextClean, &m.TextLength, &m.MediaType, &hasURL, &hasPrc, &hasCpn,
 			&price, &curr, &posted, &procAt,
-			&m.PriceOriginal, &m.PriceDiscount, &m.CouponCode, &m.PaymentMethod, &m.Shipping,
-			&m.Installments, &m.DiscountPct, &m.Merchant, &m.ProductName, &isDup,
+			&m.PriceOriginal, &m.PriceDiscount, &m.CouponCode, &couponCodesText, &m.PaymentMethod, &m.Shipping,
+			&m.Installments, &m.DiscountPct, &modifiersText, &m.Merchant, &m.ProductName, &m.ProductNameConfidence,
+			&virtualCurrency, &webpageURL, &webpageTitle, &webpageDesc, &isPromo, &isDup,
 			&m.PhotoID, &shipFr, &instN, &instVal, &isRec,
 			&validFrom, &validUntil, &flash, &recPattern, &recGroup, &seasonal); err != nil {
 			return nil, apperrors.Wrap("processor", "scan_processed_message", err)
 		}
+		if m.CouponCodes, err = decodeCoupons(couponCodesText); err != nil {
+			return nil, apperrors.Wrap("processor", "decode_processed_message", fmt.Errorf("msg_id=%d: %w", m.MessageID, err))
+		}
+		if m.Modifiers, err = decodeModifiers(modifiersText); err != nil {
+			return nil, apperrors.Wrap("processor", "decode_processed_message", fmt.Errorf("msg_id=%d: %w", m.MessageID, err))
+		}
+		if m.VirtualCurrency, err = decodeVirtualCurrency(virtualCurrency); err != nil {
+			return nil, apperrors.Wrap("processor", "decode_processed_message", fmt.Errorf("msg_id=%d: %w", m.MessageID, err))
+		}
+		m.WebpageURL = nullStringValue(webpageURL)
+		m.WebpageTitle = nullStringValue(webpageTitle)
+		m.WebpageDesc = nullStringValue(webpageDesc)
 		m.HasURL = hasURL != 0
 		m.HasPrice = hasPrc != 0
 		m.HasCoupon = hasCpn != 0
+		m.IsPromotional = isPromo != 0
 		m.IsDuplicate = isDup != 0
 		m.ShippingFree = shipFr != 0
 		m.IsRecurring = isRec != 0
@@ -397,6 +531,9 @@ func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channel
 			m.InstallmentsValue = instVal.Int64
 		}
 		m.Url = processedURLRegex.FindString(m.TextClean)
+		if m.Url == "" {
+			m.Url = m.WebpageURL
+		}
 		if price.Valid {
 			m.PriceAmount = price.Int64
 		}

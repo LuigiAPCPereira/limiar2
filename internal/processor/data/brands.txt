@@ -1,0 +1,33 @@
+# Marcas frequentes no corpus de promoções brasileiro.
+Anker
+Apple
+HyperX
+Samsung
+Motorola
+LG
+Sony
+Xiaomi
+JBL
+Logitech
+Acer
+Lenovo
+Dell
+ASUS
+Intel
+AMD
+Nike
+Adidas
+Mondial
+Elgin
+Philips
+Electrolux
+Consul
+Brastemp
+Midea
+TCL
+AOC
+Soundcore
+Mercado Livre
+Amazon
+Shopee
+Magalu

@@ -196,6 +196,7 @@ func reprocessSingle(
 		return 0, 1, nil
 	}
 	nm.MessageType = string(processor.Classify(nm))
+	nm.IsPromotional = processor.IsPromotionalMessageType(nm.MessageType)
 
 	if err := procRepo.SaveProcessed(ctx, nm); err != nil {
 		presenter.Step(fmt.Sprintf("❌ Falha ao salvar msg %d: %v", rawID, err))
@@ -281,6 +282,7 @@ func reprocessByQuery(
 				continue
 			}
 			nm.MessageType = string(processor.Classify(nm))
+			nm.IsPromotional = processor.IsPromotionalMessageType(nm.MessageType)
 			normalized = append(normalized, nm)
 		}
 
