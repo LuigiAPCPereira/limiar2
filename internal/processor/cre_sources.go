@@ -30,12 +30,30 @@ func textHeuristicCandidates(text string) []Candidate {
 		return candidates
 	}
 
-	candidates = appendProductNameTextCandidate(candidates, lines[0], "line:0", 0.30)
-	if len(lines) > 1 {
-		candidates = appendProductNameTextCandidate(candidates, lines[0]+" "+lines[1], "line:0-1", 0.20)
+	// Linhas de conteúdo = linhas não-meta, na ordem original.
+	// Candidatos são gerados a partir dessas linhas, não das linhas cruas.
+	contentLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if isMetaOnlyProductNameCandidate(line) {
+			continue
+		}
+		contentLines = append(contentLines, line)
 	}
+	if len(contentLines) == 0 {
+		return candidates
+	}
+
+	candidates = appendProductNameTextCandidate(candidates, contentLines[0], "line:0", 0.30)
+	if len(contentLines) > 1 {
+		candidates = appendProductNameTextCandidate(candidates, contentLines[0]+" "+contentLines[1], "line:0-1", 0.20)
+	}
+
+	// near_price: a linha imediatamente antes do preço, se for uma linha de conteúdo.
 	if priceLine := productNamePriceLine(lines); priceLine > 0 {
-		candidates = appendProductNameTextCandidate(candidates, lines[priceLine-1], "near_price", 0.25)
+		nearLine := lines[priceLine-1]
+		if !isMetaOnlyProductNameCandidate(nearLine) {
+			candidates = appendProductNameTextCandidate(candidates, nearLine, "near_price", 0.25)
+		}
 	}
 
 	return candidates

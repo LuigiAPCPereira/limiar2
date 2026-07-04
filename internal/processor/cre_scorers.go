@@ -89,6 +89,31 @@ func scoreMetaPenalty(c Candidate, _ *NormalizedMessage) float64 {
 	return 0
 }
 
+// scoreNarrativePenalty penaliza "hooks narrativos" — frases coloquiais que
+// canais postam antes do nome real do produto ("Melhor que sua cadeira da Skol",
+// "37 Conto Cada Oversidez da Hering", "Pra deixar a despensa no capricho").
+// Essas linhas não contêm promoção explícita (logo escapam do scoreMetaPenalty),
+// mas também não contêm marca, specs técnicas nem Title Case consistentes.
+// A ausência de TODOS esses sinais positivos é um anti-sinal forte.
+func scoreNarrativePenalty(c Candidate, msg *NormalizedMessage) float64 {
+	// Só avalia candidatos de texto (webpage title é confiável por origem).
+	if c.Source != productNameSourceTextHeuristic {
+		return 0
+	}
+	hasBrand := scoreBrandMatch(c, msg) > 0
+	hasTech := scoreTechDensity(c, msg) > 0
+	hasCaps := scoreCapitalization(c, msg) > 0
+	// Se tem pelo menos um sinal positivo forte, não penaliza.
+	if hasBrand || hasTech {
+		return 0
+	}
+	// Sem marca, sem tech, sem caps consistentes → provável hook narrativo.
+	if !hasCaps {
+		return -0.10
+	}
+	return 0
+}
+
 func productNameWords(text string) []string {
 	fields := strings.FieldsFunc(text, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)

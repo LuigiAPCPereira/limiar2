@@ -8,10 +8,17 @@ import (
 
 var reProductNameSKUTrailing = regexp.MustCompile(`\s*[-–—|]\s*[A-Z0-9]{3,}(?:-[A-Z0-9]+)+\s*$`)
 
+// reProductNamePriceTrailing remove preços/cupons que vazam para o nome do
+// produto quando a fonte é uma única linha ("Kit ... - R$55 pix", "... Cupom: XPTO").
+var reProductNamePriceTrailing = regexp.MustCompile(`(?i)\s*[-–—|•·:]\s*(?:por[:\s]*)?R?\$\s*\d+(?:[.,]\d+)?(?:\s*/\s*\d+x)?(?:\s+pix)?\s*$`)
+var reProductNameCouponTrailing = regexp.MustCompile(`(?i)\s*[-–—|•·:]\s*(?:cupom[:\s]*)?[A-Z0-9]{3,}(?:\s*\+\s*[A-Z0-9]{3,})?\s*$`)
+
 func normalizeProductName(name string) string {
 	name = cleanCandidateLine(name)
 	name = removeProductNameMerchantSuffix(name)
 	name = removeProductNameSKUTrailing(name)
+	name = removeProductNamePriceTrailing(name)
+	name = removeProductNameCouponTrailing(name)
 	name = removeProductNamePromoNoise(name)
 	name = cleanProductNameDelimiters(name)
 	if isAllCapsProductName(name) {
@@ -29,6 +36,14 @@ func removeProductNameMerchantSuffix(name string) string {
 
 func removeProductNameSKUTrailing(name string) string {
 	return strings.TrimSpace(reProductNameSKUTrailing.ReplaceAllString(name, ""))
+}
+
+func removeProductNamePriceTrailing(name string) string {
+	return strings.TrimSpace(reProductNamePriceTrailing.ReplaceAllString(name, ""))
+}
+
+func removeProductNameCouponTrailing(name string) string {
+	return strings.TrimSpace(reProductNameCouponTrailing.ReplaceAllString(name, ""))
 }
 
 func removeProductNamePromoNoise(name string) string {

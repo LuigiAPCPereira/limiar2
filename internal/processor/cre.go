@@ -51,6 +51,7 @@ func scoreProductNameCandidate(c Candidate, msg *NormalizedMessage) float64 {
 	score += scoreBrandMatch(c, msg)
 	score += scoreProximity(c, msg)
 	score += scoreMetaPenalty(c, msg)
+	score += scoreNarrativePenalty(c, msg)
 	return clampProductNameScore(score)
 }
 
