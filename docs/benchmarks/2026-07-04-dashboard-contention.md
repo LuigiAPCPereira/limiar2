@@ -349,6 +349,83 @@ RSS max: 901 MB
 Status codes: 200=313
 ```
 
+### Channels isolado
+
+```text
+Reprocess duration: 2m57.667s
+Processed: 36672
+Failures: 0
+Throughput: 206.4 msg/s
+HTTP requests: 289
+HTTP errors: 1
+HTTP p50: 81ms
+HTTP p95: 523ms
+HTTP max: 1.449s
+Slowest endpoint: /api/channels
+RSS max: 132 MB
+Status codes: 200=288
+```
+
+### Healthz isolado
+
+Primeira execução:
+
+```text
+Reprocess duration: 2m49.354s
+Processed: 36672
+Failures: 0
+Throughput: 216.5 msg/s
+HTTP requests: 323
+HTTP errors: 1
+HTTP p50: 85ms
+HTTP p95: 245ms
+HTTP max: 1.061s
+Slowest endpoint: /healthz
+RSS max: 889 MB
+Status codes: 200=322
+```
+
+Segunda execução:
+
+```text
+Reprocess duration: 2m57.184s
+Processed: 36672
+Failures: 0
+Throughput: 207.0 msg/s
+HTTP requests: 291
+HTTP errors: 0
+HTTP p50: 86ms
+HTTP p95: 368ms
+HTTP max: 1.49s
+Slowest endpoint: /healthz
+RSS max: 952 MB
+Status codes: 200=291
+```
+
+Baseline repetido após os testes de endpoints:
+
+```text
+Reprocess duration: 2m33.801s
+Processed: 36672
+Failures: 0
+Throughput: 238.4 msg/s
+RSS max: 64 MB
+```
+
+Comparação adicional:
+
+| Scenario | Reprocess | Throughput | HTTP req | HTTP err | HTTP p95 | HTTP max | RSS max |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| baseline repetido | 2m33.801s | 238.4 msg/s | 0 | 0 | 0s | 0s | 64 MB |
+| channels isolado | 2m57.667s | 206.4 msg/s | 289 | 1 | 523ms | 1.449s | 132 MB |
+| healthz isolado #1 | 2m49.354s | 216.5 msg/s | 323 | 1 | 245ms | 1.061s | 889 MB |
+| healthz isolado #2 | 2m57.184s | 207.0 msg/s | 291 | 0 | 368ms | 1.49s | 952 MB |
+
+Interpretação: o RSS alto reproduziu com `/healthz`, enquanto o baseline repetido
+continuou em 64 MB. Isso reduz a suspeita sobre `/api/channels` e aponta para o
+`CountRawMessages` executado por `/healthz` como o menor reprodutor observado do
+pico de RSS.
+
 Comparação isolada expandida:
 
 | Scenario | Reprocess | Throughput | HTTP req | HTTP err | HTTP p95 | HTTP max | RSS max | Delta vs baseline isolado |
@@ -359,14 +436,16 @@ Comparação isolada expandida:
 | light c1 isolado #1 | 2m50.236s | 215.4 msg/s | 302 | 0 | 302ms | 1.385s | 1002 MB | +1.7% |
 | stats c1 isolado | 2m41.155s | 227.6 msg/s | 316 | 0 | 302ms | 1.423s | 646 MB | -3.8% |
 | light c1 isolado #2 | 2m55.213s | 209.3 msg/s | 313 | 0 | 254ms | 1.493s | 901 MB | +4.6% |
+| channels isolado | 2m57.667s | 206.4 msg/s | 289 | 1 | 523ms | 1.449s | 132 MB | +6.1% |
+| healthz isolado #1 | 2m49.354s | 216.5 msg/s | 323 | 1 | 245ms | 1.061s | 889 MB | +1.1% |
+| healthz isolado #2 | 2m57.184s | 207.0 msg/s | 291 | 0 | 368ms | 1.49s | 952 MB | +5.8% |
 
 Interpretação adicional: aumentar `heavy` de concorrência 1 para 4 não degradou
 materialmente o throughput do reprocessamento e não gerou erros HTTP. A anomalia
-nova é memória: `light` isolado reproduziu RSS alto em duas execuções (1002 MB e
-901 MB), e `stats` isolado também atingiu RSS alto (646 MB), apesar de baixo
-impacto em wall time. Isso aponta para investigação específica de alocação/memória
-em endpoints de agregação/leitura leve, especialmente `/api/processed/stats` e
-`/api/channels`, e não para contenção forte de throughput.
+principal é memória: `healthz` reproduziu RSS alto em duas execuções (889 MB e
+952 MB), enquanto baseline repetido permaneceu em 64 MB. Como `/healthz` executa
+`CountRawMessages`, este é o menor reprodutor observado do pico de RSS. `channels`
+não reproduziu RSS alto (132 MB), mas teve p95 maior e 1 erro HTTP.
 
 ## Conclusão
 
@@ -383,25 +462,30 @@ atual é mais conservadora:
   nas duas execuções), mas atingiu RSS máximo muito alto (1002 MB e 901 MB);
 - `stats` isolado atingiu RSS alto (646 MB), mesmo com throughput maior que o
   baseline observado;
+- `healthz` isolado reproduziu RSS alto (889 MB e 952 MB), tornando
+  `CountRawMessages` o menor reprodutor conhecido;
+- `channels` isolado não reproduziu RSS alto (132 MB), mas ainda adicionou alguma
+  latência/erro HTTP;
 - a rodada `all` continua útil como alerta de que execução sequencial no mesmo
   processo pode distorcer RSS e latência, mas não deve ser usada sozinha para
   decidir arquitetura.
 
 A decisão do ADR 015 ainda deve considerar tráfego real do frontend e separação
 operacional, mas estes benchmarks isolados não provam contenção severa de
-throughput até concorrência 4. O risco mais claro agora é memória/RSS em endpoints
-de agregação/leitura leve: `/api/processed/stats` e possivelmente `/api/channels`.
+throughput até concorrência 4. O risco mais claro agora é memória/RSS associado a
+queries de contagem/agregação repetidas durante o reprocessamento, começando por
+`CountRawMessages` em `/healthz`.
 
 ## Próximas medições recomendadas
 
-1. Rodar `channels` isolado para verificar se `/api/channels` explica a diferença
-   entre `stats` (646 MB) e `light` (901–1002 MB).
-2. Rodar `healthz` isolado para confirmar o custo mínimo de endpoint que só faz
-   `CountRawMessages`.
-3. Se RSS alto reproduzir em `stats` ou `channels`, investigar alocação/memória
-   dos handlers e queries agregadas antes de qualquer otimização de throughput.
-4. Repetir `heavy` com concorrência maior apenas se o frontend esperado justificar
-   carga acima de 4 workers locais.
+1. Investigar memória/RSS de `CountRawMessages` sob carga concorrente com
+   reprocessamento; `/healthz` é o menor reprodutor observado.
+2. Confirmar se `CountRawMessages` em Tursogo faz scan/aloca/cacheia páginas de
+   forma proporcional ao tamanho de `raw_messages`.
+3. Só depois considerar mitigação, por exemplo remover contagem de `/healthz` ou
+   cachear esse valor fora do hot path.
+4. Não otimizar throughput ainda: os benchmarks isolados não mostram gargalo de
+   throughput até concorrência 4.
 
 Comandos sugeridos:
 
