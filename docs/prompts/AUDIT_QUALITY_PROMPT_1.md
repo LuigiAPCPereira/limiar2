@@ -52,6 +52,19 @@ Se qualquer skill não estiver disponível, REGISTRE isso e pare.
    - Funções com 4+ níveis de aninhamento
    - Funções que fazem 3+ coisas distintas
 
+4. **Memory leak, GC e alocações**
+   - Variáveis/structs que crescem indefinidamente sem cleanup (ex: maps, slices, caches sem TTL)
+   - Goroutines sem exit path claro (goroutine leak → memory leak + CPU)
+   - Alocações desnecessárias em hot path (loop com append sem pre-allocate, string concat em loop)
+   - `sync.Pool` mal usado ou ausente para objetos caros
+   - `context.Context` não propagado em operações longas (impede GC de request scope)
+   - `defer` dentro de loops longos sem closure (acumula deferred calls)
+   - Pointers retidos desnecessariamente (ex: struct grande guardada quando só precisa de campo)
+   - Caches sem TTL ou eviction policy (`photo_cache` tem TTL — verificar se roda)
+   - `runtime.SetFinalizer` usado incorretamente
+   - Objetos grandes passados por valor em vez de ponteiro
+   - Slices/arrays copiados desnecessariamente (`copy` vs re-slice)
+
 4. **Edge cases não tratados**
    - Erros swallowed com `_ =`
    - `panic()` em código de produção (só permitido no recover do dispatcher)

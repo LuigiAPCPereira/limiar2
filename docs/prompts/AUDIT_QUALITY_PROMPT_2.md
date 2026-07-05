@@ -110,6 +110,20 @@ Se qualquer skill não estiver disponível, REGISTRE e pare.
 - Elimine queries N+1.
 - Use prepared statements para escritas recorrentes (AGENTS.md §13.7).
 
+### Memory leak, GC e alocações
+
+- **Nunca deixe goroutines sem exit path**: todo `go func()` precisa de condição de saída clara (context.Context ou canal fechado). Goroutine leak = memory leak + CPU leak.
+- **Limpe maps/slices que crescem**: caches devem ter TTL e eviction. `photo_cache` tem TTL de 30 dias — garanta que `CleanExpiredPhotoCache` roda periodicamente no run loop.
+- **Pre-aloque slices em hot path**: `make([]T, 0, knownSize)` evita realocações.
+- **Use `strings.Builder`** para concatenação de strings em loops (já prática no projeto).
+- **Evite `defer` em loops longos sem closure**: `defer` acumula chamadas. Use função auxiliar ou mova o defer pra fora do loop.
+- **Não retenha structs grandes desnecessariamente**: se só precisa de um campo, passe o campo, não a struct inteira. Passar por ponteiro se a struct for grande.
+- **Evite copiar slices desnecessariamente**: `copy(dst, src)` ou re-slice `s[i:j]` em vez de `append` criando cópia.
+- **`sync.Pool` só para objetos caros**: objetos pequenos/criados frequentemente em hot path podem usar pool. Objetos simples não.
+- **`context.Context` em operações longas**: permite GC de request scope quando ojects tied ao request quando o context cancela.
+- **Feche resources explicitamente**: `io.Closer` (DB connections, HTTP responses, files) — use `defer` fora de loops.
+- **Evite `runtime.SetFinalizer`**: raramente necessário e fácil de usar errado. Prefira cleanup explícito.
+
 ### CLI UX (apenas internal/cli/)
 
 - Use cores via `lipgloss` SE já estiver no projeto. Senão, use ANSI codes
@@ -136,6 +150,21 @@ Todas precisam passar. Se uma correção quebrar testes, você tem duas opções
 2. Sua correção está errada → reverta e reporte o bloqueador.
 
 Build não deve conter imports de `sqlite`, `mattn`, `gorm`.
+
+## Verificação de memory/GC
+
+Após implementar, execute estas verificações adicionais:
+
+```sh
+# Teste de leak de goroutine (deve completar sem travar)
+go test -race -run TestNoGoroutineLeak ./... 2>&1 | head -20
+
+# Verificação de alocações em hot path (se houver benchmarks)
+go test -bench=BenchmarkNormalize -benchmem ./internal/processor/... 2>&1 | grep -E "Benchmark|allocs|bytes"
+
+# Verificação de GC: execute reprocessamento completo e monitore RSS
+# RSS não deve crescer linearmente com o número de mensagens processadas
+```
 
 ## Verificação de invariantes
 
