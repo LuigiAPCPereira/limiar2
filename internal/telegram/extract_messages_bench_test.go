@@ -12,7 +12,7 @@ var testExtractMessagesUpdate = &tg.MessagesChannelMessages{
 }
 
 func init() {
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		testExtractMessagesUpdate.Messages[i] = &tg.Message{
 			ID:      i,
 			Date:    int(time.Now().Unix()),

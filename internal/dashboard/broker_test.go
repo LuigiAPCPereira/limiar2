@@ -93,7 +93,7 @@ func TestBroker_Publish_NonBlocking_FullBuffer(t *testing.T) {
 	ch, _ := broker.Subscribe()
 
 	// Fill the buffer
-	for i := 0; i < clientBuffer; i++ {
+	for i := range clientBuffer {
 		broker.Publish(Event{Type: "fill", Data: []byte{byte(i)}})
 	}
 
@@ -101,7 +101,7 @@ func TestBroker_Publish_NonBlocking_FullBuffer(t *testing.T) {
 	broker.Publish(Event{Type: "dropped", Data: []byte("dropped data")})
 
 	// Verify we can read exactly clientBuffer events
-	for i := 0; i < clientBuffer; i++ {
+	for i := range clientBuffer {
 		select {
 		case ev := <-ch:
 			if ev.Type != "fill" || ev.Data[0] != byte(i) {

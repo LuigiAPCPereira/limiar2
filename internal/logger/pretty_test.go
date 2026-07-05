@@ -55,10 +55,10 @@ func TestPrettyConcurrency(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < messagesPerGoroutine; i++ {
+			for i := range messagesPerGoroutine {
 				l.Info("mensagem_concorrente", "goroutine", id, "iteracao", i)
 			}
 		}(g)
@@ -67,8 +67,8 @@ func TestPrettyConcurrency(t *testing.T) {
 
 	out := buf.String()
 	// Verificar que cada registro contém a mensagem completa (não entrelaçada)
-	lines := strings.Split(out, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(out, "\n")
+	for line := range lines {
 		if line == "" {
 			continue
 		}

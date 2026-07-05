@@ -10,8 +10,8 @@ import (
 	gotdsession "github.com/gotd/td/session"
 	"pgregory.net/rapid"
 
-	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/model"
+	"github.com/limiar/collector/internal/storage"
 	"github.com/limiar/collector/internal/telegram"
 )
 
@@ -124,23 +124,23 @@ func TestPeerStoreFlushAndLoad(t *testing.T) {
 func TestPeerStoreConcurrentAccess(t *testing.T) {
 	ps := telegram.NewPeerStore(newRepo(t), nil)
 	done := make(chan struct{})
-	for w := 0; w < 4; w++ {
+	for w := range 4 {
 		go func(base int64) {
-			for i := int64(0); i < 200; i++ {
+			for i := range int64(200) {
 				ps.Set(&model.Peer{ID: base*1000 + i, AccessHash: i, Type: "channel"})
 			}
 			done <- struct{}{}
 		}(int64(w))
 	}
-	for r := 0; r < 4; r++ {
+	for range 4 {
 		go func() {
-			for i := 0; i < 200; i++ {
+			for i := range 200 {
 				_, _ = ps.Get(int64(i))
 			}
 			done <- struct{}{}
 		}()
 	}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		<-done
 	}
 }

@@ -192,10 +192,7 @@ func extractPrices(text string, nm *NormalizedMessage) {
 			nm.PriceOriginal = parseBRL(origRaw)
 			nm.PriceAmount = parseBRL(finalRaw)
 			if nm.PriceOriginal > 0 && nm.PriceAmount > 0 {
-				nm.PriceDiscount = int(math.Round((1.0 - float64(nm.PriceAmount)/float64(nm.PriceOriginal)) * 100))
-				if nm.PriceDiscount < 0 {
-					nm.PriceDiscount = 0
-				}
+				nm.PriceDiscount = max(int(math.Round((1.0-float64(nm.PriceAmount)/float64(nm.PriceOriginal))*100)), 0)
 			}
 			return
 		}

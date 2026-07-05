@@ -61,7 +61,7 @@ func textHeuristicCandidates(text string) []Candidate {
 
 func splitProductNameLines(text string) []string {
 	lines := []string{}
-	for _, raw := range strings.Split(text, "\n") {
+	for raw := range strings.SplitSeq(text, "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" {
 			continue

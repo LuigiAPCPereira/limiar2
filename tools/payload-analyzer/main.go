@@ -140,7 +140,7 @@ func analyzePayloads(messages []RawMessage) {
 			continue
 		}
 
-		var payload interface{}
+		var payload any
 		err := json.Unmarshal([]byte(msg.Payload), &payload)
 		if err != nil {
 			invalidJSON++
@@ -152,7 +152,7 @@ func analyzePayloads(messages []RawMessage) {
 		typeCounts[typeName]++
 
 		// Analisa a estrutura se for um mapa (map)
-		if m, ok := payload.(map[string]interface{}); ok {
+		if m, ok := payload.(map[string]any); ok {
 			for k, v := range m {
 				topLevelKeys[k]++
 
@@ -167,7 +167,7 @@ func analyzePayloads(messages []RawMessage) {
 				fieldTypes[k][typeName] = true
 
 				// Analisa objetos aninhados (nested objects)
-				if nested, ok := v.(map[string]interface{}); ok {
+				if nested, ok := v.(map[string]any); ok {
 					if nestedStructures[k] == nil {
 						nestedStructures[k] = make(map[string]int)
 					}

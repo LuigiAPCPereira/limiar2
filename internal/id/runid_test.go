@@ -21,7 +21,7 @@ func TestNewRunID_IsHex(t *testing.T) {
 
 func TestNewRunID_Unique(t *testing.T) {
 	seen := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		id := NewRunID()
 		if seen[id] {
 			t.Fatalf("NewRunID() produced duplicate ID %q on iteration %d", id, i)

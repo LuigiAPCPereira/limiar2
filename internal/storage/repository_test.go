@@ -201,7 +201,7 @@ func TestProperty1SessionRoundTrip(t *testing.T) {
 func TestProperty2SessionSingleRow(t *testing.T) {
 	repo := newTestRepo(t)
 	ctx := context.Background()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := repo.SaveSession(ctx, []byte{byte(i)}); err != nil {
 			t.Fatalf("SaveSession #%d: %v", i, err)
 		}
@@ -326,7 +326,7 @@ func TestSaveRawMessageDedupsByChannelAndMessageID(t *testing.T) {
 	}
 	msg := &model.RawMessage{ChannelID: 101, MessageID: 7, Payload: []byte(`{}`), ReceivedAt: time.Now().UTC(), SchemaVersion: 1}
 	insertedFlags := make([]bool, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		inserted, err := repo.SaveRawMessage(ctx, msg)
 		if err != nil {
 			t.Fatalf("SaveRawMessage #%d: %v", i, err)

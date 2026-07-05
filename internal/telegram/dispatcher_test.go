@@ -31,7 +31,6 @@ func (panicHandler) HandleUpdate(_ context.Context, _ telegram.Update) error {
 	panic("boom")
 }
 
-
 func TestDispatcherFansOutToAllHandlers(t *testing.T) {
 	d := telegram.NewDispatcher(256, nil)
 	h1 := &countingHandler{got: make(chan struct{}, 10)}
@@ -39,8 +38,7 @@ func TestDispatcherFansOutToAllHandlers(t *testing.T) {
 	d.Register(h1)
 	d.Register(h2)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	d.Start(ctx)
 
 	d.Dispatch(ctx, telegram.Update{ChannelID: 1, MessageID: 1, Payload: []byte(`{}`)})
@@ -58,12 +56,11 @@ func TestDispatcherDeliversManyUpdates(t *testing.T) {
 	d := telegram.NewDispatcher(512, nil) // buffer > n para evitar descarte no envio não bloqueante
 	h := &countingHandler{got: make(chan struct{}, 1000)}
 	d.Register(h)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	d.Start(ctx)
 
 	const n = 500
-	for i := 0; i < n; i++ {
+	for range n {
 		d.Dispatch(ctx, telegram.Update{Payload: []byte(`{}`)})
 	}
 	waitN(t, h.got, n)
@@ -80,8 +77,7 @@ func TestDispatcherRecoversFromHandlerPanic(t *testing.T) {
 	d.Register(panicHandler{})
 	d.Register(good)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	d.Start(ctx)
 
 	d.Dispatch(ctx, telegram.Update{Payload: []byte(`{}`)})
@@ -108,19 +104,16 @@ func TestDispatcherConcurrentDispatch(t *testing.T) {
 	d := telegram.NewDispatcher(1024, nil) // buffer > 4*250 para evitar descarte no envio não bloqueante
 	h := &countingHandler{got: make(chan struct{}, 4000)}
 	d.Register(h)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	d.Start(ctx)
 
 	var wg sync.WaitGroup
-	for p := 0; p < 4; p++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < 250; i++ {
+	for range 4 {
+		wg.Go(func() {
+			for range 250 {
 				d.Dispatch(ctx, telegram.Update{Payload: []byte(`{}`)})
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	waitN(t, h.got, 1000)
@@ -131,7 +124,7 @@ func TestDispatcherConcurrentDispatch(t *testing.T) {
 func waitN(t *testing.T, ch <-chan struct{}, n int) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		select {
 		case <-ch:
 		case <-deadline:

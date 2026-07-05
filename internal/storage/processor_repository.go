@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	apperrors "github.com/limiar/collector/internal/errors"
@@ -150,10 +151,7 @@ func (r *ProcessorRepository) CountUnprocessed(ctx context.Context) (int64, erro
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM processed_messages`).Scan(&procCount); err != nil {
 		return 0, apperrors.Wrap("processor", "count_processed", err)
 	}
-	n := rawCount - procCount
-	if n < 0 {
-		n = 0
-	}
+	n := max(rawCount-procCount, 0)
 	return n, nil
 }
 
@@ -306,19 +304,20 @@ func (r *ProcessorRepository) CrossChannelDuplicates(ctx context.Context, pairs 
 
 	// Constrói query: SELECT DISTINCT url_hash FROM processed_messages
 	//   WHERE (url_hash = ? AND channel_id != ?) OR (url_hash = ? AND channel_id != ?) ...
-	args := make([]interface{}, 0, len(pairs)*2)
-	query := "SELECT DISTINCT url_hash FROM processed_messages WHERE "
+	args := make([]any, 0, len(pairs)*2)
+	var query strings.Builder
+	query.WriteString("SELECT DISTINCT url_hash FROM processed_messages WHERE ")
 	first := true
 	for hash, channelID := range pairs {
 		if !first {
-			query += " OR "
+			query.WriteString(" OR ")
 		}
-		query += "(url_hash = ? AND channel_id != ?)"
+		query.WriteString("(url_hash = ? AND channel_id != ?)")
 		args = append(args, hash, channelID)
 		first = false
 	}
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, query.String(), args...)
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "cross_channel_duplicates", err)
 	}
@@ -416,7 +415,8 @@ func nullStringValue(raw sql.NullString) string {
 // ListProcessedMessages retorna mensagens processadas com paginação e filtro
 // opcional por tipo e canal. Resultados ordenados por posted_at DESC.
 func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channelID int64, msgType string, limit, offset int) ([]*model.ProcessedMessage, error) {
-	query := `SELECT id, raw_message_id, channel_id, message_id, message_type,
+	var query strings.Builder
+	query.WriteString(`SELECT id, raw_message_id, channel_id, message_id, message_type,
 		text_clean, text_length, media_type, has_url, has_price, has_coupon,
 		price_amount, price_currency, posted_at, processed_at,
 		price_original, price_discount, coupon_code, coupon_codes, payment_method, shipping,
@@ -424,7 +424,7 @@ func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channel
 		virtual_currency, webpage_url, webpage_title, webpage_desc, is_promotional, is_duplicate,
 		photo_id, shipping_free, installments_n, installments_value, is_recurring,
 		valid_from, valid_until, flash, recurrence_pattern, recurrence_group_id, seasonal_tag
-		FROM processed_messages`
+		FROM processed_messages`)
 	var conditions []string
 	args := []any{}
 
@@ -437,15 +437,15 @@ func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channel
 		args = append(args, msgType)
 	}
 	if len(conditions) > 0 {
-		query += " WHERE " + conditions[0]
+		query.WriteString(" WHERE " + conditions[0])
 		for _, c := range conditions[1:] {
-			query += " AND " + c // #nosec G202 — conditions are hardcoded column names, values use ?
+			query.WriteString(" AND " + c) // #nosec G202 — conditions are hardcoded column names, values use ?
 		}
 	}
-	query += " ORDER BY posted_at DESC LIMIT ? OFFSET ?"
+	query.WriteString(" ORDER BY posted_at DESC LIMIT ? OFFSET ?")
 	args = append(args, limit, offset)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, query.String(), args...)
 	if err != nil {
 		return nil, apperrors.Wrap("processor", "list_processed_messages", err)
 	}

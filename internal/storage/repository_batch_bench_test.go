@@ -53,7 +53,7 @@ func makeBenchMessages(n int, channelID int64) []*model.RawMessage {
 	msgs := make([]*model.RawMessage, n)
 	payload := []byte(`{"_":"updateNewMessage","message":{"_":"message","id":0,"peer_id":{"_":"peerChannel","channel_id":` +
 		fmt.Sprintf("%d", channelID) + `},"message":"oferta relâmpago produto X https://t.me/canal","date":1700000000}}`)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		msgs[i] = &model.RawMessage{
 			ChannelID:     channelID,
 			MessageID:     int64(i + 1),

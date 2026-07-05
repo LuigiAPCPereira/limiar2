@@ -81,8 +81,6 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-
-
 func loadDotEnv() error {
 	data, err := os.ReadFile(".env")
 	if err != nil {
@@ -91,7 +89,7 @@ func loadDotEnv() error {
 		}
 		return err
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue

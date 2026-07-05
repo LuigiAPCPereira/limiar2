@@ -38,8 +38,8 @@ type ProcessedMessage struct {
 	InstallmentsN         int              `json:"installments_n"`
 	InstallmentsValue     int64            `json:"installments_value"`
 	IsRecurring           bool             `json:"is_recurring"`
-	ValidFrom             time.Time        `json:"valid_from,omitempty"`
-	ValidUntil            time.Time        `json:"valid_until,omitempty"`
+	ValidFrom             time.Time        `json:"valid_from,omitzero"`
+	ValidUntil            time.Time        `json:"valid_until,omitzero"`
 	Flash                 bool             `json:"flash"`
 	RecurrencePattern     string           `json:"recurrence_pattern,omitempty"`
 	RecurrenceGroupID     int64            `json:"recurrence_group_id,omitempty"`

@@ -105,7 +105,7 @@ func indexOfBytes(haystack []byte, needle string) bool {
 	}
 	for i := 0; i+len(n) <= len(haystack); i++ {
 		match := true
-		for j := 0; j < len(n); j++ {
+		for j := range n {
 			if haystack[i+j] != n[j] {
 				match = false
 				break

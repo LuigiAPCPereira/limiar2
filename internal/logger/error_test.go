@@ -24,7 +24,7 @@ func TestProperty10_ErrorChainPreservation(t *testing.T) {
 		baseErr := errors.New("causa_raiz")
 		err := baseErr
 		layers := []string{"causa_raiz"}
-		for i := 0; i < depth; i++ {
+		for i := range depth {
 			layer := fmt.Sprintf("camada%d", i)
 			op := fmt.Sprintf("op%d", i)
 			err = fmt.Errorf("%s: %s: %w", layer, op, err)

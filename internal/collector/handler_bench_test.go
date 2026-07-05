@@ -1,7 +1,6 @@
 package collector
 
 import (
-	"context"
 	"testing"
 
 	"github.com/limiar/collector/internal/logger"
@@ -12,8 +11,7 @@ import (
 // IsInfoEnabled() evitando alocações variádicas quando o logger é NopLogger.
 func BenchmarkHandleUpdate(b *testing.B) {
 	writeCh := make(chan WriteJob, 128)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := b.Context()
 
 	// Drena o canal em background para não bloquear o benchmark.
 	go func() {

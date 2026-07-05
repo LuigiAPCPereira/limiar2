@@ -21,14 +21,14 @@ import (
 )
 
 var (
-	reURL     = regexp.MustCompile(`https?://[^\s<>"'\)]+`)
-	reASIN    = regexp.MustCompile(`/dp/([A-Z0-9]{10})`)
-	reShopee  = regexp.MustCompile(`shopee\.com\.br`)
-	reAmazon  = regexp.MustCompile(`amazon\.com\.br`)
-	reKabum   = regexp.MustCompile(`kabum\.com\.br`)
-	reMagalu  = regexp.MustCompile(`magazineluiza\.com\.br`)
-	reML      = regexp.MustCompile(`mercadolivre\.com\.br`)
-	reAliExp  = regexp.MustCompile(`aliexpress\.com`)
+	reURL    = regexp.MustCompile(`https?://[^\s<>"'\)]+`)
+	reASIN   = regexp.MustCompile(`/dp/([A-Z0-9]{10})`)
+	reShopee = regexp.MustCompile(`shopee\.com\.br`)
+	reAmazon = regexp.MustCompile(`amazon\.com\.br`)
+	reKabum  = regexp.MustCompile(`kabum\.com\.br`)
+	reMagalu = regexp.MustCompile(`magazineluiza\.com\.br`)
+	reML     = regexp.MustCompile(`mercadolivre\.com\.br`)
+	reAliExp = regexp.MustCompile(`aliexpress\.com`)
 
 	trackingParams = []string{
 		"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
@@ -183,15 +183,13 @@ func resolveAll(urls []string, workers int) []result {
 	var idx int64
 
 	var wg sync.WaitGroup
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range workers {
+		wg.Go(func() {
 			for u := range jobs {
 				i := atomic.AddInt64(&idx, 1) - 1
 				results[i] = resolve(u)
 			}
-		}()
+		})
 	}
 
 	for _, u := range urls {

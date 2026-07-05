@@ -63,7 +63,7 @@ func TestCalculateBackoff(t *testing.T) {
 
 	t.Run("delay grows exponentially", func(t *testing.T) {
 		prev := time.Duration(0)
-		for attempt := 0; attempt < 4; attempt++ {
+		for attempt := range 4 {
 			delay, err := CalculateBackoff(attempt, cfg, rng)
 			if err != nil {
 				t.Fatalf("attempt %d: unexpected error: %v", attempt, err)

@@ -31,7 +31,7 @@ const (
 	defaultDashboardPort   = 8080
 	defaultPollInterval    = 5 * time.Second
 	defaultBatchSize       = 50
- )
+)
 
 // Limites de validação.
 const (
@@ -69,7 +69,7 @@ type Config struct {
 	// Processor
 	PollInterval time.Duration `mapstructure:"processor_poll_interval"`
 	BatchSize    int           `mapstructure:"processor_batch_size"`
- }
+}
 
 // Load lê as configurações das variáveis de ambiente com o prefixo LIMIAR_ e
 // opcionalmente de um arquivo .env no diretório atual para dentro do Config e aplica
@@ -134,7 +134,7 @@ func LoadDotEnv() error {
 		return err
 	}
 
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue

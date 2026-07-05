@@ -95,10 +95,10 @@ func TestCache_Concurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(base int) {
 			defer wg.Done()
-			for i := 0; i < opsPerGoroutine; i++ {
+			for i := range opsPerGoroutine {
 				id := int64(base*opsPerGoroutine + i)
 				c.Put(id, []byte{byte(id % 256)})
 				// Get no mesmo ID ou em outro aleatório.

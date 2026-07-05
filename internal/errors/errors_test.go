@@ -54,7 +54,7 @@ func TestProperty15WrapPreservesSentinelNLevels(t *testing.T) {
 		sentinel := sentinels[idx]
 
 		err := sentinel
-		for i := 0; i < levels; i++ {
+		for i := range levels {
 			layer := rapid.StringMatching(`[a-z]{1,8}`).Draw(t, fmt.Sprintf("layer%d", i))
 			op := rapid.StringMatching(`[a-z_]{1,8}`).Draw(t, fmt.Sprintf("op%d", i))
 			err = apperrors.Wrap(layer, op, err)
@@ -67,7 +67,7 @@ func TestProperty15WrapPreservesSentinelNLevels(t *testing.T) {
 }
 
 func TestSentinelsAreDistinct(t *testing.T) {
-	for i := 0; i < len(sentinels); i++ {
+	for i := range sentinels {
 		for j := i + 1; j < len(sentinels); j++ {
 			if stderrors.Is(sentinels[i], sentinels[j]) {
 				t.Fatalf("sentinels %d and %d are not distinct", i, j)

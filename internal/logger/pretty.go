@@ -197,11 +197,8 @@ func dottedKey(groups []string, key string) string {
 func padRightRunes(buf *bytes.Buffer, s string, width int) {
 	buf.WriteString(s)
 	n := utf8.RuneCountInString(s)
-	padding := width - n
-	if padding < 2 {
-		padding = 2
-	}
-	for i := 0; i < padding; i++ {
+	padding := max(width-n, 2)
+	for range padding {
 		buf.WriteByte(' ')
 	}
 }
