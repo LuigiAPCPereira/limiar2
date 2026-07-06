@@ -92,20 +92,20 @@ type httpMetricsSnapshot struct {
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if wantsHelp(args) {
-		fmt.Fprint(stdout, helpText())
+		_, _ = fmt.Fprint(stdout, helpText())
 		return nil
 	}
 
 	cfg, err := parseConfig(args)
 	if err != nil {
-		fmt.Fprint(stderr, helpText())
+		_, _ = fmt.Fprint(stderr, helpText())
 		return err
 	}
 
@@ -205,7 +205,7 @@ func runScenarioSetWithHook(
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, summarizeScenario(result, baseline))
+		_, _ = fmt.Fprintln(stdout, summarizeScenario(result, baseline))
 		results = append(results, result)
 		if name == "baseline" {
 			copyResult := result
@@ -213,7 +213,7 @@ func runScenarioSetWithHook(
 		}
 	}
 
-	fmt.Fprint(stdout, summarizeTable(results, baseline))
+	_, _ = fmt.Fprint(stdout, summarizeTable(results, baseline))
 	return nil
 }
 
