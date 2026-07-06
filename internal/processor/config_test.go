@@ -105,6 +105,22 @@ func TestConfig_Validate(t *testing.T) {
 	}
 }
 
+func TestConfig_URLResolverDefaultsAndValidation(t *testing.T) {
+	cfg := &Config{}
+	cfg.applyDefaults()
+	if cfg.ResolveURLs {
+		t.Fatal("ResolveURLs = true, want false by default")
+	}
+	if cfg.ResolveURLsLimit != 0 {
+		t.Fatalf("ResolveURLsLimit = %d, want 0", cfg.ResolveURLsLimit)
+	}
+
+	cfg.ResolveURLsLimit = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() with negative ResolveURLsLimit returned nil error")
+	}
+}
+
 func TestConfig_ApplyDefaults(t *testing.T) {
 	t.Run("empty config gets defaults", func(t *testing.T) {
 		c := &Config{}

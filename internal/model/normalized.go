@@ -77,6 +77,9 @@ type NormalizedMessage struct {
 	WebpageTitle          string           // Media.Webpage.Title
 	WebpageDesc           string           // Media.Webpage.Description
 	IsPromotional         bool             // deal_* → true
+	CanonicalURL          string           // URL canônica resolvida sem tracking/affiliate
+	URLTitle              string           // <title> HTML da URL resolvida
+	URLResolved           bool             // true quando a resolução HTTP/cache foi bem-sucedida
 	MessageType           string           // preenchido por Classify
 	Synthesis             string           // JSON serializado de SynthesizedPromotion
 	ShippingFree          bool             // frete grátis (boolean)

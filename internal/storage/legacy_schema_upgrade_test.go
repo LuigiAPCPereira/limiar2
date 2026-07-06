@@ -277,3 +277,41 @@ func TestOpenUpgradesLegacySchemaAddsProductNameConfidence(t *testing.T) {
 		t.Errorf("processed_messages.product_name_confidence missing after Open on legacy db")
 	}
 }
+
+func TestOpenUpgradesLegacySchemaAddsURLResolverFields(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "legacy-url-resolver.db")
+	createLegacyTursogoDB(t, dbPath)
+
+	dbRaw, err := sql.Open("turso", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open legacy raw: %v", err)
+	}
+	for _, col := range []string{"canonical_url", "url_title", "url_resolved"} {
+		if columnPresent(t, dbRaw, "processed_messages", col) {
+			_ = dbRaw.Close()
+			t.Fatalf("premissa violada: banco legado já possui %s", col)
+		}
+	}
+	if err := dbRaw.Close(); err != nil {
+		t.Fatalf("close raw legacy db: %v", err)
+	}
+
+	db, err := storage.Open(ctx, dbPath, nil)
+	if err != nil {
+		t.Fatalf("storage.Open on legacy db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	for _, col := range []string{"canonical_url", "url_title", "url_resolved"} {
+		if !columnPresent(t, db.DB(), "processed_messages", col) {
+			t.Errorf("processed_messages.%s missing after Open on legacy db", col)
+		}
+	}
+	var table string
+	if err := db.DB().QueryRowContext(ctx,
+		"SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+		"url_resolutions").Scan(&table); err != nil {
+		t.Fatalf("url_resolutions table missing after legacy Open: %v", err)
+	}
+}

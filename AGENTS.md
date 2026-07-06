@@ -758,6 +758,8 @@ Todas as variáveis são prefixadas com `LIMIAR_` e lidas de env + `.env` opcion
 | `LIMIAR_HISTORY_MAX_DAYS` | `30` | 1–365 |
 | `LIMIAR_PROCESSOR_POLL_INTERVAL` | `5s` | [1s, 5m] |
 | `LIMIAR_PROCESSOR_BATCH_SIZE` | `50` | 1–1000 |
+| `LIMIAR_PROCESSOR_RESOLVE_URLS` | `false` | `true`, `false` |
+| `LIMIAR_PROCESSOR_RESOLVE_URLS_LIMIT` | `0` | inteiro >= 0 (`0` = sem limite quando habilitado) |
 
 ---
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -37,11 +38,12 @@ func NewProcessorRepository(db *sql.DB) (*ProcessorRepository, error) {
 			payment_method, shipping, installments, discount_percent, modifiers,
 			url_hash, merchant, product_name, product_name_confidence, synthesis,
 			virtual_currency, webpage_url, webpage_title, webpage_desc, is_promotional,
+			canonical_url, url_title, url_resolved,
 			is_duplicate, feed_eligible,
 			photo_access_hash, photo_file_ref, photo_dcid, inline_thumb,
 			shipping_free, installments_n, installments_value, is_recurring,
 			valid_from, valid_until, flash, recurrence_pattern, recurrence_group_id, seasonal_tag
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(channel_id, message_id) DO UPDATE SET
 			message_type = excluded.message_type,
 			text_clean = excluded.text_clean,
@@ -77,6 +79,9 @@ func NewProcessorRepository(db *sql.DB) (*ProcessorRepository, error) {
 			webpage_title = excluded.webpage_title,
 			webpage_desc = excluded.webpage_desc,
 			is_promotional = excluded.is_promotional,
+			canonical_url = excluded.canonical_url,
+			url_title = excluded.url_title,
+			url_resolved = excluded.url_resolved,
 			is_duplicate = excluded.is_duplicate,
 			feed_eligible = excluded.feed_eligible,
 			photo_access_hash = excluded.photo_access_hash,
@@ -261,6 +266,9 @@ func processedInsertArgs(msg *model.NormalizedMessage) ([]any, error) {
 		msg.WebpageTitle,
 		msg.WebpageDesc,
 		model.BoolToInt(msg.IsPromotional),
+		msg.CanonicalURL,
+		msg.URLTitle,
+		model.BoolToInt(msg.URLResolved),
 		model.BoolToInt(msg.IsDuplicate),
 		model.BoolToInt(msg.FeedEligible),
 		msg.PhotoAccessHash,
@@ -292,6 +300,56 @@ func (r *ProcessorRepository) SaveProcessed(ctx context.Context, msg *model.Norm
 		return apperrors.Wrap("processor", "save_processed", fmt.Errorf("msg_id=%d: %w", msg.MessageID, err))
 	}
 	return nil
+}
+
+func (r *ProcessorRepository) SaveURLResolution(ctx context.Context, res model.URLResolution) error {
+	resolvedAt := res.ResolvedAt
+	if resolvedAt.IsZero() {
+		resolvedAt = time.Now().UTC()
+	}
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO url_resolutions (
+			original_url, canonical_url, merchant, title, unresolved, resolved_at
+		) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(original_url) DO UPDATE SET
+			canonical_url = excluded.canonical_url,
+			merchant = excluded.merchant,
+			title = excluded.title,
+			unresolved = excluded.unresolved,
+			resolved_at = excluded.resolved_at`,
+		res.OriginalURL,
+		res.CanonicalURL,
+		res.Merchant,
+		res.Title,
+		model.BoolToInt(res.Unresolved),
+		resolvedAt.UTC().Format(model.DBTimeLayout),
+	)
+	if err != nil {
+		return apperrors.Wrap("processor", "save_url_resolution", err)
+	}
+	return nil
+}
+
+func (r *ProcessorRepository) GetURLResolution(ctx context.Context, originalURL string) (model.URLResolution, bool, error) {
+	var (
+		resolvedAt string
+		unresolved int
+		res        model.URLResolution
+	)
+	err := r.db.QueryRowContext(ctx, `
+		SELECT original_url, canonical_url, merchant, title, unresolved, resolved_at
+		FROM url_resolutions
+		WHERE original_url = ?`, originalURL).
+		Scan(&res.OriginalURL, &res.CanonicalURL, &res.Merchant, &res.Title, &unresolved, &resolvedAt)
+	if err != nil {
+		if stderrors.Is(err, sql.ErrNoRows) {
+			return model.URLResolution{}, false, nil
+		}
+		return model.URLResolution{}, false, apperrors.Wrap("processor", "get_url_resolution", err)
+	}
+	res.Unresolved = unresolved != 0
+	res.ResolvedAt = model.ParseDBTime(resolvedAt)
+	return res, true, nil
 }
 
 // CrossChannelDuplicates recebe pares (url_hash → channel_id) e retorna
@@ -421,7 +479,8 @@ func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channel
 		price_amount, price_currency, posted_at, processed_at,
 		price_original, price_discount, coupon_code, coupon_codes, payment_method, shipping,
 		installments, discount_percent, modifiers, merchant, product_name, product_name_confidence,
-		virtual_currency, webpage_url, webpage_title, webpage_desc, is_promotional, is_duplicate,
+		virtual_currency, webpage_url, webpage_title, webpage_desc, is_promotional,
+		canonical_url, url_title, url_resolved, is_duplicate,
 		photo_id, shipping_free, installments_n, installments_value, is_recurring,
 		valid_from, valid_until, flash, recurrence_pattern, recurrence_group_id, seasonal_tag
 		FROM processed_messages`)
@@ -473,6 +532,9 @@ func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channel
 			webpageURL      sql.NullString
 			webpageTitle    sql.NullString
 			webpageDesc     sql.NullString
+			canonicalURL    sql.NullString
+			urlTitle        sql.NullString
+			urlResolved     int
 			instVal         sql.NullInt64
 			validFrom       sql.NullString
 			validUntil      sql.NullString
@@ -486,7 +548,8 @@ func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channel
 			&price, &curr, &posted, &procAt,
 			&m.PriceOriginal, &m.PriceDiscount, &m.CouponCode, &couponCodesText, &m.PaymentMethod, &m.Shipping,
 			&m.Installments, &m.DiscountPct, &modifiersText, &m.Merchant, &m.ProductName, &m.ProductNameConfidence,
-			&virtualCurrency, &webpageURL, &webpageTitle, &webpageDesc, &isPromo, &isDup,
+			&virtualCurrency, &webpageURL, &webpageTitle, &webpageDesc, &isPromo,
+			&canonicalURL, &urlTitle, &urlResolved, &isDup,
 			&m.PhotoID, &shipFr, &instN, &instVal, &isRec,
 			&validFrom, &validUntil, &flash, &recPattern, &recGroup, &seasonal); err != nil {
 			return nil, apperrors.Wrap("processor", "scan_processed_message", err)
@@ -503,6 +566,9 @@ func (r *ProcessorRepository) ListProcessedMessages(ctx context.Context, channel
 		m.WebpageURL = nullStringValue(webpageURL)
 		m.WebpageTitle = nullStringValue(webpageTitle)
 		m.WebpageDesc = nullStringValue(webpageDesc)
+		m.CanonicalURL = nullStringValue(canonicalURL)
+		m.URLTitle = nullStringValue(urlTitle)
+		m.URLResolved = urlResolved != 0
 		m.HasURL = hasURL != 0
 		m.HasPrice = hasPrc != 0
 		m.HasCoupon = hasCpn != 0

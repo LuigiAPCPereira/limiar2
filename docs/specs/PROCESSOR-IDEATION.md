@@ -813,6 +813,8 @@ LIMIAR_PROCESSOR_POLL_INTERVAL=5s          # Intervalo de poll para novas mensag
 LIMIAR_PROCESSOR_URL_TIMEOUT=5s            # Timeout para resolução de URLs
 LIMIAR_PROCESSOR_URL_MAX_REDIRECTS=10      # Max redirects ao resolver URL
 LIMIAR_PROCESSOR_BATCH_SIZE=50             # Mensagens por batch
+LIMIAR_PROCESSOR_RESOLVE_URLS=false        # Resolver URLs no processor/reprocess (opt-in)
+LIMIAR_PROCESSOR_RESOLVE_URLS_LIMIT=0      # Limite por execução; 0 = sem limite quando habilitado
 
 # Credenciais de afiliados
 LIMIAR_AFFILIATE_ML_USER=...               # Login do painel ML afiliados

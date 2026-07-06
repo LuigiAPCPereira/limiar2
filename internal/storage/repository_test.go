@@ -143,6 +143,32 @@ func TestOpenCreatesSprint2ProductNameConfidenceColumn(t *testing.T) {
 	}
 }
 
+// TestOpenCreatesSprint3URLResolverSchema garante que bancos novos já nascem
+// com o cache persistente de URL Resolver e com os campos de URL canônica em
+// processed_messages. Bancos legados recebem as colunas por reparo condicional.
+func TestOpenCreatesSprint3URLResolverSchema(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "sprint3-url-resolver.db")
+	db, err := storage.Open(ctx, dbPath, nil)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	for _, col := range []string{"canonical_url", "url_title", "url_resolved"} {
+		if !columnPresent(t, db.DB(), "processed_messages", col) {
+			t.Errorf("processed_messages.%s missing in fresh schema", col)
+		}
+	}
+
+	var table string
+	if err := db.DB().QueryRowContext(ctx,
+		"SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+		"url_resolutions").Scan(&table); err != nil {
+		t.Fatalf("url_resolutions table missing: %v", err)
+	}
+}
+
 // TestMigrationTrackingIdempotent garante que reabrir o banco não re-executa
 // migrações e não duplica registros em schema_migrations.
 func TestMigrationTrackingIdempotent(t *testing.T) {

@@ -72,6 +72,12 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 	}
 
 	batchFull = len(msgs) >= p.cfg.BatchSize
+	var resolver *URLResolver
+	if p.cfg.ResolveURLs {
+		resolver = NewURLResolver(p.repo, nil, p.log.WithComponent("url_resolver"))
+	}
+	resolveLimit := p.cfg.ResolveURLsLimit
+	resolvedThisBatch := 0
 
 	// Normaliza e classifica todas primeiro (CPU-bound, sem I/O).
 	var normalized []*NormalizedMessage
@@ -86,6 +92,11 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 		}
 		nm.MessageType = string(Classify(nm))
 		nm.IsPromotional = IsPromotionalMessageType(nm.MessageType)
+		if resolver != nil && (resolveLimit == 0 || resolvedThisBatch < resolveLimit) {
+			if p.resolveURL(ctx, nm, resolver) {
+				resolvedThisBatch++
+			}
+		}
 		nm.FeedEligible = nm.MessageType == string(TypeDealComplete) || nm.MessageType == string(TypeDealNoCoupon)
 		normalized = append(normalized, nm)
 	}
@@ -111,6 +122,41 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 		"backlog", backlog)
 
 	return batchFull
+}
+
+func (p *Processor) resolveURL(ctx context.Context, nm *NormalizedMessage, resolver *URLResolver) bool {
+	return EnrichURLResolution(ctx, nm, resolver, p.log)
+}
+
+func EnrichURLResolution(ctx context.Context, nm *NormalizedMessage, resolver *URLResolver, log logger.Logger) bool {
+	if log == nil {
+		log = logger.NopLogger{}
+	}
+	originalURL := firstURLForResolution(nm)
+	if originalURL == "" || resolver == nil {
+		return false
+	}
+	resolution, err := resolver.Resolve(ctx, originalURL)
+	if err != nil {
+		log.Warn("⚠️ URL Resolver falhou", "msg_id", nm.MessageID, "erro", err)
+		return false
+	}
+	nm.CanonicalURL = resolution.CanonicalURL
+	nm.URLTitle = resolution.Title
+	nm.URLResolved = !resolution.Unresolved
+	if nm.Merchant == "" && resolution.Merchant != "" {
+		nm.Merchant = resolution.Merchant
+	}
+	return true
+}
+func firstURLForResolution(nm *NormalizedMessage) string {
+	if nm == nil {
+		return ""
+	}
+	if url := reURL.FindString(nm.Text); url != "" {
+		return url
+	}
+	return nm.WebpageURL
 }
 
 // markDuplicates detecta mensagens com mesma URL em canais diferentes.

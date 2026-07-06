@@ -16,6 +16,8 @@ type Store interface {
 	SaveProcessedBatch(ctx context.Context, msgs []*NormalizedMessage) (saved, failed int, err error)
 	CrossChannelDuplicates(ctx context.Context, pairs map[string]int64) (map[string]bool, error)
 	CleanExpiredPhotoCache(ctx context.Context) (int64, error)
+	GetURLResolution(ctx context.Context, originalURL string) (model.URLResolution, bool, error)
+	SaveURLResolution(ctx context.Context, r model.URLResolution) error
 }
 
 // ProcessedReader reúne as queries de leitura sobre dados processados

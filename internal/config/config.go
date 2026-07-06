@@ -67,8 +67,10 @@ type Config struct {
 	DashboardPort        int           `mapstructure:"dashboard_port"`
 
 	// Processor
-	PollInterval time.Duration `mapstructure:"processor_poll_interval"`
-	BatchSize    int           `mapstructure:"processor_batch_size"`
+	PollInterval     time.Duration `mapstructure:"processor_poll_interval"`
+	BatchSize        int           `mapstructure:"processor_batch_size"`
+	ResolveURLs      bool          `mapstructure:"processor_resolve_urls"`
+	ResolveURLsLimit int           `mapstructure:"processor_resolve_urls_limit"`
 }
 
 // Load lê as configurações das variáveis de ambiente com o prefixo LIMIAR_ e
@@ -96,6 +98,7 @@ func Load(v *viper.Viper) (*Config, error) {
 		"dispatcher_buffer_size", "db_writer_buffer_size",
 		"history_max", "history_max_days", "dashboard_port",
 		"processor_poll_interval", "processor_batch_size",
+		"processor_resolve_urls", "processor_resolve_urls_limit",
 	} {
 		if err := v.BindEnv(key); err != nil {
 			return nil, fmt.Errorf("config: bind_env %s: %w", key, err)
@@ -250,6 +253,9 @@ func (c *Config) Validate() error {
 	if c.BatchSize < 1 || c.BatchSize > 1000 {
 		errs = append(errs, fmt.Errorf("processor_batch_size %d fora do intervalo [1,1000]", c.BatchSize))
 	}
+	if c.ResolveURLsLimit < 0 {
+		errs = append(errs, fmt.Errorf("processor_resolve_urls_limit %d fora do intervalo [0,∞)", c.ResolveURLsLimit))
+	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("config: validação falhou: %w", stderrors.Join(errs...))
@@ -263,11 +269,11 @@ func (c *Config) String() string {
 		"Config{AppID:%d, APIHash:%s, DBPath:%s, LogLevel:%s, LogFormat:%s, "+
 			"ShutdownTimeout:%d, MaxRetries:%d, IOTimeout:%s, "+
 			"DispatcherBufferSize:%d, DBWriterBufferSize:%d, HistoryMax:%d, HistoryMaxDays:%d, "+
-			"PollInterval:%s, BatchSize:%d}",
+			"PollInterval:%s, BatchSize:%d, ResolveURLs:%t, ResolveURLsLimit:%d}",
 		c.AppID, maskSecret(c.APIHash), c.DBPath, c.LogLevel, c.LogFormat,
 		c.ShutdownTimeout, c.MaxRetries, c.IOTimeout,
 		c.DispatcherBufferSize, c.DBWriterBufferSize, c.HistoryMax, c.HistoryMaxDays,
-		c.PollInterval, c.BatchSize,
+		c.PollInterval, c.BatchSize, c.ResolveURLs, c.ResolveURLsLimit,
 	)
 }
 
@@ -275,11 +281,13 @@ func (c *Config) String() string {
 // Usado para criar processor.NewProcessor sem duplicar campos.
 func (c *Config) ProcessorConfig() *processor.Config {
 	return &processor.Config{
-		DBPath:       c.DBPath,
-		PollInterval: c.PollInterval,
-		BatchSize:    c.BatchSize,
-		LogLevel:     c.LogLevel,
-		LogFormat:    c.LogFormat,
+		DBPath:           c.DBPath,
+		PollInterval:     c.PollInterval,
+		BatchSize:        c.BatchSize,
+		LogLevel:         c.LogLevel,
+		LogFormat:        c.LogFormat,
+		ResolveURLs:      c.ResolveURLs,
+		ResolveURLsLimit: c.ResolveURLsLimit,
 	}
 }
 

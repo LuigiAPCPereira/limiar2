@@ -53,6 +53,9 @@ var currentSchemaColumns = []schemaColumn{
 	{table: "processed_messages", name: "webpage_title", definition: "TEXT NOT NULL DEFAULT ''"},
 	{table: "processed_messages", name: "webpage_desc", definition: "TEXT NOT NULL DEFAULT ''"},
 	{table: "processed_messages", name: "is_promotional", definition: "INTEGER NOT NULL DEFAULT 0"},
+	{table: "processed_messages", name: "canonical_url", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "processed_messages", name: "url_title", definition: "TEXT NOT NULL DEFAULT ''"},
+	{table: "processed_messages", name: "url_resolved", definition: "INTEGER NOT NULL DEFAULT 0"},
 	{table: "processed_messages", name: "valid_from", definition: "TEXT"},
 	{table: "processed_messages", name: "valid_until", definition: "TEXT"},
 	{table: "processed_messages", name: "flash", definition: "INTEGER DEFAULT 0"},
@@ -71,6 +74,8 @@ var currentSchemaIndexes = []string{
 		ON processed_messages(recurrence_group_id) WHERE recurrence_group_id != 0`,
 	`CREATE INDEX IF NOT EXISTS idx_photo_cache_expires
 		ON photo_cache(expires_at) WHERE expires_at IS NOT NULL`,
+	`CREATE INDEX IF NOT EXISTS idx_url_resolutions_canonical
+		ON url_resolutions(canonical_url) WHERE canonical_url != ''`,
 }
 
 func columnExists(ctx context.Context, db *sql.DB, table, column string) (bool, error) {

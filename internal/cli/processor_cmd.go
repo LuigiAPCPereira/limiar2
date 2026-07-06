@@ -97,9 +97,11 @@ func newProcessorRunCmd(p Provider) *cobra.Command {
 // newReprocessCmd constrói `processor reprocess`: reprocessa mensagens raw existentes.
 func newReprocessCmd(p Provider) *cobra.Command {
 	var (
-		reprocessAll bool
-		msgID        int64
-		channel      string
+		reprocessAll     bool
+		msgID            int64
+		channel          string
+		resolveURLs      bool
+		resolveURLsLimit int
 	)
 
 	cmd := &cobra.Command{
@@ -148,13 +150,18 @@ Modos:
 			start := time.Now()
 			var processed, failed int
 
+			options := reprocessOptions{resolveURLs: resolveURLs, resolveURLsLimit: resolveURLsLimit}
+			if options.resolveURLsLimit < 0 {
+				return fmt.Errorf("resolve-urls-limit deve ser >= 0")
+			}
+
 			switch {
 			case msgID > 0:
-				processed, failed, err = reprocessSingle(ctx, collectorRepo, procRepo, msgID, presenter)
+				processed, failed, err = reprocessSingle(ctx, collectorRepo, procRepo, msgID, presenter, options)
 			case channel != "":
-				processed, failed, err = reprocessChannel(ctx, collectorRepo, procRepo, channel, presenter)
+				processed, failed, err = reprocessChannel(ctx, collectorRepo, procRepo, channel, presenter, options)
 			case reprocessAll:
-				processed, failed, err = reprocessAllMsgs(ctx, collectorRepo, procRepo, presenter)
+				processed, failed, err = reprocessAllMsgs(ctx, collectorRepo, procRepo, presenter, options)
 			}
 
 			if err != nil {
@@ -174,7 +181,14 @@ Modos:
 	cmd.Flags().BoolVar(&reprocessAll, "all", false, "Reprocessar todas as mensagens raw")
 	cmd.Flags().Int64Var(&msgID, "id", 0, "Reprocessar mensagem específica por raw_message ID")
 	cmd.Flags().StringVar(&channel, "channel", "", "Reprocessar todas as msgs de um canal (username)")
+	cmd.Flags().BoolVar(&resolveURLs, "resolve-urls", false, "Resolver URLs durante o reprocessamento (rede; desativado por padrão)")
+	cmd.Flags().IntVar(&resolveURLsLimit, "resolve-urls-limit", 0, "Limite de URLs resolvidas nesta execução (0 = sem limite quando --resolve-urls)")
 	return cmd
+}
+
+type reprocessOptions struct {
+	resolveURLs      bool
+	resolveURLsLimit int
 }
 
 // reprocessSingle reprocessa uma única mensagem pelo ID.
@@ -184,6 +198,7 @@ func reprocessSingle(
 	procRepo *storage.ProcessorRepository,
 	rawID int64,
 	presenter interface{ Step(string) },
+	options reprocessOptions,
 ) (processed, failed int, err error) {
 	msg, err := collectorRepo.GetMessageByID(ctx, rawID)
 	if err != nil {
@@ -197,6 +212,12 @@ func reprocessSingle(
 	}
 	nm.MessageType = string(processor.Classify(nm))
 	nm.IsPromotional = processor.IsPromotionalMessageType(nm.MessageType)
+	if options.resolveURLs {
+		resolver := processor.NewURLResolver(procRepo, nil, nil)
+		if options.resolveURLsLimit == 0 || options.resolveURLsLimit > 0 {
+			processor.EnrichURLResolution(ctx, nm, resolver, nil)
+		}
+	}
 
 	if err := procRepo.SaveProcessed(ctx, nm); err != nil {
 		presenter.Step(fmt.Sprintf("❌ Falha ao salvar msg %d: %v", rawID, err))
@@ -214,6 +235,7 @@ func reprocessChannel(
 	procRepo *storage.ProcessorRepository,
 	username string,
 	presenter interface{ Step(string) },
+	options reprocessOptions,
 ) (processed, failed int, err error) {
 	channels, err := collectorRepo.ListChannels(ctx)
 	if err != nil {
@@ -231,7 +253,7 @@ func reprocessChannel(
 		return 0, 0, fmt.Errorf("canal @%s não encontrado", username)
 	}
 
-	return reprocessByQuery(ctx, collectorRepo, procRepo, channelID, presenter)
+	return reprocessByQuery(ctx, collectorRepo, procRepo, channelID, presenter, options)
 }
 
 // reprocessAllMsgs reprocessa todas as mensagens raw.
@@ -240,8 +262,9 @@ func reprocessAllMsgs(
 	collectorRepo *storage.Repository,
 	procRepo *storage.ProcessorRepository,
 	presenter interface{ Step(string) },
+	options reprocessOptions,
 ) (processed, failed int, err error) {
-	return reprocessByQuery(ctx, collectorRepo, procRepo, 0, presenter)
+	return reprocessByQuery(ctx, collectorRepo, procRepo, 0, presenter, options)
 }
 
 const reprocessBatchSize = 100
@@ -253,6 +276,7 @@ func reprocessByQuery(
 	procRepo *storage.ProcessorRepository,
 	channelID int64,
 	presenter interface{ Step(string) },
+	options reprocessOptions,
 ) (totalProcessed, totalFailed int, err error) {
 	// Contar total para progresso.
 	total, err := countForReprocess(ctx, collectorRepo, channelID)
@@ -260,6 +284,11 @@ func reprocessByQuery(
 		return 0, 0, err
 	}
 
+	var resolver *processor.URLResolver
+	if options.resolveURLs {
+		resolver = processor.NewURLResolver(procRepo, nil, nil)
+	}
+	resolvedURLs := 0
 	offset := 0
 	for {
 		if ctx.Err() != nil {
@@ -283,6 +312,11 @@ func reprocessByQuery(
 			}
 			nm.MessageType = string(processor.Classify(nm))
 			nm.IsPromotional = processor.IsPromotionalMessageType(nm.MessageType)
+			if resolver != nil && (options.resolveURLsLimit == 0 || resolvedURLs < options.resolveURLsLimit) {
+				if processor.EnrichURLResolution(ctx, nm, resolver, nil) {
+					resolvedURLs++
+				}
+			}
 			normalized = append(normalized, nm)
 		}
 

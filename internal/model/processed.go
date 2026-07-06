@@ -53,6 +53,9 @@ type ProcessedMessage struct {
 	WebpageTitle          string           `json:"webpage_title,omitempty"`
 	WebpageDesc           string           `json:"webpage_desc,omitempty"`
 	IsPromotional         bool             `json:"is_promotional"`
+	CanonicalURL          string           `json:"canonical_url,omitempty"`
+	URLTitle              string           `json:"url_title,omitempty"`
+	URLResolved           bool             `json:"url_resolved"`
 }
 
 // ProcessedTypeStats contém contagem de mensagens processadas por tipo.

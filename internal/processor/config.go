@@ -20,11 +20,13 @@ const (
 // Config do limiar-processor. Sem credenciais Telegram — o processor
 // não interage com MTProto, apenas lê do banco compartilhado.
 type Config struct {
-	DBPath       string        `mapstructure:"db_path"`
-	PollInterval time.Duration `mapstructure:"processor_poll_interval"`
-	BatchSize    int           `mapstructure:"processor_batch_size"`
-	LogLevel     string        `mapstructure:"log_level"`
-	LogFormat    string        `mapstructure:"log_format"`
+	DBPath           string        `mapstructure:"db_path"`
+	PollInterval     time.Duration `mapstructure:"processor_poll_interval"`
+	BatchSize        int           `mapstructure:"processor_batch_size"`
+	LogLevel         string        `mapstructure:"log_level"`
+	LogFormat        string        `mapstructure:"log_format"`
+	ResolveURLs      bool          `mapstructure:"processor_resolve_urls"`
+	ResolveURLsLimit int           `mapstructure:"processor_resolve_urls_limit"`
 }
 
 // LoadConfig lê configuração de variáveis LIMIAR_ e aplica defaults.
@@ -39,6 +41,7 @@ func LoadConfig(v *viper.Viper) (*Config, error) {
 
 	for _, key := range []string{
 		"db_path", "processor_poll_interval", "processor_batch_size",
+		"processor_resolve_urls", "processor_resolve_urls_limit",
 		"log_level", "log_format",
 	} {
 		if err := v.BindEnv(key); err != nil {
@@ -77,6 +80,9 @@ func (c *Config) Validate() error {
 	}
 	if c.PollInterval < time.Second || c.PollInterval > 5*time.Minute {
 		return fmt.Errorf("processor: poll_interval %s fora do intervalo [1s,5m]", c.PollInterval)
+	}
+	if c.ResolveURLsLimit < 0 {
+		return fmt.Errorf("processor: resolve_urls_limit %d fora do intervalo [0,∞)", c.ResolveURLsLimit)
 	}
 	return nil
 }

@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS processed_messages (
     webpage_title      TEXT NOT NULL DEFAULT '',
     webpage_desc       TEXT NOT NULL DEFAULT '',
     is_promotional     INTEGER NOT NULL DEFAULT 0,
+    canonical_url      TEXT NOT NULL DEFAULT '',
+    url_title          TEXT NOT NULL DEFAULT '',
+    url_resolved       INTEGER NOT NULL DEFAULT 0,
     is_duplicate       INTEGER DEFAULT 0,
     feed_eligible      INTEGER DEFAULT 0,
     photo_access_hash  INTEGER DEFAULT 0,
@@ -93,6 +96,16 @@ CREATE TABLE IF NOT EXISTS processed_messages (
     recurrence_group_id INTEGER DEFAULT 0,
     seasonal_tag       TEXT DEFAULT '',
     UNIQUE(channel_id, message_id)
+);
+
+CREATE TABLE IF NOT EXISTS url_resolutions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    original_url  TEXT NOT NULL UNIQUE,
+    canonical_url TEXT NOT NULL DEFAULT '',
+    merchant      TEXT NOT NULL DEFAULT '',
+    title         TEXT NOT NULL DEFAULT '',
+    unresolved    INTEGER NOT NULL DEFAULT 0,
+    resolved_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS photo_cache (
@@ -113,6 +126,8 @@ CREATE INDEX IF NOT EXISTS idx_processed_messages_posted
     ON processed_messages(posted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_processed_url_hash
     ON processed_messages(url_hash) WHERE url_hash != '';
+CREATE INDEX IF NOT EXISTS idx_url_resolutions_canonical
+    ON url_resolutions(canonical_url) WHERE canonical_url != '';
 CREATE INDEX IF NOT EXISTS idx_processed_merchant
     ON processed_messages(merchant) WHERE merchant != '';
 CREATE INDEX IF NOT EXISTS idx_processed_feed
