@@ -92,20 +92,20 @@ type httpMetricsSnapshot struct {
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if wantsHelp(args) {
-		_, _ = fmt.Fprint(stdout, helpText())
+		fmt.Fprint(stdout, helpText())
 		return nil
 	}
 
 	cfg, err := parseConfig(args)
 	if err != nil {
-		_, _ = fmt.Fprint(stderr, helpText())
+		fmt.Fprint(stderr, helpText())
 		return err
 	}
 
@@ -205,7 +205,7 @@ func runScenarioSetWithHook(
 		if err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(stdout, summarizeScenario(result, baseline))
+		fmt.Fprintln(stdout, summarizeScenario(result, baseline))
 		results = append(results, result)
 		if name == "baseline" {
 			copyResult := result
@@ -213,7 +213,7 @@ func runScenarioSetWithHook(
 		}
 	}
 
-	_, _ = fmt.Fprint(stdout, summarizeTable(results, baseline))
+	fmt.Fprint(stdout, summarizeTable(results, baseline))
 	return nil
 }
 
@@ -352,17 +352,17 @@ func scenariosFor(name string) []string {
 }
 
 func printDryRun(w io.Writer, cfg config, scenarios []string) {
-	_, _ = fmt.Fprintf(w, "Dry run: dashboard contention benchmark\n")
-	_, _ = fmt.Fprintf(w, "Mode: %s\n", cfg.mode)
+	fmt.Fprintf(w, "Dry run: dashboard contention benchmark\n")
+	fmt.Fprintf(w, "Mode: %s\n", cfg.mode)
 	if cfg.mode == "external" {
-		_, _ = fmt.Fprintf(w, "Command: LIMIAR_DB_PATH=%s %s processor reprocess --all\n", cfg.dbPath, cfg.bin)
+		fmt.Fprintf(w, "Command: LIMIAR_DB_PATH=%s %s processor reprocess --all\n", cfg.dbPath, cfg.bin)
 	} else {
-		_, _ = fmt.Fprintf(w, "Command: in-process reprocess using %s\n", cfg.dbPath)
+		fmt.Fprintf(w, "Command: in-process reprocess using %s\n", cfg.dbPath)
 	}
-	_, _ = fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
-	_, _ = fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
+	fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
+	fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
 	for _, scenario := range scenarios {
-		_, _ = fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
+		fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
 	}
 }
 
