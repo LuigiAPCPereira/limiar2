@@ -7,6 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+      <style>
+      *:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
+    </style>
   </head>
   <body class="bg-[#0a0a0a] text-[#fafafa] font-sans antialiased overflow-hidden" x-data="dashboard">
     <div id="app" class="flex h-screen w-screen overflow-hidden bg-[#0a0a0a] text-[#fafafa] font-sans border border-[#262626]">
@@ -94,7 +97,7 @@
             </div>
 
             <div class="flex-1 overflow-hidden flex">
-              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto">
+              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto" role="log" aria-live="polite" aria-label="Lista de mensagens raw">
                 <div x-show="loading" class="p-4 space-y-3">
                   <template x-for="i in 5">
                     <div class="h-20 bg-[#111111] border border-[#262626] rounded-[4px] animate-pulse"></div>
@@ -105,7 +108,7 @@
                   <p class="text-sm">Nenhuma mensagem encontrada.</p>
                 </div>
                 <template x-for="msg in messages" :key="msg.ID">
-                  <div @click="$store.global.openDetail(msg, 'raw')" class="p-3 flex gap-4 cursor-pointer transition-colors" :class="$store.global.detailMessage?.ID === msg.ID && $store.global.detailType === 'raw' ? 'bg-[#1a1a1a] border-l-2 border-l-[#6366f1]' : 'hover:bg-[#111111] border-l-2 border-l-transparent'">
+                  <div @click="$store.global.openDetail(msg, 'raw')" @keydown.enter="$store.global.openDetail(msg, 'raw')" @keydown.space.prevent="$store.global.openDetail(msg, 'raw')" role="button" tabindex="0" class="p-3 flex gap-4 cursor-pointer transition-colors" :class="$store.global.detailMessage?.ID === msg.ID && $store.global.detailType === 'raw' ? 'bg-[#1a1a1a] border-l-2 border-l-[#6366f1]' : 'hover:bg-[#111111] border-l-2 border-l-transparent'">
                      <div class="w-12 h-12 bg-[#262626] rounded-[4px] flex-shrink-0 flex items-center justify-center">
                        <i data-lucide="file-json" class="w-5 h-5 text-[#737373]"></i>
                      </div>
@@ -148,7 +151,7 @@
             </div>
 
             <div class="flex-1 overflow-hidden flex">
-              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto">
+              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto" role="log" aria-live="polite" aria-label="Lista de mensagens processadas">
                 <div x-show="loading" class="p-4 space-y-3">
                   <template x-for="i in 5">
                     <div class="h-32 bg-[#111111] border border-[#262626] rounded-[4px] animate-pulse"></div>
@@ -160,7 +163,7 @@
                 </div>
                 
                 <template x-for="msg in messages" :key="msg.id">
-                  <div @click="$store.global.openDetail(msg, 'processed')" class="p-3 flex gap-4 cursor-pointer transition-colors" :class="$store.global.detailMessage?.id === msg.id && $store.global.detailType === 'processed' ? 'bg-[#1a1a1a] border-l-2 border-l-[#6366f1]' : 'hover:bg-[#111111] border-l-2 border-l-transparent'">
+                  <div @click="$store.global.openDetail(msg, 'processed')" @keydown.enter="$store.global.openDetail(msg, 'processed')" @keydown.space.prevent="$store.global.openDetail(msg, 'processed')" role="button" tabindex="0" class="p-3 flex gap-4 cursor-pointer transition-colors" :class="$store.global.detailMessage?.id === msg.id && $store.global.detailType === 'processed' ? 'bg-[#1a1a1a] border-l-2 border-l-[#6366f1]' : 'hover:bg-[#111111] border-l-2 border-l-transparent'">
                     <div class="w-24 h-24 bg-[#262626] rounded-[4px] flex-shrink-0 relative overflow-hidden flex items-center justify-center">
                       <template x-if="msg.photo_id > 0">
                         <img :src="getMediaUrl(msg.id)" @error="$event.target.style.display='none'" class="absolute inset-0 w-full h-full object-cover" loading="lazy" />
@@ -213,7 +216,7 @@
       <aside x-data="detailPanel" x-show="isOpen" style="display: none;" class="w-80 border-l border-[#262626] bg-[#111111] flex flex-col flex-shrink-0">
         <div class="p-4 border-b border-[#262626] flex justify-between items-center">
           <h2 class="text-xs font-bold uppercase tracking-widest text-[#737373]">Inspeção Detalhada</h2>
-          <button @click="close()" class="text-[#737373] hover:text-[#fafafa]">
+          <button @click="close()" aria-label="Fechar painel de detalhes" class="text-[#737373] hover:text-[#fafafa]">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>

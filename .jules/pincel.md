@@ -18,3 +18,7 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+
+## 2026-07-06 - Acessibilidade Completa em Listas do Dashboard
+**Aprendizado:** Ao construir interfaces vanilla HTML com AlpineJS, adicionar suporte apenas para mouse em `<div>`s clicáveis cria barreiras críticas de navegação. Adicionar atributos globais de `:focus-visible` é apenas o primeiro passo. Sem os atributos de teclado apropriados (`role="button"`, `tabindex="0"`) e mapeamento explícito de teclas (`@keydown.enter`, `@keydown.space.prevent`), o foco visual pode existir, mas a interação permanece inacessível. Adicionalmente, listas dinâmicas como as de SSE necessitam de `role="log"` e `aria-live="polite"` para suportar leitores de tela apropriadamente.
+**Ação:** Em todos os componentes `<div>` que atuam como itens de lista interativos ou botões, sempre incluir explicitamente: `role="button"`, `tabindex="0"`, e manipular eventos de teclado de confirmação equivalentes aos cliques do mouse. Envolver containers que recebem atualizações contínuas de tempo real com os atributos de região "live" corretos.
