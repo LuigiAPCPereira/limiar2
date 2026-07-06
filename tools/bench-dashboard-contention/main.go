@@ -352,17 +352,17 @@ func scenariosFor(name string) []string {
 }
 
 func printDryRun(w io.Writer, cfg config, scenarios []string) {
-	fmt.Fprintf(w, "Dry run: dashboard contention benchmark\n")
-	fmt.Fprintf(w, "Mode: %s\n", cfg.mode)
+	_, _ = fmt.Fprintf(w, "Dry run: dashboard contention benchmark\n")
+	_, _ = fmt.Fprintf(w, "Mode: %s\n", cfg.mode)
 	if cfg.mode == "external" {
-		fmt.Fprintf(w, "Command: LIMIAR_DB_PATH=%s %s processor reprocess --all\n", cfg.dbPath, cfg.bin)
+		_, _ = fmt.Fprintf(w, "Command: LIMIAR_DB_PATH=%s %s processor reprocess --all\n", cfg.dbPath, cfg.bin)
 	} else {
-		fmt.Fprintf(w, "Command: in-process reprocess using %s\n", cfg.dbPath)
+		_, _ = fmt.Fprintf(w, "Command: in-process reprocess using %s\n", cfg.dbPath)
 	}
-	fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
-	fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
+	_, _ = fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
+	_, _ = fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
 	for _, scenario := range scenarios {
-		fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
+		_, _ = fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
 	}
 }
 
