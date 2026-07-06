@@ -46,6 +46,12 @@ func Open(ctx context.Context, dbPath string, log logger.Logger) (*DB, error) {
 		log.Info("📦 Banco criado", "caminho", dbPath)
 	}
 
+	// 🛡️ Segurança: Garante que o arquivo do banco de dados (que contém dados sensíveis como tokens de sessão e mensagens)
+	// mantenha permissões restritas (0600) mesmo que já exista ou tenha sido modificado por outro processo.
+	if err := os.Chmod(dbPath, 0600); err != nil {
+		return nil, fmt.Errorf("storage: chmod db %q: %w", dbPath, err)
+	}
+
 	log.Info("🔌 Abrindo banco", "caminho", dbPath, "driver", driverName)
 	conn, err := sql.Open(driverName, dbPath)
 	if err != nil {
