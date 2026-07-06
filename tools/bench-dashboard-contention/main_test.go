@@ -91,7 +91,7 @@ func TestHelpTextContainsDocumentedFlags(t *testing.T) {
 		"--duration",
 		"--interval",
 		"--timeout",
-		"baseline|healthz|channels|light|heavy|stats|all",
+		"baseline|healthz|healthz-lite|channels|light|heavy|stats|all",
 	} {
 		if !strings.Contains(help, flag) {
 			t.Fatalf("help text missing %q:\n%s", flag, help)
@@ -105,6 +105,7 @@ func TestEndpointSpecsExposeIsolatedLightEndpoints(t *testing.T) {
 		expected []string
 	}{
 		{name: "healthz", expected: []string{"/healthz"}},
+		{name: "healthz-lite", expected: []string{"/healthz-lite"}},
 		{name: "channels", expected: []string{"/api/channels"}},
 		{name: "stats", expected: []string{"/api/processed/stats"}},
 	}

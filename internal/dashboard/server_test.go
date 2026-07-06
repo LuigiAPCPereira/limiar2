@@ -26,6 +26,7 @@ type mockRepo struct {
 	statsErr       error
 	countRaw       int64
 	countRawErr    error
+	countRawCalls  int
 }
 
 func (m *mockRepo) ListChannels(_ context.Context) ([]*model.Channel, error) {
@@ -45,6 +46,7 @@ func (m *mockRepo) CountMessagesByChannel(_ context.Context) ([]model.ChannelSta
 }
 
 func (m *mockRepo) CountRawMessages(_ context.Context) (int64, error) {
+	m.countRawCalls++
 	return m.countRaw, m.countRawErr
 }
 
@@ -152,6 +154,36 @@ func TestHandleHealthz_Degraded(t *testing.T) {
 	}
 	if body["db"] != false {
 		t.Errorf("db = %v, want false", body["db"])
+	}
+}
+
+func TestHandleHealthzLite_DoesNotCountRawMessages(t *testing.T) {
+	repo := &mockRepo{countRaw: 42}
+	srv := newTestServer(repo, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz-lite", nil)
+	w := httptest.NewRecorder()
+
+	srv.handleHealthzLite(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if repo.countRawCalls != 0 {
+		t.Fatalf("CountRawMessages called %d times, want 0", repo.countRawCalls)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if body["status"] != "ok" {
+		t.Errorf("status = %v, want ok", body["status"])
+	}
+	if body["db_checked"] != false {
+		t.Errorf("db_checked = %v, want false", body["db_checked"])
+	}
+	if _, ok := body["raw_messages"]; ok {
+		t.Fatalf("raw_messages present in healthz-lite response: %v", body["raw_messages"])
 	}
 }
 

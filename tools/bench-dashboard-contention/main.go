@@ -302,7 +302,7 @@ Flags:
   --db ./limiar.db                       caminho do banco; repassado como LIMIAR_DB_PATH
   --dashboard-url http://127.0.0.1:8080  URL base do dashboard já iniciado
   --mode in-process                    in-process|external
-  --scenario baseline|healthz|channels|light|heavy|stats|all
+  --scenario baseline|healthz|healthz-lite|channels|light|heavy|stats|all
   --concurrency 1                        número de workers HTTP
   --duration 120s                        duração máxima da carga HTTP
   --interval 250ms                       intervalo entre requests por worker
@@ -313,6 +313,7 @@ Flags:
 Cenários:
   baseline  reprocessamento sem carga HTTP
   healthz   /healthz isolado
+  healthz-lite /healthz-lite isolado sem consulta ao banco
   channels  /api/channels isolado
   light     /healthz, /api/processed/stats, /api/channels
   heavy     /api/messages?limit=100&offset=N, /api/processed?limit=100&offset=N
@@ -336,7 +337,7 @@ func wantsHelp(args []string) bool {
 
 func validScenario(name string) bool {
 	switch name {
-	case "baseline", "healthz", "channels", "light", "heavy", "stats", "all":
+	case "baseline", "healthz", "healthz-lite", "channels", "light", "heavy", "stats", "all":
 		return true
 	default:
 		return false
@@ -521,6 +522,8 @@ func endpointSpecs(name string) []endpointSpec {
 	switch name {
 	case "healthz":
 		return []endpointSpec{{Path: "/healthz"}}
+	case "healthz-lite":
+		return []endpointSpec{{Path: "/healthz-lite"}}
 	case "channels":
 		return []endpointSpec{{Path: "/api/channels"}}
 	case "light":

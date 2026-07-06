@@ -426,6 +426,47 @@ continuou em 64 MB. Isso reduz a suspeita sobre `/api/channels` e aponta para o
 `CountRawMessages` executado por `/healthz` como o menor reprodutor observado do
 pico de RSS.
 
+### Healthz-lite sem consulta ao banco
+
+Após identificar `/healthz` como menor reprodutor do RSS alto, foi adicionada a
+rota experimental `/healthz-lite`, que retorna status e uptime sem chamar
+`CountRawMessages`.
+
+Comando:
+
+```sh
+go run ./tools/bench-dashboard-contention \
+  --db ./limiar.db \
+  --dashboard-url http://127.0.0.1:9090 \
+  --scenario healthz-lite \
+  --duration 120s \
+  --concurrency 1 \
+  --interval 250ms \
+  --timeout 5s
+```
+
+Resultado:
+
+```text
+Reprocess duration: 2m45.026s
+Processed: 36672
+Failures: 0
+Throughput: 222.2 msg/s
+HTTP requests: 478
+HTTP errors: 0
+HTTP p50: 0s
+HTTP p95: 1ms
+HTTP max: 1ms
+Slowest endpoint: /healthz-lite
+RSS max: 128 MB
+Status codes: 200=478
+```
+
+Interpretação: remover `CountRawMessages` do health check derrubou o RSS máximo de
+889–952 MB (`/healthz`) para 128 MB (`/healthz-lite`) e reduziu a latência HTTP
+para p95 de 1ms. Isso confirma que o custo observado em `/healthz` vem da consulta
+ao banco, não do servidor HTTP nem do encoder JSON.
+
 Comparação isolada expandida:
 
 | Scenario | Reprocess | Throughput | HTTP req | HTTP err | HTTP p95 | HTTP max | RSS max | Delta vs baseline isolado |
@@ -439,13 +480,14 @@ Comparação isolada expandida:
 | channels isolado | 2m57.667s | 206.4 msg/s | 289 | 1 | 523ms | 1.449s | 132 MB | +6.1% |
 | healthz isolado #1 | 2m49.354s | 216.5 msg/s | 323 | 1 | 245ms | 1.061s | 889 MB | +1.1% |
 | healthz isolado #2 | 2m57.184s | 207.0 msg/s | 291 | 0 | 368ms | 1.49s | 952 MB | +5.8% |
+| healthz-lite isolado | 2m45.026s | 222.2 msg/s | 478 | 0 | 1ms | 1ms | 128 MB | -1.5% |
 
 Interpretação adicional: aumentar `heavy` de concorrência 1 para 4 não degradou
 materialmente o throughput do reprocessamento e não gerou erros HTTP. A anomalia
 principal é memória: `healthz` reproduziu RSS alto em duas execuções (889 MB e
-952 MB), enquanto baseline repetido permaneceu em 64 MB. Como `/healthz` executa
-`CountRawMessages`, este é o menor reprodutor observado do pico de RSS. `channels`
-não reproduziu RSS alto (132 MB), mas teve p95 maior e 1 erro HTTP.
+952 MB), enquanto baseline repetido permaneceu em 64 MB. A variante
+`healthz-lite`, sem `CountRawMessages`, caiu para 128 MB e p95 de 1ms. Isso
+confirma `CountRawMessages` em `/healthz` como gatilho do pico de RSS observado.
 
 ## Conclusão
 
@@ -464,6 +506,8 @@ atual é mais conservadora:
   baseline observado;
 - `healthz` isolado reproduziu RSS alto (889 MB e 952 MB), tornando
   `CountRawMessages` o menor reprodutor conhecido;
+- `healthz-lite`, sem `CountRawMessages`, reduziu RSS para 128 MB e latência
+  para p95 de 1ms;
 - `channels` isolado não reproduziu RSS alto (132 MB), mas ainda adicionou alguma
   latência/erro HTTP;
 - a rodada `all` continua útil como alerta de que execução sequencial no mesmo
@@ -472,19 +516,20 @@ atual é mais conservadora:
 
 A decisão do ADR 015 ainda deve considerar tráfego real do frontend e separação
 operacional, mas estes benchmarks isolados não provam contenção severa de
-throughput até concorrência 4. O risco mais claro agora é memória/RSS associado a
-queries de contagem/agregação repetidas durante o reprocessamento, começando por
-`CountRawMessages` em `/healthz`.
+throughput até concorrência 4. O achado confirmado é memória/RSS associado a
+`CountRawMessages` em `/healthz`; a variante sem consulta ao banco removeu o pico.
 
 ## Próximas medições recomendadas
 
-1. Investigar memória/RSS de `CountRawMessages` sob carga concorrente com
-   reprocessamento; `/healthz` é o menor reprodutor observado.
+1. Investigar por que `CountRawMessages` sob carga concorrente com reprocessamento
+   eleva RSS; `/healthz` é o menor reprodutor observado.
 2. Confirmar se `CountRawMessages` em Tursogo faz scan/aloca/cacheia páginas de
    forma proporcional ao tamanho de `raw_messages`.
-3. Só depois considerar mitigação, por exemplo remover contagem de `/healthz` ou
-   cachear esse valor fora do hot path.
-4. Não otimizar throughput ainda: os benchmarks isolados não mostram gargalo de
+3. Manter `/healthz-lite` como controle experimental para separar custo do HTTP
+   do custo da consulta ao banco.
+4. Só depois considerar mitigação de produção, por exemplo remover contagem de
+   `/healthz` ou cachear esse valor fora do hot path.
+5. Não otimizar throughput ainda: os benchmarks isolados não mostram gargalo de
    throughput até concorrência 4.
 
 Comandos sugeridos:
@@ -505,6 +550,28 @@ go run ./tools/bench-dashboard-contention \
   --db ./limiar.db \
   --dashboard-url http://127.0.0.1:9090 \
   --scenario heavy \
+  --duration 120s \
+  --concurrency 1 \
+  --interval 250ms \
+  --timeout 5s
+```
+
+```sh
+go run ./tools/bench-dashboard-contention \
+  --db ./limiar.db \
+  --dashboard-url http://127.0.0.1:9090 \
+  --scenario healthz \
+  --duration 120s \
+  --concurrency 1 \
+  --interval 250ms \
+  --timeout 5s
+```
+
+```sh
+go run ./tools/bench-dashboard-contention \
+  --db ./limiar.db \
+  --dashboard-url http://127.0.0.1:9090 \
+  --scenario healthz-lite \
   --duration 120s \
   --concurrency 1 \
   --interval 250ms \

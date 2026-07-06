@@ -56,6 +56,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/healthz-lite", s.handleHealthzLite)
 	mux.HandleFunc("/api/channels", s.handleChannels)
 	mux.HandleFunc("/api/messages", s.handleMessages)
 	mux.HandleFunc("/api/message/", s.handleMessage)
@@ -138,6 +139,18 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		"status":         status,
 		"db":             dbStatus,
 		"raw_messages":   count,
+		"uptime_seconds": time.Since(s.startedAt).Seconds(),
+	})
+}
+
+func (s *Server) handleHealthzLite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+	s.writeJSON(w, map[string]any{
+		"status":         "ok",
+		"db_checked":     false,
 		"uptime_seconds": time.Since(s.startedAt).Seconds(),
 	})
 }
