@@ -13,10 +13,11 @@ import (
 )
 
 const (
-	urlResolverTimeout      = 5 * time.Second
-	urlResolverMaxRedirects = 10
-	urlResolverReadLimit    = 256 * 1024
-	urlResolverUserAgent    = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+	urlResolverTimeout              = 5 * time.Second
+	urlResolverMaxRedirects         = 10
+	urlResolverReadLimit            = 256 * 1024
+	urlResolverUnresolvedRetryAfter = 24 * time.Hour
+	urlResolverUserAgent            = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
 )
 
 type URLResolutionStore interface {
@@ -66,7 +67,7 @@ func (r *URLResolver) Resolve(ctx context.Context, originalURL string) (model.UR
 		if err != nil {
 			return model.URLResolution{}, err
 		}
-		if ok {
+		if ok && !shouldRetryUnresolved(cached) {
 			return r.refreshCachedCanonical(ctx, cached)
 		}
 	}
@@ -125,6 +126,16 @@ func (r *URLResolver) refreshCachedCanonical(ctx context.Context, cached model.U
 		cached.Merchant = detectMerchant(canonical)
 	}
 	return r.save(ctx, cached)
+}
+
+func shouldRetryUnresolved(cached model.URLResolution) bool {
+	if !cached.Unresolved {
+		return false
+	}
+	if cached.ResolvedAt.IsZero() {
+		return true
+	}
+	return time.Since(cached.ResolvedAt) >= urlResolverUnresolvedRetryAfter
 }
 
 func (r *URLResolver) save(ctx context.Context, result model.URLResolution) (model.URLResolution, error) {

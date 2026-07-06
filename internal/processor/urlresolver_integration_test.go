@@ -64,6 +64,59 @@ func TestProcessorProcessBatchDoesNotResolveURLsByDefault(t *testing.T) {
 	}
 }
 
+func TestProcessorProcessBatchResolveLimitPersistsAcrossBatches(t *testing.T) {
+	firstURL := "https://loja.example/primeira"
+	secondURL := "https://loja.example/segunda"
+	repo := &urlResolverProcessorStore{
+		rawBatches: [][]*model.RawMessage{
+			{makeURLResolverRawMessage(t, 1, "Primeira oferta R$ 10 "+firstURL)},
+			{makeURLResolverRawMessage(t, 2, "Segunda oferta R$ 20 "+secondURL)},
+		},
+		resolutions: map[string]model.URLResolution{
+			firstURL: {
+				OriginalURL:  firstURL,
+				CanonicalURL: firstURL,
+				Merchant:     "loja",
+				Title:        "Primeira",
+				ResolvedAt:   time.Date(2026, 7, 5, 10, 0, 0, 0, time.UTC),
+			},
+			secondURL: {
+				OriginalURL:  secondURL,
+				CanonicalURL: secondURL,
+				Merchant:     "loja",
+				Title:        "Segunda",
+				ResolvedAt:   time.Date(2026, 7, 5, 10, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	proc := NewProcessor(repo, &Config{BatchSize: 1, PollInterval: time.Second, ResolveURLs: true, ResolveURLsLimit: 1}, logger.NopLogger{})
+
+	proc.processBatch(context.Background())
+	proc.processBatch(context.Background())
+
+	if repo.resolveCalls != 1 {
+		t.Fatalf("ResolveURL calls = %d, want 1 across processor run", repo.resolveCalls)
+	}
+	if len(repo.saved) != 2 {
+		t.Fatalf("saved len = %d, want 2", len(repo.saved))
+	}
+	if repo.saved[0].CanonicalURL == "" {
+		t.Fatal("first batch was not URL-enriched")
+	}
+	if repo.saved[1].CanonicalURL != "" || repo.saved[1].URLResolved {
+		t.Fatalf("second batch exceeded global URL limit: %#v", repo.saved[1])
+	}
+}
+
+func TestNewProcessorCreatesReusableURLResolverWhenEnabled(t *testing.T) {
+	repo := &urlResolverProcessorStore{}
+	proc := NewProcessor(repo, &Config{BatchSize: 1, PollInterval: time.Second, ResolveURLs: true}, logger.NopLogger{})
+
+	if proc.urlResolver == nil {
+		t.Fatal("urlResolver = nil, want reusable resolver when ResolveURLs is enabled")
+	}
+}
+
 func makeURLResolverRawMessage(t *testing.T, id int64, text string) *model.RawMessage {
 	t.Helper()
 	payload := `{"ID":101,"Message":` + quoteJSONString(text) + `,"PeerID":{"ChannelID":1},"Date":1717891200}`
@@ -89,12 +142,23 @@ func quoteJSONString(s string) string {
 
 type urlResolverProcessorStore struct {
 	raw          []*model.RawMessage
+	rawBatches   [][]*model.RawMessage
+	fetchCalls   int
 	resolution   model.URLResolution
+	resolutions  map[string]model.URLResolution
 	saved        []*NormalizedMessage
 	resolveCalls int
 }
 
 func (s *urlResolverProcessorStore) FetchUnprocessed(context.Context, int) ([]*model.RawMessage, error) {
+	if s.rawBatches != nil {
+		if s.fetchCalls >= len(s.rawBatches) {
+			return nil, nil
+		}
+		batch := s.rawBatches[s.fetchCalls]
+		s.fetchCalls++
+		return batch, nil
+	}
 	return s.raw, nil
 }
 func (s *urlResolverProcessorStore) CountUnprocessed(context.Context) (int64, error) { return 0, nil }
@@ -113,6 +177,10 @@ func (s *urlResolverProcessorStore) CleanExpiredPhotoCache(context.Context) (int
 }
 func (s *urlResolverProcessorStore) GetURLResolution(_ context.Context, originalURL string) (model.URLResolution, bool, error) {
 	s.resolveCalls++
+	if s.resolutions != nil {
+		r, ok := s.resolutions[originalURL]
+		return r, ok, nil
+	}
 	if originalURL == s.resolution.OriginalURL {
 		return s.resolution, true, nil
 	}

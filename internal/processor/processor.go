@@ -11,9 +11,11 @@ import (
 // periódico de raw_messages não processadas, normaliza, classifica e
 // persiste em processed_messages.
 type Processor struct {
-	repo Store
-	cfg  *Config
-	log  logger.Logger
+	repo         Store
+	cfg          *Config
+	log          logger.Logger
+	urlResolver  *URLResolver
+	resolvedURLs int
 }
 
 // NewProcessor constrói um Processor com as dependências injetadas.
@@ -21,7 +23,11 @@ func NewProcessor(repo Store, cfg *Config, log logger.Logger) *Processor {
 	if log == nil {
 		log = logger.NopLogger{}
 	}
-	return &Processor{repo: repo, cfg: cfg, log: log}
+	p := &Processor{repo: repo, cfg: cfg, log: log}
+	if cfg != nil && cfg.ResolveURLs {
+		p.urlResolver = NewURLResolver(repo, nil, log.WithComponent("url_resolver"))
+	}
+	return p
 }
 
 // Run inicia o loop de processamento. Faz poll a cada PollInterval até
@@ -72,12 +78,8 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 	}
 
 	batchFull = len(msgs) >= p.cfg.BatchSize
-	var resolver *URLResolver
-	if p.cfg.ResolveURLs {
-		resolver = NewURLResolver(p.repo, nil, p.log.WithComponent("url_resolver"))
-	}
+	resolver := p.urlResolver
 	resolveLimit := p.cfg.ResolveURLsLimit
-	resolvedThisBatch := 0
 
 	// Normaliza e classifica todas primeiro (CPU-bound, sem I/O).
 	var normalized []*NormalizedMessage
@@ -92,9 +94,9 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 		}
 		nm.MessageType = string(Classify(nm))
 		nm.IsPromotional = IsPromotionalMessageType(nm.MessageType)
-		if resolver != nil && (resolveLimit == 0 || resolvedThisBatch < resolveLimit) {
-			if p.resolveURL(ctx, nm, resolver) {
-				resolvedThisBatch++
+		if resolver != nil && (resolveLimit == 0 || p.resolvedURLs < resolveLimit) {
+			if p.resolveURL(ctx, nm) {
+				p.resolvedURLs++
 			}
 		}
 		nm.FeedEligible = nm.MessageType == string(TypeDealComplete) || nm.MessageType == string(TypeDealNoCoupon)
@@ -124,8 +126,8 @@ func (p *Processor) processBatch(ctx context.Context) (batchFull bool) {
 	return batchFull
 }
 
-func (p *Processor) resolveURL(ctx context.Context, nm *NormalizedMessage, resolver *URLResolver) bool {
-	return EnrichURLResolution(ctx, nm, resolver, p.log)
+func (p *Processor) resolveURL(ctx context.Context, nm *NormalizedMessage) bool {
+	return EnrichURLResolution(ctx, nm, p.urlResolver, p.log)
 }
 
 func EnrichURLResolution(ctx context.Context, nm *NormalizedMessage, resolver *URLResolver, log logger.Logger) bool {

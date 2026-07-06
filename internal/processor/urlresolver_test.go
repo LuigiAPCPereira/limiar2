@@ -193,6 +193,70 @@ func TestURLResolver_ForbiddenFallsBackAsUnresolved(t *testing.T) {
 	}
 }
 
+func TestURLResolver_FreshUnresolvedCacheHitDoesNotRetry(t *testing.T) {
+	store := newFakeURLResolutionStore()
+	serverHits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serverHits++
+		_, _ = w.Write([]byte(`<html><head><title>Produto</title></head></html>`))
+	}))
+	defer server.Close()
+
+	original := server.URL + "/temporario"
+	store.items[original] = model.URLResolution{
+		OriginalURL:  original,
+		CanonicalURL: original,
+		ResolvedAt:   time.Now().UTC(),
+		Unresolved:   true,
+	}
+
+	resolver := NewURLResolver(store, server.Client(), logger.NopLogger{})
+	got, err := resolver.Resolve(context.Background(), original)
+	if err != nil {
+		t.Fatalf("Resolve fresh unresolved cache hit: %v", err)
+	}
+	if !got.Unresolved {
+		t.Fatalf("Unresolved = false, want cached unresolved: %#v", got)
+	}
+	if serverHits != 0 {
+		t.Fatalf("serverHits = %d, want 0 for fresh unresolved cache", serverHits)
+	}
+}
+
+func TestURLResolver_StaleUnresolvedCacheHitRetries(t *testing.T) {
+	store := newFakeURLResolutionStore()
+	serverHits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serverHits++
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Produto Retentado</title></head><body>ok</body></html>`))
+	}))
+	defer server.Close()
+
+	original := server.URL + "/temporario?utm_source=telegram"
+	store.items[original] = model.URLResolution{
+		OriginalURL:  original,
+		CanonicalURL: server.URL + "/temporario",
+		ResolvedAt:   time.Now().Add(-48 * time.Hour).UTC(),
+		Unresolved:   true,
+	}
+
+	resolver := NewURLResolver(store, server.Client(), logger.NopLogger{})
+	got, err := resolver.Resolve(context.Background(), original)
+	if err != nil {
+		t.Fatalf("Resolve stale unresolved cache hit: %v", err)
+	}
+	if got.Unresolved {
+		t.Fatalf("Unresolved = true, want retried resolved result: %#v", got)
+	}
+	if got.Title != "Produto Retentado" {
+		t.Fatalf("Title = %q, want retry result title", got.Title)
+	}
+	if serverHits != 1 {
+		t.Fatalf("serverHits = %d, want 1 retry", serverHits)
+	}
+}
+
 func TestURLResolver_TimeoutFallsBackAsUnresolved(t *testing.T) {
 	store := newFakeURLResolutionStore()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
