@@ -514,7 +514,7 @@ func ensureExpiresAtColumn(t *testing.T, ctx context.Context, db *sql.DB) {
 	if err != nil {
 		t.Fatalf("pragma table_info: %v", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	for rows.Next() {
 		var cid int
 		var name, ctype string
