@@ -261,7 +261,7 @@ func exportPayloads(messages []RawMessage) {
 		})
 	}
 
-	f, err := os.OpenFile("payloads_export.json", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	f, err := os.OpenFile("payloads_export.json", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		log.Fatal(err)
 	}
