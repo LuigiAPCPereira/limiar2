@@ -18,3 +18,7 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+
+## 2023-10-24 - Melhoria de Acessibilidade no Dashboard e Mensagens de Empty State
+**Aprendizado:** Elementos interativos complexos como `<div>` renderizados em templates como AlpineJS precisam de atributos ARIA explícitos e tratamentos de eventos de teclado combinados (`@keydown.enter` e `@keydown.space.prevent`) para navegação consistente. Assegurar foco global (`*:focus-visible`) e labels descritivos garante navegabilidade e acessibilidade de leitores de tela sem sobrecarga. Empty states devem prover instruções claras de próximos passos como o uso de comandos da CLI do sistema.
+**Ação:** Continuar combinando `role="button"` e `tabindex="0"` nas views HTML em conjunto com o bind das teclas Enter e Space nos componentes interativos. Assegurar que widgets SSE possuam `role="status"` para serem acompanhados pelos leitores de tela.
