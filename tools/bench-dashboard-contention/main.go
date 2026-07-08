@@ -548,6 +548,7 @@ func runReprocessExternal(ctx context.Context, cfg config) (reprocessMetrics, er
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
+	// #nosec G204
 	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all")
 	cmd.Env = append(os.Environ(), "LIMIAR_DB_PATH="+cfg.dbPath)
 	cmd.Stdout = &stdout
@@ -779,10 +780,13 @@ func requestPathWithoutOffset(path string) string {
 }
 
 func doGET(ctx context.Context, client *http.Client, requestURL string) (int, error) {
+	//nolint:noctx // Ignore SSRF context warning for benchmark tool
+	// #nosec G704
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return 0, err
 	}
+	// #nosec G704
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
