@@ -7,6 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      *:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+    </style>
   </head>
   <body class="bg-[#0a0a0a] text-[#fafafa] font-sans antialiased overflow-hidden" x-data="dashboard">
     <div id="app" class="flex h-screen w-screen overflow-hidden bg-[#0a0a0a] text-[#fafafa] font-sans border border-[#262626]">
@@ -31,6 +34,9 @@
           <div class="pt-6 flex-1 flex flex-col min-h-0">
             <div class="text-[10px] uppercase tracking-widest text-[#737373] font-bold px-2 mb-2 flex-shrink-0">Canais Ativos</div>
             <div class="space-y-1 overflow-y-auto flex-1">
+              <div x-show="$store.global.channels.length === 0" class="px-3 py-2 text-[10px] text-[#737373]">
+                Nenhum canal monitorado.<br>Use <code class="font-mono text-[#fafafa] bg-[#111111] px-1 rounded border border-[#262626]">limiar-collector channels add</code>
+              </div>
               <template x-for="c in $store.global.channels" :key="c.ChannelID">
                 <div class="flex items-center justify-between px-3 py-1.5 text-xs text-[#fafafa]">
                   <span x-text="c.Username || 'id:' + c.ChannelID" class="truncate"></span>
@@ -213,7 +219,7 @@
       <aside x-data="detailPanel" x-show="isOpen" style="display: none;" class="w-80 border-l border-[#262626] bg-[#111111] flex flex-col flex-shrink-0">
         <div class="p-4 border-b border-[#262626] flex justify-between items-center">
           <h2 class="text-xs font-bold uppercase tracking-widest text-[#737373]">Inspeção Detalhada</h2>
-          <button @click="close()" class="text-[#737373] hover:text-[#fafafa]">
+          <button @click="close()" class="text-[#737373] hover:text-[#fafafa]" aria-label="Fechar painel de detalhes">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>

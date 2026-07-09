@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2024-07-09 - Acessibilidade de Foco e Estados Vazios no Dashboard
+**Aprendizado:** Pequenos detalhes fazem muita diferença: elementos interativos em dashboard requerem estilos explícitos de focus (`*:focus-visible`) para facilitar a navegação por teclado e estados vazios ajudam os usuários sugerindo uma próxima ação útil ("Nenhum canal monitorado. Use limiar-collector channels add").
+**Ação:** Sempre definir aria-labels em botões que contém apenas ícones e certificar que listas tenham estados vazios explicativos para guiar a interação e evitar confusão, assim como garantir suporte universal ao `:focus-visible`.
