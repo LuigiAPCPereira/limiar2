@@ -17,3 +17,7 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+## 2025-06-12 - [File Permissions] Forçar permissões restritas (0o600) em toda base de arquivos sensíveis
+**Vulnerabilidade:** A base de dados principal (`.db`) estava sendo criada com `0600` em alguns pontos e não estava recebendo `os.Chmod` ao já existir. Além disso, a sintaxe antiga em octal (`0600`) era apontada pelo `gosec` (G306) como falha.
+**Aprendizado:** Em sistemas de banco de dados embedded, se as permissões estiverem abertas na abertura ou em criações subsequentes, dados críticos de sessão podem ser lidos por outros usuários.
+**Prevenção:** Sempre utilizar `0o600` na criação de arquivos com segredos (.db, .env). Se o arquivo DB já existir, sempre enforce permissões estritas utilizando `os.Chmod(dbPath, 0o600)`.
