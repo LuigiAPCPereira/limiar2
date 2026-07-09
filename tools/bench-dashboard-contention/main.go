@@ -92,7 +92,7 @@ type httpMetricsSnapshot struct {
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -359,10 +359,10 @@ func printDryRun(w io.Writer, cfg config, scenarios []string) {
 	} else {
 		_, _ = fmt.Fprintf(w, "Command: in-process reprocess using %s\n", cfg.dbPath)
 	}
-	fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
-	fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
+	_, _ = fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
+	_, _ = fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
 	for _, scenario := range scenarios {
-		fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
+		_, _ = fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
 	}
 }
 
@@ -865,20 +865,20 @@ func percentile(sorted []time.Duration, p float64) time.Duration {
 
 func summarizeScenario(result scenarioResult, baseline *scenarioResult) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Scenario: %s\n", result.Name)
-	fmt.Fprintf(&b, "Reprocess duration: %s\n", result.Reprocess.Duration.Round(time.Millisecond))
-	fmt.Fprintf(&b, "Processed: %d\n", result.Reprocess.Processed)
-	fmt.Fprintf(&b, "Failures: %d\n", result.Reprocess.Failed)
-	fmt.Fprintf(&b, "Throughput: %.1f msg/s\n", result.Reprocess.Throughput)
-	fmt.Fprintf(&b, "HTTP requests: %d\n", result.HTTP.Requests)
-	fmt.Fprintf(&b, "HTTP errors: %d\n", result.HTTP.Errors)
-	fmt.Fprintf(&b, "HTTP p50: %s\n", result.HTTP.P50.Round(time.Millisecond))
-	fmt.Fprintf(&b, "HTTP p95: %s\n", result.HTTP.P95.Round(time.Millisecond))
-	fmt.Fprintf(&b, "HTTP max: %s\n", result.HTTP.Max.Round(time.Millisecond))
-	fmt.Fprintf(&b, "Slowest endpoint: %s\n", valueOrUnknown(result.HTTP.SlowestEndpoint))
-	fmt.Fprintf(&b, "RSS max: %s\n", formatRSS(result.Reprocess.RSSMaxKB))
-	fmt.Fprintf(&b, "Status codes: %s\n", formatStatusCodes(result.HTTP.StatusCodes))
-	fmt.Fprintf(&b, "Conclusion: %s\n\n", conclusion(result, baseline))
+	_, _ = fmt.Fprintf(&b, "Scenario: %s\n", result.Name)
+	_, _ = fmt.Fprintf(&b, "Reprocess duration: %s\n", result.Reprocess.Duration.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(&b, "Processed: %d\n", result.Reprocess.Processed)
+	_, _ = fmt.Fprintf(&b, "Failures: %d\n", result.Reprocess.Failed)
+	_, _ = fmt.Fprintf(&b, "Throughput: %.1f msg/s\n", result.Reprocess.Throughput)
+	_, _ = fmt.Fprintf(&b, "HTTP requests: %d\n", result.HTTP.Requests)
+	_, _ = fmt.Fprintf(&b, "HTTP errors: %d\n", result.HTTP.Errors)
+	_, _ = fmt.Fprintf(&b, "HTTP p50: %s\n", result.HTTP.P50.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(&b, "HTTP p95: %s\n", result.HTTP.P95.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(&b, "HTTP max: %s\n", result.HTTP.Max.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(&b, "Slowest endpoint: %s\n", valueOrUnknown(result.HTTP.SlowestEndpoint))
+	_, _ = fmt.Fprintf(&b, "RSS max: %s\n", formatRSS(result.Reprocess.RSSMaxKB))
+	_, _ = fmt.Fprintf(&b, "Status codes: %s\n", formatStatusCodes(result.HTTP.StatusCodes))
+	_, _ = fmt.Fprintf(&b, "Conclusion: %s\n\n", conclusion(result, baseline))
 	return b.String()
 }
 
@@ -892,16 +892,16 @@ func conclusion(result scenarioResult, baseline *scenarioResult) string {
 
 func summarizeTable(results []scenarioResult, baseline *scenarioResult) string {
 	var b strings.Builder
-	fmt.Fprintln(&b, "Final table:")
-	fmt.Fprintln(&b, "Scenario | Reprocess | Processed | Failures | Throughput | HTTP req | HTTP err | HTTP p50 | HTTP p95 | RSS max | Delta")
-	fmt.Fprintln(&b, "--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---:")
+	_, _ = fmt.Fprintln(&b, "Final table:")
+	_, _ = fmt.Fprintln(&b, "Scenario | Reprocess | Processed | Failures | Throughput | HTTP req | HTTP err | HTTP p50 | HTTP p95 | RSS max | Delta")
+	_, _ = fmt.Fprintln(&b, "--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---:")
 	for _, result := range results {
 		delta := "n/a"
 		if baseline != nil && baseline.Reprocess.Duration > 0 && result.Name != "baseline" {
 			pct := (float64(result.Reprocess.Duration) - float64(baseline.Reprocess.Duration)) / float64(baseline.Reprocess.Duration) * 100
 			delta = fmt.Sprintf("%+.1f%%", pct)
 		}
-		fmt.Fprintf(&b, "%s | %s | %d | %d | %.1f msg/s | %d | %d | %s | %s | %s | %s\n",
+		_, _ = fmt.Fprintf(&b, "%s | %s | %d | %d | %.1f msg/s | %d | %d | %s | %s | %s | %s\n",
 			result.Name,
 			result.Reprocess.Duration.Round(time.Millisecond),
 			result.Reprocess.Processed,
