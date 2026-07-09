@@ -173,7 +173,7 @@ func (w *Wizard) saveEnvFile(appID int, apiHash string) error {
 		appID, apiHash,
 	)
 
-	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
 		return fmt.Errorf("erro ao salvar .env: %w", err)
 	}
 
