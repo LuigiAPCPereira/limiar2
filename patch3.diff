@@ -1,0 +1,7 @@
+<<<<<<< SEARCH
+func _TestPhotoMetadataStats(t *testing.T) {
+	dbPath := "test_stats.db"
+=======
+func TestPhotoMetadataStats(t *testing.T) {
+	dbPath := "test_stats.db"
+>>>>>>> REPLACE
