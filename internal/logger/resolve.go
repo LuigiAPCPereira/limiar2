@@ -19,7 +19,7 @@ func ResolveFormat(envFormat string, logIsTTY bool) string {
 		case "pretty", "text", "json":
 			return envFormat
 		default:
-			fmt.Fprintf(os.Stderr, "limiar: LIMIAR_LOG_FORMAT=%q inválido; usando \"text\"\n", envFormat)
+			_, _ = fmt.Fprintf(os.Stderr, "limiar: LIMIAR_LOG_FORMAT=%q inválido; usando \"text\"\n", envFormat)
 			return "text"
 		}
 	}

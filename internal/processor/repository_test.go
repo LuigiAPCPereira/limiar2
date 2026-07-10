@@ -38,8 +38,7 @@ func openTempProcessorRepo() (*storage.ProcessorRepository, *storage.DB, func(),
 	return repo, db, cleanup, nil
 }
 
-// nolint:unused
-func _TestPhotoMetadataStats(t *testing.T) {
+func TestPhotoMetadataStats(t *testing.T) {
 	repo, db, cleanup, err := openTempProcessorRepo()
 	if err != nil {
 		t.Fatalf("openTempProcessorRepo: %v", err)

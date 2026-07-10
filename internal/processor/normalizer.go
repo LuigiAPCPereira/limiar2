@@ -422,7 +422,7 @@ func recurrenceGroupID(nm *NormalizedMessage) int64 {
 	}, "|"))
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(key))
-	return int64(h.Sum64() & 0x7fffffffffffffff)
+	return int64(h.Sum64() & 0x7fffffffffffffff) // #nosec G115
 }
 
 // computeURLHash retorna SHA-256 da primeira URL normalizada no texto.

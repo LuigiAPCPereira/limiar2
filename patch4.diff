@@ -1,0 +1,29 @@
+<<<<<<< SEARCH
+func doGET(ctx context.Context, client *http.Client, requestURL string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil) // #nosec G704 — input from controlled benchmarking config
+	if err != nil {
+		return 0, err
+	}
+	resp, err := client.Do(req) // #nosec G704
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}
+=======
+func doGET(ctx context.Context, client *http.Client, requestURL string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := client.Do(req) // #nosec G107
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}
+>>>>>>> REPLACE

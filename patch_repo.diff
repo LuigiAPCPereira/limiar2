@@ -1,0 +1,6 @@
+<<<<<<< SEARCH
+// nolint:unused
+func _TestPhotoMetadataStats(t *testing.T) {
+=======
+func TestPhotoMetadataStats(t *testing.T) {
+>>>>>>> REPLACE

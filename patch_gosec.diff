@@ -1,0 +1,6 @@
+<<<<<<< SEARCH
+	// #nosec G107
+	resp, err := client.Do(req)
+=======
+	resp, err := client.Do(req) // #nosec G107
+>>>>>>> REPLACE
