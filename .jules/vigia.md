@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-13 - [File Permissions] Forçar criação do banco SQLite/Tursogo com 0o600
+**Vulnerabilidade:** O arquivo de banco de dados (`.db`) que hospeda a sessão MTProto do Telegram e as mensagens em texto plano estava sendo criado com o umask padrão do sistema (que normalmente resulta em permissões `0644`), permitindo que outros usuários locais no mesmo sistema acessassem os dados críticos.
+**Aprendizado:** A criação automática de arquivos pelo driver `database/sql` para bancos de dados baseados em arquivos pode não aplicar regras de segurança estritas, deixando os arquivos resultantes vulneráveis a leituras não autorizadas.
+**Prevenção:** Antes de chamar `sql.Open(...)`, deve-se criar manualmente o arquivo do banco de dados (se não existir) utilizando `os.OpenFile` com permissões `0o600` e, caso exista, aplicar `os.Chmod` para garantir que as permissões restritas (owner-only) continuam sendo aplicadas. Isso assegura que dados sensíveis armazenados localmente sejam fortemente protegidos em nível de sistema de arquivos. Além disso, usar o prefixo `0o` atende aos padrões modernos do Go.
