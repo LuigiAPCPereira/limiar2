@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2024-05-18 - Acessibilidade Base e Feedback de Estado
+**Aprendizado:** Em dashboards HTML vanilla, o estado da conexão via SSE pode passar despercebido por leitores de tela sem as tags apropriadas. Além disso, elementos interativos customizados (como `div`s clicáveis) perdem o foco e a acessibilidade via teclado sem suporte explícito, prejudicando a navegação.
+**Ação:** Sempre adicione um `<style>` global com `*:focus-visible`, garanta atributos `role="status"` e `aria-live="polite"` para indicadores de conexão assíncrona, e não esqueça de adicionar `role="button"`, `tabindex="0"` e `@keydown` apropriados em divs clicáveis usando AlpineJS.
