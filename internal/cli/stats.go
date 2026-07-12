@@ -56,9 +56,9 @@ func newStatsCmd(p Provider) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 			presenter.Info("📊 Relatório Limiar")
-			fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 
 			// Volume
 			fmt.Fprintln(out, "  VOLUME")
