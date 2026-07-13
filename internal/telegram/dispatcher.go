@@ -101,13 +101,16 @@ func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update)
 // Se o buffer de um handler estiver cheio, o update é descartado para esse handler com
 // aviso de log, sem bloquear os demais handlers (evita cascata de bloqueio).
 func (d *Dispatcher) Dispatch(ctx context.Context, update Update) {
+	_, isNop := d.log.(logger.NopLogger)
+	logWarn := !isNop && d.log.IsWarnEnabled()
+
 	for i, ch := range d.chans {
 		select {
 		case ch <- update:
 		case <-ctx.Done():
 			return
 		default:
-			if d.log.IsWarnEnabled() {
+			if logWarn {
 				d.log.Warn("⚠️ Buffer do handler cheio, update descartado", "handler", i)
 			}
 		}

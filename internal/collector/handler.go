@@ -80,7 +80,9 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Updat
 		return apperrors.Wrap("collector", "classify", err)
 	}
 
-	if h.log.IsInfoEnabled() {
+	_, isNop := h.log.(logger.NopLogger)
+
+	if !isNop && h.log.IsInfoEnabled() {
 		h.log.Info("📩 Mensagem ao vivo", "canal_id", update.ChannelID, "msg_id", update.MessageID)
 	}
 
@@ -90,7 +92,7 @@ func (h *MessageHandler) HandleUpdate(ctx context.Context, update telegram.Updat
 	case <-ctx.Done():
 		return apperrors.Wrap("collector", "handle_update", ctx.Err())
 	default:
-		if h.log.IsWarnEnabled() {
+		if !isNop && h.log.IsWarnEnabled() {
 			h.log.Warn("⚠️ Canal de escrita cheio, job descartado", "canal_id", update.ChannelID, "msg_id", update.MessageID)
 		}
 		return nil
