@@ -17,3 +17,7 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+## 2025-02-27 - Permissões do Banco de Dados (.db)
+**Vulnerabilidade:** O arquivo do banco de dados (que armazena o token MTProto) estava sendo criado usando uma sintaxe octal antiga (0600) em vez da moderna (0o600). Adicionalmente, dependia apenas do `os.OpenFile` na criação e ignorava a correção de arquivos já criados com umask menos restritivo.
+**Aprendizado:** Bancos criados antes da imposição estrita poderiam estar com permissões brandas e legíveis globalmente. E a umask do sistema pode contornar os parâmetros da criação.
+**Prevenção:** Sempre usar a notação moderna do Go `0o600` e impor ativamente com `os.Chmod` na inicialização para garantir a segurança independentemente da umask e mitigar histórico.
