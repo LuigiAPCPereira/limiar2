@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Dashboard em tempo real do limiar-collector" />
     <title>Limiar Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,12 +31,9 @@
           <div class="pt-6 flex-1 flex flex-col min-h-0">
             <div class="text-[10px] uppercase tracking-widest text-[#737373] font-bold px-2 mb-2 flex-shrink-0">Canais Ativos</div>
             <div class="space-y-1 overflow-y-auto flex-1">
-              <div x-show="$store.global.channels.length === 0" class="px-3 py-2 text-xs text-[#737373]">
-                Nenhum canal monitorado. Use <code class="bg-[#111111] border border-[#262626] px-1 py-0.5 rounded text-[10px] font-mono mt-1 block w-fit">limiar-collector channels add</code>
-              </div>
               <template x-for="c in $store.global.channels" :key="c.ChannelID">
                 <div class="flex items-center justify-between px-3 py-1.5 text-xs text-[#fafafa]">
-                  <span x-text="c.Username || 'id:' + c.ChannelID" :title="c.Username || 'id:' + c.ChannelID" class="truncate cursor-default"></span>
+                  <span x-text="c.Username || 'id:' + c.ChannelID" class="truncate"></span>
                   <span class="font-mono text-[#737373]" x-text="c.MessageCount > 1000 ? (c.MessageCount/1000).toFixed(1) + 'k' : c.MessageCount"></span>
                 </div>
               </template>
@@ -45,7 +41,7 @@
           </div>
         </nav>
         <div class="p-4 border-t border-[#262626]" x-data="{ status: () => $store.global.connectionStatus }">
-          <div class="flex items-center gap-2 mb-3" role="status" aria-live="polite">
+          <div class="flex items-center gap-2 mb-3">
             <div class="w-2 h-2 rounded-full" :class="{'bg-[#22c55e]': status() === 'connected', 'bg-[#f59e0b]': status() === 'polling', 'bg-[#ef4444]': status() === 'disconnected'}"></div>
             <span class="text-[11px] font-medium text-[#737373]" x-text="status() === 'connected' ? 'CONEXÃO LIVE (SSE)' : (status() === 'polling' ? 'POLLING (30S)' : 'OFFLINE')"></span>
           </div>
@@ -217,7 +213,7 @@
       <aside x-data="detailPanel" x-show="isOpen" style="display: none;" class="w-80 border-l border-[#262626] bg-[#111111] flex flex-col flex-shrink-0">
         <div class="p-4 border-b border-[#262626] flex justify-between items-center">
           <h2 class="text-xs font-bold uppercase tracking-widest text-[#737373]">Inspeção Detalhada</h2>
-          <button @click="close()" aria-label="Fechar painel de detalhes" class="text-[#737373] hover:text-[#fafafa]">
+          <button @click="close()" class="text-[#737373] hover:text-[#fafafa]">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
