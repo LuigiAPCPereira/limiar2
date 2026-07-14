@@ -17,3 +17,7 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+## 2025-06-12 - [File Permissions] Forçar permissões restritivas (0600) em bancos existentes
+**Vulnerabilidade:** Se um arquivo de banco de dados (`.db`) já existisse com permissões permissivas (ex: `0644`), `os.OpenFile(dbPath, ..., 0600)` não corrigiria as permissões do arquivo existente, mantendo-o vulnerável à leitura não autorizada por outros usuários locais do sistema (G306).
+**Aprendizado:** A criação via `os.OpenFile` com flags apenas garante as permissões para novos arquivos ou arquivos truncados. Quando abrimos um arquivo pré-existente (sem O_TRUNC), as permissões originais são mantidas pelo sistema operacional (comportamento padrão POSIX). Além disso, deve-se usar a sintaxe octal moderna `0o600` em vez da legada `0600`.
+**Prevenção:** Sempre aplique `os.Chmod(path, 0o600)` explicitamente ao abrir arquivos sensíveis garantindo que, mesmo que o arquivo já existisse com permissões permissivas (por ex. criado acidentalmente antes ou com outro umask), elas sejam corrigidas antes do uso pelo banco.
