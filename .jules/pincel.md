@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2024-07-14 - Melhorias de Acessibilidade e UX no Dashboard HTML
+**Aprendizado:** A inclusão de `<meta name="description">` e atributos ARIA como `role="status"` e `aria-live="polite"` são essenciais para interfaces baseadas em SSE num único arquivo HTML para garantir leitura por screen readers e contextualização em search/social. O uso nativo de tooltips via o atributo `title` ajuda com textos truncados, e estados vazios com comandos CLI sugeridos guiam melhor o usuário, especialmente num cenário onde a CLI interage em conjunto com um dashboard embutido.
+**Ação:** Sempre considerar navegação em tela dividida, garantindo contrastes, labels em botões com ícones isolados, e mensagens claras em estados de ausência de dados, além de priorizar as tags nativas HTML sempre que possível em ambientes "vanilla" (sem framework).
