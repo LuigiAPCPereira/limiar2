@@ -1,0 +1,20 @@
+--- internal/dashboard/server_test.go
++++ internal/dashboard/server_test.go
+@@ -460,7 +460,7 @@
+
+ // flusherRecorder wraps httptest.ResponseRecorder to also satisfy http.Flusher.
+ type flusherRecorder struct {
+-	httptest.ResponseRecorder
++	*httptest.ResponseRecorder
+ }
+
+ func (f *flusherRecorder) Flush() {}
+@@ -472,7 +472,7 @@
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+-	w := &flusherRecorder{ResponseRecorder: *httptest.NewRecorder()}
++	w := &flusherRecorder{httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
