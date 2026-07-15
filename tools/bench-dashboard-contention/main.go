@@ -548,7 +548,7 @@ func runReprocessExternal(ctx context.Context, cfg config) (reprocessMetrics, er
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all")
+	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all") // #nosec G204
 	cmd.Env = append(os.Environ(), "LIMIAR_DB_PATH="+cfg.dbPath)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
