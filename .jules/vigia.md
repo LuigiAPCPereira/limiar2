@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-13 - [File Permissions] Uso de permissão 0o600 e os.Chmod para proteção de arquivos críticos
+**Vulnerabilidade:** A criação do arquivo `.env` via `wizard.go` e a criação do banco de dados no `db.go` não reforçavam garantias ativas contra um `umask` leniente após a criação ou utilizavam octais legados (ex: `0600`), que falhavam nos cheques modernos de `gosec` (G306). Bancos legados poderiam estar em disco com permissões inseguras (`0644`).
+**Aprendizado:** Apenas declarar a criação de arquivos com `0600` pode não ser suficiente, dependendo da configuração de SO, e o linting mais recente de go exige a forma idiomática de anotação octal `0o600`.
+**Prevenção:** Alterada a criação de arquivos para a sintaxe `0o600`. Em `db.go`, incluída a chamada de `os.Chmod` como fallback se o banco de dados `.db` já existisse, assegurando que bancos recriados em instâncias legadas sejam ativamente re-protegidos e blindados via verificação e reforço após checagem por `os.Stat`.
