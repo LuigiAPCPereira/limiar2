@@ -460,7 +460,7 @@ func TestHandleIndex_NotFound(t *testing.T) {
 
 // flusherRecorder wraps httptest.ResponseRecorder to also satisfy http.Flusher.
 type flusherRecorder struct {
-	*httptest.ResponseRecorder
+	httptest.ResponseRecorder
 }
 
 func (f *flusherRecorder) Flush() {}
@@ -472,12 +472,12 @@ func TestHandleEvents_Subscribe(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
-	w := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+	w := &flusherRecorder{ResponseRecorder: *httptest.NewRecorder()}
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		srv.handleEvents(w, req)
+		srv.handleEvents(&w.ResponseRecorder, req)
 	}()
 
 	// Give the handler time to subscribe and start listening
