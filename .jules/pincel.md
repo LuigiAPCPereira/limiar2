@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2026-07-28 - Alpine x-text em tag <title> fora do componente
+**Aprendizado:** A diretiva `x-text` do Alpine.js funciona bem dentro do escopo do `<body x-data="...">`. No entanto, ela não tem efeito (ou se comporta de forma imprevisível) quando colocada diretamente na tag `<title>` dentro do `<head>`, a menos que a inicialização do `x-data` seja feita na própria tag `<html>`. Se isso não for feito, deve-se manter o título de forma estática para evitar quebra de funcionalidade e poluição.
+**Ação:** Evite injetar código Alpine como `x-text` no header (`<head>`) da página caso o componente não englobe essa área. Mantenha o `<title>` estático, ou utilize abordagens programáticas em JS vanilla se precisar atualizá-lo de forma reativa sob essa limitação estrutural.
