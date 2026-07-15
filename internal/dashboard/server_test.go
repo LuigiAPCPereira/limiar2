@@ -472,7 +472,8 @@ func TestHandleEvents_Subscribe(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
-	w := &flusherRecorder{httptest.NewRecorder()}
+	rec := httptest.NewRecorder()
+	w := &flusherRecorder{rec}
 
 	done := make(chan struct{})
 	go func() {
@@ -492,10 +493,10 @@ func TestHandleEvents_Subscribe(t *testing.T) {
 	cancel()
 	<-done
 
-	if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
 		t.Errorf("Content-Type = %q, want text/event-stream", ct)
 	}
-	body := w.Body.String()
+	body := rec.Body.String()
 	if body == "" {
 		t.Error("expected SSE event in body")
 	}
