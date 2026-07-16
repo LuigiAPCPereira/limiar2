@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2025-06-13 - Estados Vazios Orientadores em Listas
+**Aprendizado:** Listas que dependem de configuração (como a lista de canais monitorados) devem sempre ter um "empty state" quando vazias. Ao invés de apenas mostrar espaço em branco ou "Nenhum canal", é fundamental fornecer o comando CLI exato para o usuário resolver o problema diretamente pela interface.
+**Ação:** Implementado um estado vazio (empty state) guiado no painel lateral do dashboard que instrui explicitamente a rodar `limiar-collector channels add`. Sempre adicionar instruções acionáveis em estados vazios de UI.
