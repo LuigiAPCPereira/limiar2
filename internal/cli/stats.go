@@ -61,8 +61,8 @@ func newStatsCmd(p Provider) *cobra.Command {
 			_, _ = fmt.Fprintln(out)
 
 			// Volume
-			fmt.Fprintln(out, "  VOLUME")
-			fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
+			_, _ = fmt.Fprintln(out, "  VOLUME")
+			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
 			fmt.Fprintf(out, "  Mensagens raw:         %d\n", rawCount)
 			fmt.Fprintf(out, "  Mensagens processadas: %d\n", procCount)
 			if rawCount > 0 {
@@ -77,10 +77,10 @@ func newStatsCmd(p Provider) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(out, "  DISTRIBUIÇÃO POR TIPO")
-			fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
+			_, _ = fmt.Fprintln(out, "  DISTRIBUIÇÃO POR TIPO")
+			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
 			fmt.Fprintf(out, "  %-20s %8s %7s\n", "TIPO", "QTD", "%")
-			fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
+			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
 			for _, ts := range typeStats {
 				pct := 0.0
 				if procCount > 0 {
@@ -88,7 +88,7 @@ func newStatsCmd(p Provider) *cobra.Command {
 				}
 				fmt.Fprintf(out, "  %-20s %8d %6.1f%%\n", ts.MessageType, ts.Count, pct)
 			}
-			fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
+			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
 			fmt.Fprintf(out, "  %-20s %8d\n", "TOTAL", procCount)
 			_, _ = fmt.Fprintln(out)
 
