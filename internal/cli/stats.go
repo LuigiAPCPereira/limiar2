@@ -56,9 +56,9 @@ func newStatsCmd(p Provider) *cobra.Command {
 				return err
 			}
 
-		_, _ = fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 			presenter.Info("📊 Relatório Limiar")
-		_, _ = fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 
 			// Volume
 			_, _ = fmt.Fprintln(out, "  VOLUME")
@@ -69,7 +69,7 @@ func newStatsCmd(p Provider) *cobra.Command {
 				pct := 100 * float64(procCount) / float64(rawCount)
 				_, _ = fmt.Fprintf(out, "  Taxa de conversão:     %.1f%%\n", pct)
 			}
-		_, _ = fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 
 			// Distribuição por tipo
 			typeStats, err := procRepo.CountProcessedByType(ctx)
@@ -90,7 +90,7 @@ func newStatsCmd(p Provider) *cobra.Command {
 			}
 			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
 			_, _ = fmt.Fprintf(out, "  %-20s %8d\n", "TOTAL", procCount)
-		_, _ = fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 
 			// Contagem por canal
 			channelStats, err := collectorRepo.CountMessagesByChannel(ctx)
@@ -109,7 +109,7 @@ func newStatsCmd(p Provider) *cobra.Command {
 				}
 				_, _ = fmt.Fprintf(out, "  %-30s %8d\n", name, cs.MessageCount)
 			}
-		_, _ = fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 
 			// Completude de campos (amostrados de deal_complete e deal_no_coupon)
 			printCompleteness(ctx, out, procRepo)
@@ -177,6 +177,6 @@ func printCompleteness(ctx context.Context, out interface{ Write([]byte) (int, e
 			}
 			_, _ = fmt.Fprintf(out, "  %-20s %8s %-12s %5.1f%%\n", typeLabel, totalLabel, f.name, pct)
 		}
-	_, _ = fmt.Fprintln(out)
+		_, _ = fmt.Fprintln(out)
 	}
 }
