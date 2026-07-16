@@ -77,7 +77,7 @@ func TestSaveEnvFile(t *testing.T) {
 	}
 
 	// Verifica se as permissões são 0600
-	if mode := info.Mode().Perm(); mode != 0600 {
+	if mode := info.Mode().Perm(); mode != 0o600 {
 		t.Errorf("esperado permissões 0600, obteve %o", mode)
 	}
 
