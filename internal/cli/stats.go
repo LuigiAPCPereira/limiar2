@@ -63,8 +63,8 @@ func newStatsCmd(p Provider) *cobra.Command {
 			// Volume
 			_, _ = fmt.Fprintln(out, "  VOLUME")
 			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
-			fmt.Fprintf(out, "  Mensagens raw:         %d\n", rawCount)
-			fmt.Fprintf(out, "  Mensagens processadas: %d\n", procCount)
+			_, _ = fmt.Fprintf(out, "  Mensagens raw:         %d\n", rawCount)
+			_, _ = fmt.Fprintf(out, "  Mensagens processadas: %d\n", procCount)
 			if rawCount > 0 {
 				pct := 100 * float64(procCount) / float64(rawCount)
 				fmt.Fprintf(out, "  Taxa de conversão:     %.1f%%\n", pct)
@@ -98,10 +98,10 @@ func newStatsCmd(p Provider) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(out, "  MENSAGENS POR CANAL")
-			fmt.Fprintln(out, "  "+strings.Repeat("─", 40))
+			_, _ = fmt.Fprintln(out, "  MENSAGENS POR CANAL")
+			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 40))
 			fmt.Fprintf(out, "  %-30s %8s\n", "CANAL", "MSGS")
-			fmt.Fprintln(out, "  "+strings.Repeat("─", 40))
+			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 40))
 			for _, cs := range channelStats {
 				name := cs.Username
 				if name == "" {

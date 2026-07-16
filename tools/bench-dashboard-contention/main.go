@@ -362,7 +362,7 @@ func printDryRun(w io.Writer, cfg config, scenarios []string) {
 	_, _ = fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
 	_, _ = fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
 	for _, scenario := range scenarios {
-		fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
+		_, _ = fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
 	}
 }
 
