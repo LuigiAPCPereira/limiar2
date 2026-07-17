@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-12 - [File Permissions] Correção do umask para criação de arquivos do banco e configuração
+**Vulnerabilidade:** A permissão do arquivo para banco de dados e arquivos de configuração estava especificada com a sintaxe octal legada, o que além de levantar um alerta gosec G306, podia omitir o enforcement de permissões estritas em arquivos de DB já existentes criados de forma permissiva.
+**Aprendizado:** Bancos de dados gerados previamente (ou externamente) podem persistir com permissões inseguras se não forçarmos sua alteração no bootstrap e a sintaxe 0o600 deve ser usada no lugar de 0600.
+**Prevenção:** Utilizar a sintaxe Go octal moderna `0o600` e fazer o force-chmod explícito em `dbPath` caso o arquivo já exista para consertar bancos de dados criados com permissões excessivas.
