@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2026-07-17 - Melhorias de Empty State e Acessibilidade no Dashboard
+**Aprendizado:** Estados vazios e tags meta/títulos dinâmicos melhoram a experiência do usuário, mantendo contexto e guiando-o. O uso de foco global com CSS vanilla reduz a necessidade de classes tailwind repetidas.
+**Ação:** Sempre incluir empty states com ações (comandos CLI) em listas dinâmicas e aplicar estilos globais para suporte a teclado.
