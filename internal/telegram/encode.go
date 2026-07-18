@@ -1,22 +1,47 @@
 package telegram
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/gotd/td/tg"
 )
 
+var bufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
 // encodeUpdate serializa um contêiner de atualização do gotd para JSON. Os tipos tg do gotd
 // são structs Go simples com campos exportados, então encoding/json captura todo o formato
 // bruto — o que é exatamente o que a Fase 1 precisa para descobrir os dados reais.
 func encodeUpdate(u tg.UpdatesClass) ([]byte, error) {
-	payload, err := json.Marshal(u)
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
+	err := json.NewEncoder(buf).Encode(u)
 	if err != nil {
 		return nil, fmt.Errorf("marshal update: %w", err)
 	}
-	return payload, nil
+
+	// O json.Encoder adiciona um '\n' no final, removemos ele
+	// para manter o output igual ao json.Marshal
+	b := buf.Bytes()
+	if len(b) > 0 && b[len(b)-1] == '\n' {
+		b = b[:len(b)-1]
+	}
+
+	// Copia o payload para que o slice resultante não referencie
+	// a memória subjacente do buffer, permitindo que ele seja
+	// reutilizado com segurança pelo sync.Pool.
+	res := make([]byte, len(b))
+	copy(res, b)
+	return res, nil
 }
 
 // extractUpdateMeta extrai channelID e messageID de um contêiner de atualização do gotd.
@@ -91,10 +116,25 @@ func extractMessages(res tg.MessagesMessagesClass) ([]HistoryMessage, error) {
 			// Ignora mensagens de serviço e outras variantes que não sejam mensagens.
 			continue
 		}
-		payload, err := json.Marshal(msg)
+
+		buf := bufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+
+		err := json.NewEncoder(buf).Encode(msg)
 		if err != nil {
+			bufferPool.Put(buf)
 			return nil, fmt.Errorf("marshal history message %d: %w", msg.ID, err)
 		}
+
+		b := buf.Bytes()
+		if len(b) > 0 && b[len(b)-1] == '\n' {
+			b = b[:len(b)-1]
+		}
+
+		payload := make([]byte, len(b))
+		copy(payload, b)
+		bufferPool.Put(buf)
+
 		out = append(out, HistoryMessage{
 			MessageID: int64(msg.ID),
 			Date:      time.Unix(int64(msg.Date), 0),
