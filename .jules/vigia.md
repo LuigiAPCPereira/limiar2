@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-12 - [File Permissions] Forçar permissões restritivas 0o600 no banco de dados via Chmod
+**Vulnerabilidade:** Embora o banco de dados `Tursogo` local embarcado seja criado com a flag de permissão segura `0o600` via `os.OpenFile()`, bancos de dados pré-existentes criados por processos externos poderiam possuir permissões lenientes (como `0o644`), permitindo acesso indevido à informações críticas, incluindo a sessão MTProto.
+**Aprendizado:** A segurança em disco não termina no processo de criação. Defesa em profundidade exige aplicar ou re-aplicar regras de permissão rigorosas em arquivos existentes durante a carga/leitura, especialmente se eles armazenam segredos em plain-text como hashes de acesso e chaves de sessão.
+**Prevenção:** Sempre utilize a função `os.Chmod` sobre o arquivo de banco de dados imediatamente após abri-lo ou verificar que ele existe, garantindo que as permissões corretas (0o600) estão aplicadas independentemente de qual umask ou processo o criou originalmente. Se a chamada `Chmod` falhar por problemas de sistema de arquivo não-UNIX, deve-se logar adequadamente, mas sem interromper o serviço.

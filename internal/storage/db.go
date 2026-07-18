@@ -38,12 +38,18 @@ func Open(ctx context.Context, dbPath string, log logger.Logger) (*DB, error) {
 	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0600) // #nosec G304 — path from validated config
+		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 — path from validated config
 		if err != nil {
 			return nil, fmt.Errorf("storage: create db %q: %w", dbPath, err)
 		}
 		_ = f.Close()
 		log.Info("📦 Banco criado", "caminho", dbPath)
+	} else {
+		// 🛡️ Vigia: Garante que permissões restritivas 0o600 continuam sendo aplicadas mesmo se o
+		// arquivo já existia ou foi criado com um umask permissivo, protegendo a session token.
+		if err := os.Chmod(dbPath, 0o600); err != nil {
+			log.Warn("⚠️ Não foi possível aplicar chmod 0o600 no banco", "erro", err)
+		}
 	}
 
 	log.Info("🔌 Abrindo banco", "caminho", dbPath, "driver", driverName)
