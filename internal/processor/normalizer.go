@@ -53,7 +53,7 @@ var (
 	rePriceReais = regexp.MustCompile(`(?i)\b([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+(?:,[0-9]{2})?)\s*reais\b`)
 	// rePriceAlt catches "POR: 425 REAIS", "POR 65,47", "por apenas 99,90" without R$
 	rePriceAlt = regexp.MustCompile(`(?i)(?:por|only|apenas)[:\s]+R?\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)\s*(?:reais|REAIS)?`)
-	reCoupon   = regexp.MustCompile(`(?i)(?:cup[ao]m|c[oó]digo|code)[\s:\n]+([A-Za-z0-9_]{3,25})`)
+	Test__ = regexp.MustCompile(`(?i)(?:cup[ao]m|c[oó]digo|code)[\s:\n]+([A-Za-z0-9_]{3,25})`)
 
 	// Dual price: "De R$ 429 por R$ 208,92", "De: R$ 429 | Por: R$ 208", "R$ 50 OFF em R$ 250"
 	reDualPrice = regexp.MustCompile(
@@ -61,7 +61,7 @@ var (
 			`|(?:R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)\s*OFF\s+em\s+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?))`)
 
 	// Modifiers
-	rePix        = regexp.MustCompile(`(?i)no\s*pix|via\s*pix|pagamento\s+pix|[àa]\s+vista\s+no\s+pix`)
+	_ = regexp.MustCompile(`(?i)no\s*pix|via\s*pix|pagamento\s+pix|[àa]\s+vista\s+no\s+pix`)
 	reFretePrime = regexp.MustCompile(`(?i)frete\s*gr[áa]tis\s*prime|prime.*frete\s*gr[áa]tis`)
 	reFreteG     = regexp.MustCompile(`(?i)frete\s*gr[áa]tis`)
 	reInstall    = regexp.MustCompile(`(?i)(\d+)x\s*(?:sem\s*juros|s/\s*juros)`)
@@ -71,9 +71,9 @@ var (
 
 	// Urgency
 	reExpired  = regexp.MustCompile(`(?i)(esgotado|acabou|encerrado|expirado)`)
-	reCorre    = regexp.MustCompile(`(?i)\b(corre|corram)\b`)
-	reUltima   = regexp.MustCompile(`(?i)[úu]ltima[s]?\s*unidade|acabando|esgotando`)
-	reNacional = regexp.MustCompile(`(?i)envio\s+(nacional|do\s+brasil)`)
+	_ = regexp.MustCompile(`(?i)\b(corre|corram)\b`)
+	_ = regexp.MustCompile(`(?i)[úu]ltima[s]?\s*unidade|acabando|esgotando`)
+	_ = regexp.MustCompile(`(?i)envio\s+(nacional|do\s+brasil)`)
 	// Temporalidade de promoções. Datas explícitas vencem sinais flash.
 	reDateDMY           = regexp.MustCompile(`\b([0-3]?\d)/([01]?\d)(?:/(\d{2,4}))?\b`)
 	reFlashTemporal     = regexp.MustCompile(`(?i)\b(corre|corram|rel[âa]mpago|tempo\s+limitado|s[oó]\s+hoje|apenas\s+hoje|24h|12h|oferta\s+do\s+dia|[úu]ltima[s]?\s+unidade[s]?|acabando|esgotando|agora)\b`)
