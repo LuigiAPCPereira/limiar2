@@ -18,3 +18,7 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+
+## 2026-07-19 - Navegação por teclado em elementos interativos customizados
+**Aprendizado:** Elementos customizados como `<div>` com `@click` no AlpineJS não são nativamente acessíveis por teclado, impedindo navegação via Tab e acionamento via Enter/Espaço.
+**Ação:** Sempre adicionar `role="button"`, `tabindex="0"` e os bindings `@keydown.enter` e `@keydown.space.prevent` para replicar o comportamento de clique de forma acessível.
