@@ -89,7 +89,7 @@ func (d *Dispatcher) invoke(ctx context.Context, h UpdateHandler, update Update)
 	defer func() {
 		if r := recover(); r != nil {
 			errMsg := safePanicMessage(r)
-			d.log.Error("💥 Panic no handler recuperado", "erro", errMsg, "tipo", fmt.Sprintf("%T", r))
+			d.log.Error("💥 Panic no handler recuperado", "erro", fmt.Errorf("panic: %v", errMsg), "tipo", fmt.Sprintf("%T", r))
 		}
 	}()
 	if err := h.HandleUpdate(ctx, update); err != nil {

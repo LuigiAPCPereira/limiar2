@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-13 - [Dashboard Security] Restringir escuta do dashboard
+**Vulnerabilidade:** Embora o dashboard escute em `127.0.0.1` de forma fixa (`addr := fmt.Sprintf("127.0.0.1:%d", s.port)`), em sistemas mal configurados com encaminhamento de porta ou com proxy reverso pode haver exposição imprevista. Contudo, constatou-se que a falha de fato descrita no diário prévio tratava-se das permissões `0600` defasadas que poderiam, numa reabertura do DB (por exemplo, sob outro umask), expor as credenciais.
+**Aprendizado:** A segurança do `os.OpenFile` com 0600 (agora modernizado para `0o600`) é válida somente para a **criação** do arquivo. Se ele já existe com permissões amplas (ex: 0644 criado por um backup sem preservação), o Go não sobrescreve os metadados.
+**Prevenção:** Deve-se usar sempre `os.Chmod` como rede de segurança para garantir o isolamento das chaves após a constatação de sua existência.
