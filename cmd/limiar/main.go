@@ -17,7 +17,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "limiar:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "limiar:", err)
 		os.Exit(1)
 	}
 }
