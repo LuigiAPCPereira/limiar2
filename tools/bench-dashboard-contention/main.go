@@ -463,11 +463,11 @@ func isTursoLockError(text string) bool {
 func waitDashboard(ctx context.Context, cfg config) error {
 	client := &http.Client{Timeout: cfg.timeout}
 	requestURL := strings.TrimRight(cfg.dashboardURL, "/") + "/healthz"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil) // #nosec G704
 	if err != nil {
 		return fmt.Errorf("dashboard readiness: criar request: %w", err)
 	}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) // #nosec G704
 	if err != nil {
 		return fmt.Errorf("dashboard não respondeu em %s: %w", requestURL, err)
 	}
@@ -548,7 +548,7 @@ func runReprocessExternal(ctx context.Context, cfg config) (reprocessMetrics, er
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all")
+	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all") // #nosec G204
 	cmd.Env = append(os.Environ(), "LIMIAR_DB_PATH="+cfg.dbPath)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -779,11 +779,11 @@ func requestPathWithoutOffset(path string) string {
 }
 
 func doGET(ctx context.Context, client *http.Client, requestURL string) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil) // #nosec G704
 	if err != nil {
 		return 0, err
 	}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) // #nosec G704
 	if err != nil {
 		return 0, err
 	}
