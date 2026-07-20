@@ -173,11 +173,12 @@ func (w *Wizard) saveEnvFile(appID int, apiHash string) error {
 		appID, apiHash,
 	)
 
-	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
+	// Segurança: salva o .env restrito usando sintaxe octal moderna
+	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("erro ao salvar .env: %w", err)
 	}
 
-	fmt.Printf("  ✅ Credenciais salvas em %s (permissões 0600)\n", envPath)
+	fmt.Printf("  ✅ Credenciais salvas em %s (permissões 0o600)\n", envPath)
 	fmt.Println("  Adicione .env ao seu .gitignore!")
 	return nil
 }

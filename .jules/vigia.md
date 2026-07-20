@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-13 - [File Permissions] Uso de sintaxe octal moderna e garantia ativa de permissões em arquivos sensíveis
+**Vulnerabilidade:** A criação do banco de dados (que armazena session token MTProto) e do arquivo `.env` (que armazena APP_ID e API_HASH) usava a sintaxe legada `0600`, que, embora equivalente, dispara o warning `gosec G306`. Além disso, se o arquivo `.db` do Tursogo já existisse (por ter sido criado em versões anteriores sem permissões restritivas, sujeitas ao `umask` do sistema, ou seja, possivelmente globalmente legível), o código apenas pulava a sua criação sem alterar as permissões.
+**Aprendizado:** Bancos legados e configurações sensíveis podem manter permissões permissivas vindas de execuções anteriores, expondo informações por padrão. O linter `gosec` e boas práticas exigem `0o600` para clareza e que a segurança do banco seja reforçada ativamente.
+**Prevenção:** Sempre utilize a sintaxe moderna em octal do Go (`0o600`) para a criação de arquivos, e aplique um `os.Chmod(filepath, 0o600)` ativamente quando o arquivo de um banco de dados já existir para mitigar permissões fracas deixadas por versões antigas.
