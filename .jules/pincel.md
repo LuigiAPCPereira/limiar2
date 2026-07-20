@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2026-07-20 - Estado vazio, Tooltips e Meta Description no Dashboard Vanilla
+**Aprendizado:** Em interfaces vanilla, elementos que truncam texto sem suporte nativo escondem informação do usuário. Além disso, a falta de estados vazios guiados (com comandos acionáveis) deixa o usuário perdido. Finalmente, meta tags aumentam o SEO e contexto de acessibilidade sem impacto na performance.
+**Ação:** Em projetos sem framework ou componentes maduros, adicionar sempre o atributo `:title` e regras unificadas de `:focus-visible` para melhor acessibilidade. Quando a ausência de dados decorrer de falta de configuração, mostre sempre o comando correspondente para sanar a situação.
