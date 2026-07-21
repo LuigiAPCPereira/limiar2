@@ -129,7 +129,7 @@ var legacyMigrationVersions = []string{
 // storage.Open acreditar que está em dia e pular migrações.
 func createLegacyTursogoDB(t *testing.T, dbPath string) {
 	t.Helper()
-	f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0600)
+	f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		t.Fatalf("create legacy db file %q: %v", dbPath, err)
 	}
