@@ -31,6 +31,13 @@
           <div class="pt-6 flex-1 flex flex-col min-h-0">
             <div class="text-[10px] uppercase tracking-widest text-[#737373] font-bold px-2 mb-2 flex-shrink-0">Canais Ativos</div>
             <div class="space-y-1 overflow-y-auto flex-1">
+              <template x-if="$store.global.channels.length === 0">
+                <div class="px-3 py-4 text-center">
+                  <p class="text-xs text-[#737373] mb-2">Nenhum canal monitorado.</p>
+                  <p class="text-[10px] text-[#737373] mb-1">Use no terminal:</p>
+                  <div class="bg-[#111111] border border-[#262626] rounded-[4px] py-1.5 px-2 text-[10px] font-mono text-[#fafafa] break-all">limiar-collector channels add</div>
+                </div>
+              </template>
               <template x-for="c in $store.global.channels" :key="c.ChannelID">
                 <div class="flex items-center justify-between px-3 py-1.5 text-xs text-[#fafafa]">
                   <span x-text="c.Username || 'id:' + c.ChannelID" class="truncate"></span>
