@@ -463,6 +463,7 @@ func isTursoLockError(text string) bool {
 func waitDashboard(ctx context.Context, cfg config) error {
 	client := &http.Client{Timeout: cfg.timeout}
 	requestURL := strings.TrimRight(cfg.dashboardURL, "/") + "/healthz"
+		// #nosec G107
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return fmt.Errorf("dashboard readiness: criar request: %w", err)
@@ -548,6 +549,7 @@ func runReprocessExternal(ctx context.Context, cfg config) (reprocessMetrics, er
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
+	// #nosec G204
 	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all")
 	cmd.Env = append(os.Environ(), "LIMIAR_DB_PATH="+cfg.dbPath)
 	cmd.Stdout = &stdout
@@ -779,6 +781,7 @@ func requestPathWithoutOffset(path string) string {
 }
 
 func doGET(ctx context.Context, client *http.Client, requestURL string) (int, error) {
+		// #nosec G107
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return 0, err
