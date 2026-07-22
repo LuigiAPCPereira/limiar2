@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2025-06-12 - [File Permissions] Forçar criação de arquivos .env com 0600
+**Vulnerabilidade:** A criação do arquivo `.env` no assistente de configuração (wizard) estava utilizando um octal antigo (`0600`) que embora funcionasse poderia ser flagado por linters, além de faltar clareza sobre os requisitos de segurança no código.
+**Aprendizado:** Ao gerenciar arquivos sensíveis que guardam segredos, além de forçar a criação com `0o600`, é fundamental documentar inline o motivo de segurança, estabelecendo uma postura clara de *secure-by-default*.
+**Prevenção:** Sempre use `0o600` (sintaxe octal moderna) ao escrever o `.env` e assegure-se de que os testes unitários também validem a permissão adequadamente. Comentários claros de segurança documentam o "porquê".

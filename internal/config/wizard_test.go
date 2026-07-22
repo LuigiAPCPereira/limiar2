@@ -57,7 +57,7 @@ func TestWizardAppIDValidation(t *testing.T) {
 	}
 }
 
-// TestSaveEnvFile verifica se o .env é criado com permissões 0600
+// TestSaveEnvFile verifica se o .env é criado com permissões 0o600
 func TestSaveEnvFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
@@ -76,9 +76,9 @@ func TestSaveEnvFile(t *testing.T) {
 		t.Fatalf("esperado que o .env existisse: %v", err)
 	}
 
-	// Verifica se as permissões são 0600
-	if mode := info.Mode().Perm(); mode != 0600 {
-		t.Errorf("esperado permissões 0600, obteve %o", mode)
+	// Verifica se as permissões são 0o600
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("esperado permissões 0o600, obteve %o", mode)
 	}
 
 	// Verifica o conteúdo

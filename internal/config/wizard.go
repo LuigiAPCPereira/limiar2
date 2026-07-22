@@ -173,7 +173,9 @@ func (w *Wizard) saveEnvFile(appID int, apiHash string) error {
 		appID, apiHash,
 	)
 
-	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
+	// Segurança: O arquivo .env contém as credenciais do Telegram e deve ser criado
+	// com permissões estritas (owner-only) para evitar acesso não autorizado.
+	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("erro ao salvar .env: %w", err)
 	}
 
