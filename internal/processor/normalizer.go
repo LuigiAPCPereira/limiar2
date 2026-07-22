@@ -61,6 +61,7 @@ var (
 			`|(?:R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?)\s*OFF\s+em\s+R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?))`)
 
 	// Modifiers
+	//nolint:unused
 	rePix        = regexp.MustCompile(`(?i)no\s*pix|via\s*pix|pagamento\s+pix|[àa]\s+vista\s+no\s+pix`)
 	reFretePrime = regexp.MustCompile(`(?i)frete\s*gr[áa]tis\s*prime|prime.*frete\s*gr[áa]tis`)
 	reFreteG     = regexp.MustCompile(`(?i)frete\s*gr[áa]tis`)
@@ -71,8 +72,11 @@ var (
 
 	// Urgency
 	reExpired  = regexp.MustCompile(`(?i)(esgotado|acabou|encerrado|expirado)`)
+	//nolint:unused
 	reCorre    = regexp.MustCompile(`(?i)\b(corre|corram)\b`)
+	//nolint:unused
 	reUltima   = regexp.MustCompile(`(?i)[úu]ltima[s]?\s*unidade|acabando|esgotando`)
+	//nolint:unused
 	reNacional = regexp.MustCompile(`(?i)envio\s+(nacional|do\s+brasil)`)
 	// Temporalidade de promoções. Datas explícitas vencem sinais flash.
 	reDateDMY           = regexp.MustCompile(`\b([0-3]?\d)/([01]?\d)(?:/(\d{2,4}))?\b`)
