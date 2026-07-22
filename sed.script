@@ -1,2 +1,0 @@
-495s/w.Header/w.ResponseRecorder.Header/
-498s/w.Body/w.ResponseRecorder.Body/
