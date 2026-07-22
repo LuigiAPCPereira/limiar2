@@ -77,20 +77,20 @@ func newStatsCmd(p Provider) *cobra.Command {
 				return err
 			}
 
-			_, _ = fmt.Fprintln(out, "  DISTRIBUIÇÃO POR TIPO")
-			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
-			_, _ = fmt.Fprintf(out, "  %-20s %8s %7s\n", "TIPO", "QTD", "%")
-			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
+			fmt.Fprintln(out, "  DISTRIBUIÇÃO POR TIPO")
+			fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
+			fmt.Fprintf(out, "  %-20s %8s %7s\n", "TIPO", "QTD", "%")
+			fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
 			for _, ts := range typeStats {
 				pct := 0.0
 				if procCount > 0 {
 					pct = 100 * float64(ts.Count) / float64(procCount)
 				}
-				_, _ = fmt.Fprintf(out, "  %-20s %8d %6.1f%%\n", ts.MessageType, ts.Count, pct)
+				fmt.Fprintf(out, "  %-20s %8d %6.1f%%\n", ts.MessageType, ts.Count, pct)
 			}
-			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
-			_, _ = fmt.Fprintf(out, "  %-20s %8d\n", "TOTAL", procCount)
-			_, _ = fmt.Fprintln(out)
+			fmt.Fprintln(out, "  "+strings.Repeat("─", 37))
+			fmt.Fprintf(out, "  %-20s %8d\n", "TOTAL", procCount)
+			fmt.Fprintln(out)
 
 			// Contagem por canal
 			channelStats, err := collectorRepo.CountMessagesByChannel(ctx)
@@ -98,18 +98,18 @@ func newStatsCmd(p Provider) *cobra.Command {
 				return err
 			}
 
-			_, _ = fmt.Fprintln(out, "  MENSAGENS POR CANAL")
-			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 40))
-			_, _ = fmt.Fprintf(out, "  %-30s %8s\n", "CANAL", "MSGS")
-			_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 40))
+			fmt.Fprintln(out, "  MENSAGENS POR CANAL")
+			fmt.Fprintln(out, "  "+strings.Repeat("─", 40))
+			fmt.Fprintf(out, "  %-30s %8s\n", "CANAL", "MSGS")
+			fmt.Fprintln(out, "  "+strings.Repeat("─", 40))
 			for _, cs := range channelStats {
 				name := cs.Username
 				if name == "" {
 					name = fmt.Sprintf("id:%d", cs.ChannelID)
 				}
-				_, _ = fmt.Fprintf(out, "  %-30s %8d\n", name, cs.MessageCount)
+				fmt.Fprintf(out, "  %-30s %8d\n", name, cs.MessageCount)
 			}
-			_, _ = fmt.Fprintln(out)
+			fmt.Fprintln(out)
 
 			// Completude de campos (amostrados de deal_complete e deal_no_coupon)
 			printCompleteness(ctx, out, procRepo)
@@ -125,10 +125,10 @@ func newStatsCmd(p Provider) *cobra.Command {
 func printCompleteness(ctx context.Context, out interface{ Write([]byte) (int, error) }, repo *storage.ProcessorRepository) {
 	dealTypes := []string{"deal_complete", "deal_no_coupon"}
 
-		_, _ = fmt.Fprintln(out, "  COMPLETUDE DE CAMPOS (tipos deal)")
-		_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 50))
-		_, _ = fmt.Fprintf(out, "  %-20s %8s %8s %7s\n", "TIPO", "TOTAL", "CAMPO", "%")
-		_, _ = fmt.Fprintln(out, "  "+strings.Repeat("─", 50))
+	fmt.Fprintln(out, "  COMPLETUDE DE CAMPOS (tipos deal)")
+	fmt.Fprintln(out, "  "+strings.Repeat("─", 50))
+	fmt.Fprintf(out, "  %-20s %8s %8s %7s\n", "TIPO", "TOTAL", "CAMPO", "%")
+	fmt.Fprintln(out, "  "+strings.Repeat("─", 50))
 
 	for _, msgType := range dealTypes {
 		msgs, err := repo.ListProcessedMessages(ctx, 0, msgType, 1000, 0)
@@ -175,8 +175,8 @@ func printCompleteness(ctx context.Context, out interface{ Write([]byte) (int, e
 				typeLabel = ""
 				totalLabel = ""
 			}
-			_, _ = fmt.Fprintf(out, "  %-20s %8s %-12s %5.1f%%\n", typeLabel, totalLabel, f.name, pct)
+			fmt.Fprintf(out, "  %-20s %8s %-12s %5.1f%%\n", typeLabel, totalLabel, f.name, pct)
 		}
-		_, _ = fmt.Fprintln(out)
+		fmt.Fprintln(out)
 	}
 }
