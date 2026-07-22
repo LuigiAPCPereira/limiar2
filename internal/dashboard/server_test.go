@@ -492,10 +492,11 @@ func TestHandleEvents_Subscribe(t *testing.T) {
 	cancel()
 	<-done
 
-	if ct := w.ResponseRecorder.Header().Get("Content-Type"); ct != "text/event-stream" {
+	if ct := w.ResponseRecorder.Result().Header.Get("Content-Type"); ct != "text/event-stream" {
 		t.Errorf("Content-Type = %q, want text/event-stream", ct)
 	}
 	body := w.ResponseRecorder.Body.String()
+
 	if body == "" {
 		t.Error("expected SSE event in body")
 	}
