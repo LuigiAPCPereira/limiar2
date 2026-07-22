@@ -550,7 +550,7 @@ func runReprocessExternal(ctx context.Context, cfg config) (reprocessMetrics, er
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all")
+	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all") // #nosec G204 — cfg.bin vem de flag de CLI numa ferramenta de benchmark local
 	cmd.Env = append(os.Environ(), "LIMIAR_DB_PATH="+cfg.dbPath)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -781,11 +781,11 @@ func requestPathWithoutOffset(path string) string {
 }
 
 func doGET(ctx context.Context, client *http.Client, requestURL string) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil) // #nosec G704 — requestURL é dashboard URL local validada em parseConfig
 	if err != nil {
 		return 0, err
 	}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) // #nosec G704 — client aponta para dashboard local do benchmark
 	if err != nil {
 		return 0, err
 	}
