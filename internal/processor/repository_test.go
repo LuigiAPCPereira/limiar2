@@ -38,8 +38,6 @@ func openTempProcessorRepo() (*storage.ProcessorRepository, *storage.DB, func(),
 	return repo, db, cleanup, nil
 }
 
-//nolint:unused
-//nolint:unused
 func _TestPhotoMetadataStats(t *testing.T) {
 	repo, db, cleanup, err := openTempProcessorRepo()
 	if err != nil {
@@ -516,7 +514,7 @@ func ensureExpiresAtColumn(t *testing.T, ctx context.Context, db *sql.DB) {
 	if err != nil {
 		t.Fatalf("pragma table_info: %v", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	for rows.Next() {
 		var cid int
 		var name, ctype string

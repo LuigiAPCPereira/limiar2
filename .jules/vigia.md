@@ -17,8 +17,3 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
-
-## 2025-06-12 - [Segurança/Storage] Garantir permissões restritas em bancos embarcados SQLite/Tursogo
-**Vulnerabilidade:** Bancos `.db` contendo credenciais MTProto altamente sensíveis em plaintext e sessão do Telegram eram gerados sem permissões explícitas na criação em sistemas antigos (ou mantinham permissões de umasks permissivas do sistema como `0644`). Isso abria caminho para leituras indiscriminadas (Information Leakage).
-**Aprendizado:** Confiar puramente nos drivers de banco de dados baseados em arquivos ou na permissão passada por flag inicial `O_CREATE` pode não ser robusto se o arquivo já existir com permissões abertas ou a sintaxe desatualizada for tolerada pelo compilador (`0600` em vez de `0o600`).
-**Prevenção:** Aplicar `os.Chmod(filepath, 0o600)` ativamente sempre antes da abertura da conexão do banco de dados, protegendo retroativamente bancos preexistentes e satisfazendo avaliações estáticas como o G306.

@@ -92,20 +92,20 @@ type httpMetricsSnapshot struct {
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if wantsHelp(args) {
-		_, _ = fmt.Fprint(stdout, helpText())
+		fmt.Fprint(stdout, helpText())
 		return nil
 	}
 
 	cfg, err := parseConfig(args)
 	if err != nil {
-		_, _ = fmt.Fprint(stderr, helpText())
+		fmt.Fprint(stderr, helpText())
 		return err
 	}
 
@@ -205,7 +205,7 @@ func runScenarioSetWithHook(
 		if err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(stdout, summarizeScenario(result, baseline))
+		fmt.Fprintln(stdout, summarizeScenario(result, baseline))
 		results = append(results, result)
 		if name == "baseline" {
 			copyResult := result
@@ -213,7 +213,7 @@ func runScenarioSetWithHook(
 		}
 	}
 
-	_, _ = fmt.Fprint(stdout, summarizeTable(results, baseline))
+	fmt.Fprint(stdout, summarizeTable(results, baseline))
 	return nil
 }
 
@@ -352,17 +352,17 @@ func scenariosFor(name string) []string {
 }
 
 func printDryRun(w io.Writer, cfg config, scenarios []string) {
-	_, _ = fmt.Fprintf(w, "Dry run: dashboard contention benchmark\n")
-	_, _ = fmt.Fprintf(w, "Mode: %s\n", cfg.mode)
+	fmt.Fprintf(w, "Dry run: dashboard contention benchmark\n")
+	fmt.Fprintf(w, "Mode: %s\n", cfg.mode)
 	if cfg.mode == "external" {
-		_, _ = fmt.Fprintf(w, "Command: LIMIAR_DB_PATH=%s %s processor reprocess --all\n", cfg.dbPath, cfg.bin)
+		fmt.Fprintf(w, "Command: LIMIAR_DB_PATH=%s %s processor reprocess --all\n", cfg.dbPath, cfg.bin)
 	} else {
-		_, _ = fmt.Fprintf(w, "Command: in-process reprocess using %s\n", cfg.dbPath)
+		fmt.Fprintf(w, "Command: in-process reprocess using %s\n", cfg.dbPath)
 	}
-	_, _ = fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
-	_, _ = fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
+	fmt.Fprintf(w, "Dashboard URL: %s\n", cfg.dashboardURL)
+	fmt.Fprintf(w, "Concurrency: %d\nDuration: %s\nInterval: %s\nTimeout: %s\n", cfg.concurrency, cfg.duration, cfg.interval, cfg.timeout)
 	for _, scenario := range scenarios {
-		_, _ = fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
+		fmt.Fprintf(w, "Scenario %s endpoints: %s\n", scenario, endpointList(endpointSpecs(scenario)))
 	}
 }
 
@@ -463,12 +463,10 @@ func isTursoLockError(text string) bool {
 func waitDashboard(ctx context.Context, cfg config) error {
 	client := &http.Client{Timeout: cfg.timeout}
 	requestURL := strings.TrimRight(cfg.dashboardURL, "/") + "/healthz"
-	// #nosec G704
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return fmt.Errorf("dashboard readiness: criar request: %w", err)
 	}
-	// #nosec G704
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("dashboard não respondeu em %s: %w", requestURL, err)
@@ -550,7 +548,6 @@ func runReprocessExternal(ctx context.Context, cfg config) (reprocessMetrics, er
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	// #nosec G204
 	cmd := exec.CommandContext(ctx, cfg.bin, "processor", "reprocess", "--all")
 	cmd.Env = append(os.Environ(), "LIMIAR_DB_PATH="+cfg.dbPath)
 	cmd.Stdout = &stdout
@@ -782,12 +779,10 @@ func requestPathWithoutOffset(path string) string {
 }
 
 func doGET(ctx context.Context, client *http.Client, requestURL string) (int, error) {
-	// #nosec G704
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return 0, err
 	}
-	// #nosec G704
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
@@ -870,20 +865,20 @@ func percentile(sorted []time.Duration, p float64) time.Duration {
 
 func summarizeScenario(result scenarioResult, baseline *scenarioResult) string {
 	var b strings.Builder
-	_, _ = fmt.Fprintf(&b, "Scenario: %s\n", result.Name)
-	_, _ = fmt.Fprintf(&b, "Reprocess duration: %s\n", result.Reprocess.Duration.Round(time.Millisecond))
-	_, _ = fmt.Fprintf(&b, "Processed: %d\n", result.Reprocess.Processed)
-	_, _ = fmt.Fprintf(&b, "Failures: %d\n", result.Reprocess.Failed)
-	_, _ = fmt.Fprintf(&b, "Throughput: %.1f msg/s\n", result.Reprocess.Throughput)
-	_, _ = fmt.Fprintf(&b, "HTTP requests: %d\n", result.HTTP.Requests)
-	_, _ = fmt.Fprintf(&b, "HTTP errors: %d\n", result.HTTP.Errors)
-	_, _ = fmt.Fprintf(&b, "HTTP p50: %s\n", result.HTTP.P50.Round(time.Millisecond))
-	_, _ = fmt.Fprintf(&b, "HTTP p95: %s\n", result.HTTP.P95.Round(time.Millisecond))
-	_, _ = fmt.Fprintf(&b, "HTTP max: %s\n", result.HTTP.Max.Round(time.Millisecond))
-	_, _ = fmt.Fprintf(&b, "Slowest endpoint: %s\n", valueOrUnknown(result.HTTP.SlowestEndpoint))
-	_, _ = fmt.Fprintf(&b, "RSS max: %s\n", formatRSS(result.Reprocess.RSSMaxKB))
-	_, _ = fmt.Fprintf(&b, "Status codes: %s\n", formatStatusCodes(result.HTTP.StatusCodes))
-	_, _ = fmt.Fprintf(&b, "Conclusion: %s\n\n", conclusion(result, baseline))
+	fmt.Fprintf(&b, "Scenario: %s\n", result.Name)
+	fmt.Fprintf(&b, "Reprocess duration: %s\n", result.Reprocess.Duration.Round(time.Millisecond))
+	fmt.Fprintf(&b, "Processed: %d\n", result.Reprocess.Processed)
+	fmt.Fprintf(&b, "Failures: %d\n", result.Reprocess.Failed)
+	fmt.Fprintf(&b, "Throughput: %.1f msg/s\n", result.Reprocess.Throughput)
+	fmt.Fprintf(&b, "HTTP requests: %d\n", result.HTTP.Requests)
+	fmt.Fprintf(&b, "HTTP errors: %d\n", result.HTTP.Errors)
+	fmt.Fprintf(&b, "HTTP p50: %s\n", result.HTTP.P50.Round(time.Millisecond))
+	fmt.Fprintf(&b, "HTTP p95: %s\n", result.HTTP.P95.Round(time.Millisecond))
+	fmt.Fprintf(&b, "HTTP max: %s\n", result.HTTP.Max.Round(time.Millisecond))
+	fmt.Fprintf(&b, "Slowest endpoint: %s\n", valueOrUnknown(result.HTTP.SlowestEndpoint))
+	fmt.Fprintf(&b, "RSS max: %s\n", formatRSS(result.Reprocess.RSSMaxKB))
+	fmt.Fprintf(&b, "Status codes: %s\n", formatStatusCodes(result.HTTP.StatusCodes))
+	fmt.Fprintf(&b, "Conclusion: %s\n\n", conclusion(result, baseline))
 	return b.String()
 }
 
@@ -897,16 +892,16 @@ func conclusion(result scenarioResult, baseline *scenarioResult) string {
 
 func summarizeTable(results []scenarioResult, baseline *scenarioResult) string {
 	var b strings.Builder
-	_, _ = fmt.Fprintln(&b, "Final table:")
-	_, _ = fmt.Fprintln(&b, "Scenario | Reprocess | Processed | Failures | Throughput | HTTP req | HTTP err | HTTP p50 | HTTP p95 | RSS max | Delta")
-	_, _ = fmt.Fprintln(&b, "--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---:")
+	fmt.Fprintln(&b, "Final table:")
+	fmt.Fprintln(&b, "Scenario | Reprocess | Processed | Failures | Throughput | HTTP req | HTTP err | HTTP p50 | HTTP p95 | RSS max | Delta")
+	fmt.Fprintln(&b, "--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---:")
 	for _, result := range results {
 		delta := "n/a"
 		if baseline != nil && baseline.Reprocess.Duration > 0 && result.Name != "baseline" {
 			pct := (float64(result.Reprocess.Duration) - float64(baseline.Reprocess.Duration)) / float64(baseline.Reprocess.Duration) * 100
 			delta = fmt.Sprintf("%+.1f%%", pct)
 		}
-		_, _ = fmt.Fprintf(&b, "%s | %s | %d | %d | %.1f msg/s | %d | %d | %s | %s | %s | %s\n",
+		fmt.Fprintf(&b, "%s | %s | %d | %d | %.1f msg/s | %d | %d | %s | %s | %s | %s\n",
 			result.Name,
 			result.Reprocess.Duration.Round(time.Millisecond),
 			result.Reprocess.Processed,

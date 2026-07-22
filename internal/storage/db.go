@@ -38,17 +38,12 @@ func Open(ctx context.Context, dbPath string, log logger.Logger) (*DB, error) {
 	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 — path from validated config
+		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0600) // #nosec G304 — path from validated config
 		if err != nil {
 			return nil, fmt.Errorf("storage: create db %q: %w", dbPath, err)
 		}
 		_ = f.Close()
 		log.Info("📦 Banco criado", "caminho", dbPath)
-	}
-
-	// 🛡️ Vigia: Garante que bancos existentes (e recém-criados) não fiquem world-readable (corrige G306 e falha de umask local).
-	if err := os.Chmod(dbPath, 0o600); err != nil {
-		log.Warn("⚠️ Falha ao aplicar permissões restritas (0600) ao banco", "caminho", dbPath, "erro", err)
 	}
 
 	log.Info("🔌 Abrindo banco", "caminho", dbPath, "driver", driverName)
