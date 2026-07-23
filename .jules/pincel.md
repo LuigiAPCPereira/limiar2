@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2026-07-23 - Navegação Acessível com WAI-ARIA Tabs
+**Aprendizado:** Em interfaces vanilla com abas customizadas, a falta de roles e controles impede que usuários de leitores de tela entendam a estrutura e os painéis de conteúdo vinculados.
+**Ação:** Implementar o padrão `role="tablist"`, `role="tab"` com `aria-selected` e `aria-controls`, juntamente com `role="tabpanel"` com tabindex e aria-labelledby nos conteúdos, garantindo navegação semântica para leitores de tela.
