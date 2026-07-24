@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2026-07-24 - Acessibilidade de Abas em AlpineJS
+**Aprendizado:** Em dashboards vanilla sem bibliotecas de componentes, abas construídas com botões e divs ocultas (`x-show`) não são reconhecidas como abas pelos leitores de tela se não tiverem as roles ARIA corretas. Isso quebra a navegação semântica e a expectativa do usuário de tecnologia assistiva.
+**Ação:** Sempre implementar o padrão WAI-ARIA para abas: `role="tablist"` no container, `role="tab"` com `aria-selected` e `aria-controls` nos gatilhos, e `role="tabpanel"` com `tabindex="0"` e `aria-labelledby` nos painéis de conteúdo correspondentes.
