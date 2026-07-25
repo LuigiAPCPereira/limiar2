@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2025-07-25 - Acessibilidade em Listas de Atualização Dinâmica e Indicadores de Status
+**Aprendizado:** Listas que recebem mensagens via eventos SSE e indicadores do tipo "Live" ou "Polling" não são noticiados para os usuários com leitores de tela sem as anotações `aria-live`. Para mensagens o uso de `role="log"` e para conexão `role="status"` melhora a compreensão dinâmica da tela.
+**Ação:** Ao adicionar elementos de tela que mudam dinamicamente por background ou SSE, sempre considerar o uso de `role="log"` (para histórico/mensagens), `role="status"` (estado de um recurso/conexão) junto à diretiva `aria-live="polite"` (para ler sem interromper de forma invasiva).
