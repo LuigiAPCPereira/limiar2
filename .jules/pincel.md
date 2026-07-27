@@ -18,3 +18,7 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+
+## 2026-07-27 - Melhoria de Acessibilidade com aria-live no Dashboard
+**Aprendizado:** Interfaces em tempo real atualizadas via SSE necessitam que containers de dados (listas) e indicadores de status informem ativamente as atualizações a leitores de tela para manter a acessibilidade. Sem `aria-live` e as roles apropriadas (`role="log"`, `role="status"`), atualizações no DOM em Single Page Applications baseadas em AlpineJS e SSE não são anunciadas.
+**Ação:** Sempre adicionar `role="log"` com `aria-live="polite"` a listas dinâmicas e `role="status"` com `aria-live="polite"` a componentes que reflitam estado de conexão na aplicação vanilla HTML para garantir a conformidade WAI-ARIA sem depender de frameworks.
