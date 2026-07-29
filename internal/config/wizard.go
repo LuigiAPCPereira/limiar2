@@ -178,7 +178,7 @@ func (w *Wizard) saveEnvFile(appID int, apiHash string) error {
 		return fmt.Errorf("erro ao salvar .env: %w", err)
 	}
 
-	fmt.Printf("  ✅ Credenciais salvas em %s (permissões 0600)\n", envPath)
+	fmt.Printf("  ✅ Credenciais salvas em %s (permissões 0o600)\n", envPath)
 	fmt.Println("  Adicione .env ao seu .gitignore!")
 	return nil
 }
