@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2025-06-13 - Retenção de Contexto em Abas via Título Dinâmico (Alpine.js)
+**Aprendizado:** Usuários de dashboards, especialmente aqueles atualizados em tempo real, frequentemente deixam a aba aberta em background. Se o `<title>` for estático, o usuário não sabe quando novos dados (como mensagens processadas) chegaram.
+**Ação:** Em dashboards vanilla usando Alpine.js (ou reatividade similar), amarre o `document.title` a contadores globais críticos (como `$store.global.processedStats.total`) usando `x-effect` na tag `<body>`. Assim, a notificação visual na aba acontece "de graça" e melhora muito o engajamento passivo e a acessibilidade.

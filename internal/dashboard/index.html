@@ -12,7 +12,7 @@
       *:focus-visible { outline: 2px solid var(--accent, #6366f1); }
     </style>
   </head>
-  <body class="bg-[#0a0a0a] text-[#fafafa] font-sans antialiased overflow-hidden" x-data="dashboard">
+  <body class="bg-[#0a0a0a] text-[#fafafa] font-sans antialiased overflow-hidden" x-data="dashboard" x-effect="document.title = $store.global.processedStats ? '(' + $store.global.processedStats.total + ') Limiar Dashboard' : 'Limiar Dashboard'">
     <div id="app" class="flex h-screen w-screen overflow-hidden bg-[#0a0a0a] text-[#fafafa] font-sans border border-[#262626]">
       <!-- Left Sidebar -->
       <aside class="w-64 flex flex-col border-r border-[#262626] bg-[#0a0a0a] flex-shrink-0">
@@ -102,7 +102,7 @@
             </div>
 
             <div class="flex-1 overflow-hidden flex">
-              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto">
+              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto" role="log" aria-live="polite" aria-label="Lista de mensagens raw">
                 <div x-show="loading" class="p-4 space-y-3">
                   <template x-for="i in 5">
                     <div class="h-20 bg-[#111111] border border-[#262626] rounded-[4px] animate-pulse"></div>
@@ -156,7 +156,7 @@
             </div>
 
             <div class="flex-1 overflow-hidden flex">
-              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto">
+              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto" role="log" aria-live="polite" aria-label="Lista de deals processados">
                 <div x-show="loading" class="p-4 space-y-3">
                   <template x-for="i in 5">
                     <div class="h-32 bg-[#111111] border border-[#262626] rounded-[4px] animate-pulse"></div>
