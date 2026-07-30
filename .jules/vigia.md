@@ -17,3 +17,8 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+
+## 2026-07-30 - [File Permissions] Uso de sintaxe octal moderna (0o600)
+**Vulnerabilidade:** A utilização da notação octal antiga `0600` em chamadas do pacote `os` (como `os.OpenFile`) pode causar falhas no CI devido a detecção de potenciais problemas no SAST (gosec G306), o que consome bastante memória e pode derrubar o runner (OOM).
+**Aprendizado:** Ferramentas de análise estática modernas (e o CI) preferem a sintaxe `0o600` ao invés da legada `0600`.
+**Prevenção:** Sempre utilizar a sintaxe octal moderna do Go 1.13+ (`0o600`, `0o644`) para permissões de arquivo em métodos da stdlib como `os.WriteFile` ou `os.OpenFile`.
