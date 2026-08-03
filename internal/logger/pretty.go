@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -182,7 +183,7 @@ func dottedKey(groups []string, key string) string {
 	if len(groups) == 0 {
 		return key
 	}
-	var buf bytes.Buffer
+	var buf strings.Builder
 	for _, g := range groups {
 		buf.WriteString(g)
 		buf.WriteByte('.')
