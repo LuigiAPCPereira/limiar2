@@ -18,3 +18,7 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+
+## 2026-08-03 - Melhoria de acessibilidade no dashboard
+**Aprendizado:** Listas que atualizam dinamicamente (como via SSE) não informam mudanças automaticamente aos leitores de tela se carecerem de semântica.
+**Ação:** Usar `role="log"` combinado com `aria-live="polite"` em contêineres dinâmicos do AlpineJS para que leitores de tela anunciem novas mensagens adequadamente.
