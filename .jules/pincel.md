@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2026-08-04 - ARIA Live Regions e Semântica de Lista para Atualizações em Tempo Real (SSE)
+**Aprendizado:** Quando um dashboard é construído sem frameworks reativos avançados, atualizações de DOM dinâmicas (como listas de mensagens preenchidas via Server-Sent Events) não são anunciadas aos leitores de tela a menos que possuam os atributos ARIA corretos. Elementos de lista também se beneficiam grandemente de rótulos claros para navegação não-visual.
+**Ação:** Sempre aplique `role="log"` em conjunto com `aria-live="polite"` aos contêineres cujos conteúdos crescem e são atualizados dinamicamente via backend, garantindo também o uso de `aria-label` (como 'Lista de Deals Processados') para descrever a região de forma precisa a usuários com tecnologia assistiva.
