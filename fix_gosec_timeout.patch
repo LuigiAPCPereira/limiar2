@@ -1,0 +1,12 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index a77399f..2b425b0 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -29,4 +29,4 @@ jobs:
+           cache-invalidation-interval: 7
+           problem-matchers: false
+       - name: Run gosec
+-        uses: securego/gosec@v2.28.0
++        uses: securego/gosec@v2.20.0
+         with:
+           args: -exclude-dir=.agents ./...
