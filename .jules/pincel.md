@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2025-06-13 - Acessibilidade em Listas de Atualização Dinâmica e Indicadores de Status
+**Aprendizado:** Quando lidamos com Server-Sent Events (SSE) no dashboard, atualizar a UI dinamicamente nem sempre é audível para leitores de tela. Um status badge (indicando online/polling) ou a inserção de novas mensagens (Raw e Processed) passam batido se não possuírem regras ARIA corretas.
+**Ação:** Em implementações vanilla HTML e interfaces web com updates via polling/SSE, certifique-se de adicionar `role="status"` ou `role="log"` junto de `aria-live="polite"` nos containers ou spans em que há mutação dinâmica.
