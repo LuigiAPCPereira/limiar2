@@ -250,7 +250,7 @@ func (r *Repository) UpdateChannelLastMessage(ctx context.Context, channelID, me
 // contagens precisas de observabilidade "novo vs duplicado".
 func (r *Repository) SaveRawMessage(ctx context.Context, msg *model.RawMessage) (inserted bool, err error) {
 	res, err := r.stmtSaveMessage.ExecContext(ctx,
-		msg.ChannelID, msg.MessageID, string(msg.Payload),
+		msg.ChannelID, msg.MessageID, msg.Payload,
 		msg.ReceivedAt.UTC().Format(model.DBTimeLayout), msg.SchemaVersion)
 	if err != nil {
 		return false, apperrors.Wrap("storage", "save_raw_message", err)
@@ -288,7 +288,7 @@ func (r *Repository) SaveRawMessageBatch(ctx context.Context, msgs []*model.RawM
 	inserted = make([]bool, len(msgs))
 	for i, msg := range msgs {
 		res, execErr := stmt.ExecContext(ctx,
-			msg.ChannelID, msg.MessageID, string(msg.Payload),
+			msg.ChannelID, msg.MessageID, msg.Payload,
 			msg.ReceivedAt.UTC().Format(model.DBTimeLayout), msg.SchemaVersion)
 		if execErr != nil {
 			return nil, 0, apperrors.Wrap("storage", "save_raw_message_batch_exec", execErr)
