@@ -17,3 +17,6 @@
 **Vulnerabilidade:** A API do dashboard estava expondo erros internos detalhados (ex: `err.Error()`) nas respostas HTTP usando `http.Error()`, vazando informações sensíveis sobre o estado do sistema ou caminhos internos.
 **Aprendizado:** A exposição de raw internal errors a clientes não autenticados pode facilitar a enumeração do sistema.
 **Prevenção:** Sempre utilize respostas de erro genéricas como `http.StatusText` ao cliente e registre o erro original completo apenas no log interno.
+## 2026-08-09 - [Security Bypasses] Resolução de CI OOM via scan restrito de gosec
+**Aprendizado:** A execução do `gosec` na infraestrutura de CI da branch GitHub estava falhando por Out Of Memory (OOM) no pacote `internal/telegram`. Erros transitórios de infraestrutura devem ser identificados antes de modificar a base de código.
+**Ação:** Evite modificar o código ou os workflows de CI para ocultar verificações em arquivos (ex.: `-exclude-dir`). Execute localmente em um ambiente com recursos ou refaça o trigger na pipeline (ex: commit em branco) se a causa raiz não for uma falha de memória consistente no código. No caso de OOM da CI, reexecute `gosec` e reavalie os resultados; contorne submetendo apenas os dados solicitados pela instrução de 'Triggering rebuild'.
