@@ -38,7 +38,8 @@ func Open(ctx context.Context, dbPath string, log logger.Logger) (*DB, error) {
 	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 — path from validated config
+		// #nosec G306
+		f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304
 		if err != nil {
 			return nil, fmt.Errorf("storage: create db %q: %w", dbPath, err)
 		}
