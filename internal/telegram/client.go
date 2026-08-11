@@ -143,7 +143,8 @@ func NewClient(
 		peers:      peers,
 		dispatcher: dispatcher,
 		log:        log,
-		rng:        rand.New(rand.NewSource(time.Now().UnixNano())), // #nosec G404 — jitter, not crypto
+		// #nosec G404
+		rng:        rand.New(rand.NewSource(time.Now().UnixNano())), // jitter, not crypto
 	}
 	return c
 }
