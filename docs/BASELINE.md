@@ -104,9 +104,11 @@ live. O princípio de gotd do ADR 002 é mantido com boundary de sincronização
 Os itens abaixo são resultados de pesquisa, experimentos e propostas da rebaseline.
 **Eles não devem ser tratados como decisões apenas por aparecerem aqui.**
 
-- mecânica concreta `updates.Manager + DurableEvidenceHandler +
-  DurabilityBarrier/GuardedStateStorage`, condicionada aos contract tests do
-  EXP-LIMIAR-001;
+- boundary de recovery Telegram Candidate v3, validado contra gotd/td v0.161.0 por 12
+  contract tests + race detector: `GuardedRecoveryAPI + updates.Manager +
+  DurableEvidenceHandler + GuardedStateStorage + DurabilityBarrier + Supervisor`;
+  `PROPOSAL-ING-002` e ADR 017 permanecem não autoritativos enquanto o ADR 017 estiver
+  `Proposed`;
 - migração side-by-side do banco legado, preservando o antigo como artefato imutável;
 - Processing Generations para derivados reconstruíveis e reprocessamento seguro;
 - Source Message Projection separada da Evidence;
@@ -156,9 +158,7 @@ com documentação primária e testes proporcionais ao risco.
 
 ## 7. Questões abertas prioritárias
 
-1. contract tests reais do gotd e política para stateless updates,
-   `differenceTooLong`/`ChannelDifferenceTooLong` e recovery antes da implementação do
-   ingress decidido pelo ADR 016;
+1. decisão explícita sobre o boundary de recovery Telegram Candidate v3 (ADR 017);
 2. escolha/validação da engine SQLite local e PRAGMAs de durabilidade;
 3. contrato físico do payload de Evidence;
 4. estratégia final de sessão/peer state;
