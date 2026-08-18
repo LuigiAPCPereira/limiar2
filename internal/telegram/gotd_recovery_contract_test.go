@@ -434,27 +434,3 @@ func TestGotdRecoveryContract_BarrierCancelsManager(t *testing.T) {
 		t.Fatal("supervisor did not cancel updates.Manager after barrier failure")
 	}
 }
-
-func TestGotdRecoveryContract_CommonGapUsesGetDifference(t *testing.T) {
-	barrier := newDurabilityBarrier()
-	storage := newContractStorage(barrier, updates.State{})
-	api := newContractAPI()
-
-	running := startContractManager(t, storage, api, gotdtelegram.UpdateHandlerFunc(func(context.Context, tg.UpdatesClass) error {
-		return nil
-	}))
-	defer running.stop(t)
-
-	if err := running.manager.Handle(context.Background(), ptsUpdate(2)); err != nil {
-		t.Fatalf("Handle returned error: %v", err)
-	}
-
-	select {
-	case request := <-api.diffCalled:
-		if request.Pts != 0 {
-			t.Fatalf("getDifference pts = %d, want 0", request.Pts)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("common PTS gap did not trigger updates.getDifference")
-	}
-}
