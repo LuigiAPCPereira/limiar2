@@ -1,7 +1,7 @@
 # EXP-LIMIAR-001 — Recuperação durável de updates Telegram
 
 Authority: Non-authoritative
-Status: Supported with limitations; runtime contract confirmed
+Status: Supported
 
 ## Hipótese
 
@@ -165,6 +165,82 @@ Consequência: o Candidate v3 continua **SUPPORTED** para fail-stop, ordering de
 recovery já testados, mas é **INSUFICIENTE como boundary completo de Source Evidence** se
 o `DurableEvidenceHandler` pós-Manager for a única captura do envelope bruto.
 
+## Fase E — Source Admission v4
+
+A hipótese seguinte moveu a admissão da Evidence live para antes do manager e ampliou o
+wrapper de recovery para preservar respostas semanticamente relevantes antes de
+entregá-las ao manager:
+
+```text
+Live:
+Telegram UpdateHandler
+    ↓
+DurableSourceAdmission
+    ↓
+updates.Manager
+    ↓
+OrderedUpdateHandler / trabalho derivado
+
+Recovery:
+Telegram recovery RPC
+    ↓
+SourcePreservingRecoveryAPI
+    ↓
+updates.Manager
+
+updates.Manager
+    ↓
+GuardedStateStorage
+
+DurabilityBarrier + Supervisor atravessam admission / recovery / state.
+```
+
+O protótipo usa JSON apenas para provar preservação/ordem. **JSON não é decisão de codec
+ou schema físico.**
+
+Contratos adicionais validados:
+
+16. envelope live composto contendo edit + delete é persistido integralmente antes dos
+    PTS correspondentes;
+17. falha da Source Admission impede forwarding ao manager e não produz PTS;
+18. resposta comum de `getDifference` com conteúdo é persistida antes de `SetState`;
+19. falha na persistência de recovery impede a resposta de chegar ao manager;
+20. `getChannelDifference` é persistido antes de channel PTS;
+21. o contrato permanece válido para `UpdatesChannelDifference` com conteúdo real;
+22. com Source Evidence já durável, falha do handler pós-Manager não fecha a source
+    durability barrier nem precisa impedir o avanço de sync state;
+23. o finding da Fase D continua coberto para impedir regressão da premissa de envelope
+    transparente.
+
+Durante o desenvolvimento do harness houve duas classes de falso negativo, ambas
+corrigidas antes da conclusão:
+
+- efeitos residuais do recovery de startup foram inicialmente confundidos com writes do
+  caso sob teste;
+- o teste inicialmente observava o state intermediário após o primeiro de dois `SetPts`.
+
+A versão final sincroniza explicitamente os eventos relevantes e não depende da velocidade
+do scheduler.
+
+Execução final:
+
+```text
+Workflow run: agent-runtime#32189541388
+Go: 1.26.6 linux/amd64
+gotd/td: v0.161.0
+23 contract tests                                     PASS
+go test -race ./... -count=1                         PASS
+```
+
+Resultado: **SUPPORTED** para a topologia v4 no escopo do contract harness.
+
+A consequência semântica é importante: Source Evidence durable e saída ordenada/derivada
+são responsabilidades diferentes. Uma falha reconstruível de projeção não deve ser
+confundida automaticamente com falha de admissão da fonte.
+
+Proposal derivada:
+`docs/evolution/proposals/PROPOSAL-ING-003-source-admission-before-manager.md`.
+
 ## O que o experimento NÃO prova
 
 - exactly-once;
@@ -174,8 +250,8 @@ o `DurableEvidenceHandler` pós-Manager for a única captura do envelope bruto.
 - engine/PRAGMAs de storage;
 - session storage;
 - policy final de retries/supervisor;
-- boundary final de admissão da Evidence live antes/depois do manager;
-- codec final para respostas de recovery;
+- codec final para Evidence/recovery;
+- política final para respostas de Difference vazias sem observação de fonte;
 - correção da integração completa antes de ela existir no Limiar;
 - autorização para mudança de produção.
 
@@ -185,24 +261,22 @@ fonte não consegue mais recuperar o passado.
 
 ## Pendências antes de produção
 
-1. testar uma captura durável do envelope live antes do `updates.Manager`;
-2. testar persistência das respostas de recovery antes de retorná-las ao manager;
-3. decidir se o handler pós-Manager é apenas saída ordenada/derivada ou se mantém algum
-   papel de Evidence adicional;
-4. cobrir edit/delete/update composto no boundary corrigido;
-5. provar coexistência backfill/live com authorities de progresso separadas;
-6. integrar o storage escolhido preservando Evidence -> state ordering;
-7. preservar os contract tests na implementação real do adapter.
+1. decidir por nova Decision a semântica de Source Admission v4, pois ela altera
+   materialmente o papel do handler pós-Manager descrito no ADR 017;
+2. provar coexistência backfill/live com authorities de progresso separadas;
+3. integrar o storage escolhido preservando Evidence -> state ordering;
+4. definir schema/codec/versionamento de Evidence;
+5. preservar os contract tests na implementação real do adapter;
+6. validar crash/restart na integração real, não apenas nos fakes de contrato.
 
 ## Conclusão epistemológica
 
 A hipótese de **fail-stop + state ordering** sobreviveu ao protótipo, à inspeção do gotd
 pinado e aos contract tests com race detector.
 
-A hipótese de que o Candidate v3 também preservaria sozinho a **Source Evidence bruta**
-foi rejeitada pela Fase D. O candidato precisa de revisão antes de implementação de
-produção.
+A Fase D rejeitou a hipótese de que o Candidate v3 preservaria sozinho a **Source Evidence
+bruta**. A Fase E encontrou e validou uma correção: preservar o envelope live antes do
+manager e preservar respostas de recovery antes de sua entrega ao manager, mantendo o
+gotd responsável pelo ordering/recovery.
 
-Isso não desfaz os contratos já aceitos nos ADRs 016/017; revela que a topologia concreta
-precisa ser ajustada ou explicitamente superseded por nova Decision caso a próxima
-experiência confirme uma mudança material.
+O Candidate v4 está **SUPPORTED**, mas continua não autoritativo até uma Decision explícita.
