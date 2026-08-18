@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -110,6 +109,22 @@ func (a *sourcePreservingRecoveryAPI) record(ctx context.Context, kind string, v
 	return nil
 }
 
+func assertNoStateWriteKind(t *testing.T, storage *contractStorage, kind string, duration time.Duration) {
+	t.Helper()
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	for {
+		select {
+		case result := <-storage.results:
+			if result.kind == kind {
+				t.Fatalf("unexpected state write %q after failed source admission: %+v", kind, result)
+			}
+		case <-timer.C:
+			return
+		}
+	}
+}
+
 func TestSourceAdmission_LiveCompoundEnvelopeIsDurableBeforeManagerStateAdvance(t *testing.T) {
 	barrier := newDurabilityBarrier()
 	baseStorage := newContractStorage(barrier, updates.State{})
@@ -191,14 +206,9 @@ func TestSourceAdmission_LiveCompoundEnvelopeIsDurableBeforeManagerStateAdvance(
 func TestSourceAdmission_FailurePreventsManagerStateAdvance(t *testing.T) {
 	barrier := newDurabilityBarrier()
 	storage := newContractStorage(barrier, updates.State{})
-	manager := updates.New(updates.Config{
-		Storage: storage,
-		Handler: gotdtelegram.UpdateHandlerFunc(func(context.Context, tg.UpdatesClass) error { return nil }),
-	})
 	api := newContractAPI()
 	running := startContractManager(t, storage, api, gotdtelegram.UpdateHandlerFunc(func(context.Context, tg.UpdatesClass) error { return nil }))
 	defer running.stop(t)
-	manager = running.manager
 	select {
 	case <-api.diffCalled:
 	case <-time.After(3 * time.Second):
@@ -207,7 +217,7 @@ func TestSourceAdmission_FailurePreventsManagerStateAdvance(t *testing.T) {
 
 	admission := &sourceAdmissionHandler{
 		barrier: barrier,
-		next:    manager,
+		next:    running.manager,
 		persist: func(context.Context, []byte) error { return errEvidencePersistence },
 	}
 	input := &tg.Updates{Updates: []tg.UpdateClass{&tg.UpdateDeleteMessages{Messages: []int{1}, Pts: 1, PtsCount: 1}}}
@@ -217,11 +227,10 @@ func TestSourceAdmission_FailurePreventsManagerStateAdvance(t *testing.T) {
 	if got := storage.snapshot().Pts; got != 0 {
 		t.Fatalf("state advanced to %d after admission failure", got)
 	}
-	select {
-	case result := <-storage.results:
-		t.Fatalf("unexpected state write after failed admission: %+v", result)
-	case <-time.After(100 * time.Millisecond):
-	}
+	// Startup recovery may still leave date/seq bookkeeping in the fake result
+	// channel. The contract under test is that the failed live admission never
+	// reaches the manager and therefore cannot produce a PTS advance.
+	assertNoStateWriteKind(t, storage, "pts", 100*time.Millisecond)
 }
 
 func TestRecoveryAdmission_CommonDifferenceEvidencePrecedesStateAdvance(t *testing.T) {
@@ -250,8 +259,6 @@ func TestRecoveryAdmission_CommonDifferenceEvidencePrecedesStateAdvance(t *testi
 	manager := updates.New(updates.Config{
 		Storage: storage,
 		Handler: gotdtelegram.UpdateHandlerFunc(func(context.Context, tg.UpdatesClass) error {
-			// Ordered output is allowed to fail: source/recovery Evidence is
-			// already durable and derived state can be rebuilt later.
 			return errors.New("projection failed")
 		}),
 	})
@@ -314,14 +321,20 @@ func TestRecoveryAdmission_ChannelDifferenceEvidencePrecedesChannelState(t *test
 	upstream := newScriptedRecoveryAPI()
 	upstream.channelDiffs = []tg.UpdatesChannelDifferenceClass{&tg.UpdatesChannelDifferenceEmpty{Pts: 11}}
 	api := newSourcePreservingRecoveryAPI(upstream, barrier, func(_ context.Context, kind string, payload []byte) error {
-		if kind != recoveryEvidenceChannelDifference {
-			t.Fatalf("kind=%q", kind)
+		switch kind {
+		case recoveryEvidenceDifference:
+			// Common startup recovery is independent of the channel gate.
+			return nil
+		case recoveryEvidenceChannelDifference:
+			if len(payload) == 0 {
+				t.Fatal("empty channel recovery Evidence")
+			}
+			order.add("evidence:channel-difference")
+			return nil
+		default:
+			t.Fatalf("unexpected recovery kind=%q", kind)
+			return nil
 		}
-		if len(payload) == 0 {
-			t.Fatal("empty channel recovery Evidence")
-		}
-		order.add("evidence:channel-difference")
-		return nil
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -360,4 +373,3 @@ func TestRecoveryAdmission_ChannelDifferenceEvidencePrecedesChannelState(t *test
 
 var _ gotdtelegram.UpdateHandler = (*sourceAdmissionHandler)(nil)
 var _ updates.API = (*sourcePreservingRecoveryAPI)(nil)
-var _ = sync.Mutex{}
