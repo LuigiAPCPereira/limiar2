@@ -1,7 +1,7 @@
 # F-ING-008 — O `updates.Manager` exige fail-stop externo para preservar durabilidade
 
 Authority: Non-authoritative
-Status: Confirmed by source; runtime execution blocked
+Status: Confirmed by source and runtime contract
 
 ## Finding
 
@@ -90,11 +90,11 @@ explícita antes de `SetState`.
 ### Recovery produz updates stateless
 
 Mensagens reconstruídas por `getDifference`/`getChannelDifference` podem ser entregues ao
-handler com PTS/QTS negativos. O próprio gotd documenta que handlers não devem usar esses
-valores como posição de sincronização.
+handler com PTS/QTS negativos. Esses valores não devem ser usados como autoridade de
+sync.
 
-Consequência para o Limiar: Evidence de mensagem e autoridade de sync precisam continuar
-separadas. O state pertence ao recovery manager/StateStorage, não ao payload derivado
+Consequência para o Limiar: Evidence de mensagem e autoridade de sync permanecem
+separadas. O state pertence ao recovery manager/StateStorage, não ao payload reconstruído
 entregue ao handler.
 
 ## Candidato revisado — v3
@@ -131,35 +131,35 @@ Se a Evidence falhar:
 
 - fecha a barrier antes de retornar;
 - sinaliza o supervisor;
-- retorna erro apenas para observabilidade, sem depender dele para parar o gotd.
+- retorna erro para observabilidade, sem depender dele para parar o gotd.
 
 ### `GuardedStateStorage`
 
 Mantém a verificação da barrier e a escrita física do state na mesma seção crítica,
 impedindo TOCTOU.
 
-Estado permitido:
+Estados admitidos:
 
 ```text
-Evidence durável / state antigo   -> replay aceitável
-Evidence durável / state novo     -> normal
-Evidence não durável / state antigo -> falha segura
-Evidence não durável / state novo -> proibido
+Evidence durável / state antigo       -> replay aceitável
+Evidence durável / state novo         -> normal
+Evidence não durável / state antigo   -> falha segura
+Evidence não durável / state novo     -> proibido
 ```
 
 ### `GuardedRecoveryAPI`
 
 Intercepta respostas especiais antes do `updates.Manager`:
 
-- `UpdatesGetState` -> Evidence de bootstrap/adopção de baseline remoto;
+- `UpdatesGetState` -> Evidence de bootstrap/adoção de baseline remoto;
 - `UpdatesDifferenceTooLong` -> Evidence de descontinuidade common;
 - `UpdatesChannelDifferenceTooLong` -> Evidence de descontinuidade de canal.
 
 Se a Evidence correspondente falhar, a resposta especial não é devolvida ao manager, a
 barrier fecha e o supervisor encerra o lifecycle.
 
-A Evidence real deverá carregar contexto suficiente para auditoria/reprocessamento; os
-strings usados no harness são apenas marcadores de contrato, não schema proposto.
+Os strings usados no harness são apenas marcadores de contrato; não são schema de
+produção.
 
 ## Garantia pretendida
 
@@ -172,61 +172,81 @@ Ele promete algo mais preciso:
 > bootstrap ou descontinuidade que ainda não foi representada por Evidence durável no
 > boundary que controla.
 
-## Harness da PR #151
+## Contract tests executados
 
-O harness de teste agora possui casos preparados para:
+A suíte da PR experimental `limiar-collector#151` foi copiada sem dependência de código
+de produção para um módulo descartável em `agent-runtime#14`, exclusivamente para usar o
+runner self-hosted já configurado naquele repositório.
 
-| Contrato | Cobertura escrita | Execução real |
-| --- | --- | --- |
-| Evidence durável -> PTS pode avançar | sim | pendente |
-| falha de Evidence -> PTS persistido não avança | sim | pendente |
-| falha do StateStorage fecha barrier | sim | pendente |
-| barrier -> supervisor cancela Manager | sim | pendente |
-| common gap -> segundo `getDifference` após startup | sim | pendente |
-| falha durante `getDifference` deixa state antigo | sim | pendente |
-| callback `DifferenceTooLong` ocorre tarde | sim | pendente |
-| `GuardedRecoveryAPI` bloqueia common too-long quando Evidence falha | sim | pendente |
-| `GuardedRecoveryAPI` bloqueia channel too-long quando Evidence falha | sim | pendente |
-| bootstrap sem state local não é adotado se Evidence falha | sim | pendente |
-| `UpdateChannelTooLong` provoca novo `getChannelDifference` após startup | sim | pendente |
-| falha -> restart -> replay a partir do state persistido antigo | sim | pendente |
-| replay de `getDifference` chega stateless (`Pts=-1`) | sim | pendente |
+Ambiente observado:
 
-O teste inicial de common gap que podia confundir o `getDifference` de startup foi
-superado por um caso mais forte que primeiro drena explicitamente a chamada de startup e
-só então exige uma segunda chamada após introduzir o gap. O caso antigo permanece apenas
-como cobertura fraca redundante nesta branch experimental e não deve ser usado como
-Evidence isolada.
+```text
+Runner: LuigiCachyOS / actions-runner 2.336.0
+Go: 1.26.6 linux/amd64
+gotd/td: v0.161.0
+Workflow run: agent-runtime Actions 32171500698
+```
 
-## Bloqueio de execução
+Resultado:
 
-As execuções da GitHub Action desta PR encerram o job antes de qualquer step, sem logs ou
-artifacts de teste. O ambiente local desta sessão também não possui o toolchain/deps
-necessários para executar `gotd/td v0.161.0` com race detector.
+| Contrato | Runtime |
+| --- | --- |
+| Evidence durável -> PTS pode avançar | PASS |
+| falha de Evidence -> PTS persistido não avança | PASS |
+| falha do StateStorage fecha barrier | PASS |
+| barrier -> supervisor cancela Manager | PASS |
+| common gap -> segunda `getDifference` após startup | PASS |
+| falha durante `getDifference` deixa state antigo | PASS |
+| callback `DifferenceTooLong` ocorre tarde | PASS |
+| guard bloqueia common too-long se Evidence falha | PASS |
+| guard bloqueia channel too-long se Evidence falha | PASS |
+| bootstrap não é adotado se Evidence falha | PASS |
+| `UpdateChannelTooLong` -> novo `getChannelDifference` | PASS |
+| falha -> restart -> replay do state antigo + stateless PTS | PASS |
 
-Portanto:
+Comando funcional:
+
+```text
+go test ./... -count=1 -v
+```
+
+Resultado: `PASS`, 12 contratos, pacote em aproximadamente 0,53 s após compilação.
+
+Race detector:
+
+```text
+go test -race ./... -count=1
+```
+
+Resultado: `PASS`.
+
+O workflow do próprio Limiar continuou incapaz de alocar GitHub-hosted runner e a prova
+self-hosted adicionada temporariamente ao Limiar ficou `queued`; isso é problema de
+infraestrutura, não resultado do experimento.
+
+## Estado epistemológico
 
 ```text
 source contract: CONFIRMED
-harness design: PREPARED
-runtime contract: INCONCLUSIVE
+runtime contract: CONFIRMED para a suíte exercitada
+Candidate v3: SUPPORTED
+produção: NÃO AUTORIZADA por este Finding
 ```
 
-Nenhum teste deve ser tratado como PASS apenas porque foi escrito.
+`SUPPORTED` continua diferente de `Accepted`.
 
 ## Pendências antes de produção
 
-1. executar o harness com Go atual e `-race` em ambiente que realmente inicie os steps;
-2. remover a cobertura fraca redundante do common gap depois que a execução do caso forte
-   estiver disponível;
-3. validar runtime de `ChannelDifferenceTooLong` com diálogo/PTS válido, além da
-   interceptação já coberta pelo adapter;
-4. decidir o schema real das Evidence de bootstrap/descontinuidade no ADR de storage;
-5. decidir lifecycle/retry do supervisor quando a barrier fecha.
+1. definir o schema real das Evidence de bootstrap/descontinuidade no ADR de storage;
+2. definir lifecycle/retry do supervisor quando a barrier fecha;
+3. durante implementação, manter contract tests junto ao adapter real e validar o caminho
+   de `ChannelDifferenceTooLong` com payload de diálogo/PTS realista;
+4. validar a integração completa no módulo do Limiar, não apenas o boundary isolado.
 
 ## Conclusão epistemológica
 
-**Finding confirmado por inspeção do source pinado.**
+O Candidate v3 sobreviveu à inspeção do source pinado e aos contract tests executados com
+race detector.
 
-O Candidate v3 é mais forte que o desenho anterior e agora possui uma suíte de contratos
-preparada, mas continua **não-autoritativo** até a execução real dos testes pendentes.
+Isso é Evidence suficiente para tratá-lo como **Candidate suportado**, mas não cria
+Decision nem autoriza implementação de produção por si só.
