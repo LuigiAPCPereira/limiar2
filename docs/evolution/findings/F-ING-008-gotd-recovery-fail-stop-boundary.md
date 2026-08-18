@@ -1,7 +1,7 @@
 # F-ING-008 — O `updates.Manager` exige fail-stop externo para preservar durabilidade
 
 Authority: Non-authoritative
-Status: Confirmed by source; runtime contract pending
+Status: Confirmed by source; runtime execution blocked
 
 ## Finding
 
@@ -16,33 +16,28 @@ updates.Manager
 não é suficiente para garantir C-03 apenas por propagação de erros.
 
 Na versão `github.com/gotd/td v0.161.0`, o manager registra em log vários erros do
-handler e do `StateStorage` e continua o fluxo. Além disso, alguns caminhos de recovery
-avançam o state antes de chamar callbacks de perda irrecuperável.
+handler e do `StateStorage` e pode continuar o fluxo. Além disso, alguns caminhos de
+recovery avançam state antes de callbacks que informam perda de continuidade.
 
-Logo, o candidato concreto precisa de um boundary externo de fail-stop e de um adapter
-que observe respostas de recovery antes que elas sejam entregues ao manager.
+Logo, o candidato concreto precisa de fail-stop externo e de um adapter que observe
+respostas especiais de recovery antes que elas sejam entregues ao manager.
 
 ## Evidence de código — gotd v0.161.0
 
-Fontes primárias:
+Fontes primárias examinadas:
 
-- `telegram/updates/state_apply.go`
-- `telegram/updates/sequence_box.go`
-- `telegram/updates/state.go`
-- `telegram/updates/state_channel.go`
-- `telegram/updates/manager.go`
-- `telegram/updates/storage.go`
+- `telegram/updates/manager.go`;
+- `telegram/updates/state.go`;
+- `telegram/updates/state_apply.go`;
+- `telegram/updates/state_channel.go`;
+- `telegram/updates/sequence_box.go`;
+- `telegram/updates/storage.go`;
+- `telegram/updates/utils.go`.
 
-Tag examinada:
+### Handler error não é fail-stop
 
-`v0.161.0`
-
-### 1. Handler error não é boundary de stop
-
-Nos caminhos de PTS/QTS e updates combinados, o retorno de `dispatch` é registrado em
-log. O fluxo pode prosseguir para a escrita do state.
-
-Portanto:
+Nos caminhos de PTS/QTS e updates combinados, erros de `dispatch` podem ser apenas
+registrados em log. Assim:
 
 ```text
 handler retorna erro
@@ -50,78 +45,59 @@ handler retorna erro
 manager interrompe processamento
 ```
 
-Uma implementação que dependa apenas do erro do `UpdateHandler` pode persistir progresso
-posterior à falha.
+A durabilidade não pode depender somente do erro retornado pelo `UpdateHandler`.
 
-### 2. Erro de `StateStorage` também pode ser absorvido
+### Erro de `StateStorage` pode ser absorvido
 
 `SetPts`, `SetQts`, `SetSeq`, `SetDateSeq`, `SetState` e `SetChannelPts` possuem caminhos
-em que o erro é apenas registrado.
+em que o erro é logado e o fluxo continua.
 
-`sequenceBox.Handle` só evita atualizar seu state em memória se a função `apply` retornar
-erro. Como os `apply*` relevantes frequentemente absorvem os erros acima, o state em
-memória pode avançar mesmo quando o state persistido permaneceu antigo.
+`sequenceBox` só evita atualizar seu state interno quando `apply` devolve erro; como os
+`apply*` relevantes absorvem parte desses erros, state em memória e state persistido
+podem divergir temporariamente.
 
-Isso não é necessariamente perda de dados: se a Evidence já está durável, state antigo
-significa replay possível. Porém, exige lifecycle explícito e invalida a hipótese de que
-um erro do storage sozinho fará o manager parar.
+Se a Evidence já está durável, state persistido antigo é aceitável porque permite replay.
+O que não é aceitável é state persistido novo após falha de Evidence.
 
-### 3. Fail-stop precisa ser externo
-
-Para uma falha de Evidence, a ordem necessária é:
-
-```text
-Evidence write falha
-  -> fechar DurabilityBarrier
-  -> impedir novos state writes
-  -> cancelar/supervisionar updates.Manager
-  -> reiniciar posteriormente a partir do state persistido antigo
-```
-
-O fechamento da barrier deve acontecer antes de o handler retornar.
-
-`GuardedStateStorage` precisa manter a verificação da barrier e a escrita do state dentro
-da mesma seção crítica para evitar TOCTOU.
-
-### 4. `DifferenceTooLong` não pode ser tratado apenas por callback
+### `DifferenceTooLong` ocorre antes do callback
 
 No common recovery, `UpdatesDifferenceTooLong` faz o manager:
 
-1. persistir o novo `Pts`;
-2. atualizar o PTS em memória;
-3. chamar `OnTooLong`;
-4. continuar `getDifference`.
+1. `SetPts(remotePts)`;
+2. atualiza o PTS em memória;
+3. chama `OnTooLong`;
+4. continua o recovery.
 
-Logo, `OnTooLong` ocorre tarde demais para persistir uma Evidence de descontinuidade
-**antes** do avanço do state.
+Portanto, `OnTooLong` sozinho é tarde demais para garantir Evidence de descontinuidade
+antes do avanço do state.
 
-### 5. `ChannelDifferenceTooLong` possui o mesmo problema
+### `ChannelDifferenceTooLong` possui a mesma ordem
 
 No recovery de canal, `UpdatesChannelDifferenceTooLong` extrai o PTS remoto do diálogo,
-persiste `SetChannelPts`, atualiza o state em memória e somente depois chama
-`OnChannelTooLong`.
+persiste `SetChannelPts`, atualiza o state interno e só então chama `OnChannelTooLong`.
 
-Um callback não consegue, sozinho, garantir:
+O callback também não é boundary suficiente.
 
-```text
-SyncDiscontinuity Evidence durável
-antes de
-state avançado
-```
-
-### 6. Bootstrap remoto também precisa de semântica explícita
+### Bootstrap remoto precisa ser explícito
 
 Quando não existe state local, `Manager.loadState` chama `UpdatesGetState` e persiste o
 state remoto recebido.
 
-Isso estabelece um novo baseline operacional, mas não prova que o Limiar observou todos
-os eventos anteriores. Se esse caminho representar perda potencial de continuidade, ele
-deve gerar uma Evidence explícita de bootstrap/resync antes de o state remoto ser
-aceito.
+Esse state é um novo baseline operacional. Ele não prova que o Limiar observou todo o
+passado anterior a esse baseline; portanto a adoção precisa ser representada por Evidence
+explícita antes de `SetState`.
+
+### Recovery produz updates stateless
+
+Mensagens reconstruídas por `getDifference`/`getChannelDifference` podem ser entregues ao
+handler com PTS/QTS negativos. O próprio gotd documenta que handlers não devem usar esses
+valores como posição de sincronização.
+
+Consequência para o Limiar: Evidence de mensagem e autoridade de sync precisam continuar
+separadas. O state pertence ao recovery manager/StateStorage, não ao payload derivado
+entregue ao handler.
 
 ## Candidato revisado — v3
-
-O boundary que sobrevive à inspeção é:
 
 ```text
 Telegram RPC
@@ -149,77 +125,108 @@ atravessam Handler / API / StateStorage
 
 ### `DurableEvidenceHandler`
 
-Persiste observações normais antes de permitir que o fluxo alcance o state write.
+Persiste observações normais antes de permitir o avanço correspondente do state.
 
 Se a Evidence falhar:
 
-- fecha a barrier;
+- fecha a barrier antes de retornar;
 - sinaliza o supervisor;
-- retorna erro para observabilidade, sem depender desse erro para parar o gotd.
+- retorna erro apenas para observabilidade, sem depender dele para parar o gotd.
 
 ### `GuardedStateStorage`
 
-Permite state write apenas enquanto a barrier permanece aberta durante toda a operação.
+Mantém a verificação da barrier e a escrita física do state na mesma seção crítica,
+impedindo TOCTOU.
 
-Se a Evidence falhou, nenhum state posterior pode ser persistido como avançado.
+Estado permitido:
 
-Uma falha do próprio state write depois de Evidence durável deixa o state persistido
-antigo; replay é seguro. A política operacional pode optar por fail-stop também nesse
-caso, mas isso é uma decisão de disponibilidade, não requisito para preservar Evidence.
+```text
+Evidence durável / state antigo   -> replay aceitável
+Evidence durável / state novo     -> normal
+Evidence não durável / state antigo -> falha segura
+Evidence não durável / state novo -> proibido
+```
 
 ### `GuardedRecoveryAPI`
 
-Intercepta respostas especiais **antes** de retorná-las ao `updates.Manager`.
+Intercepta respostas especiais antes do `updates.Manager`:
 
-Antes de devolver `UpdatesDifferenceTooLong` ou `UpdatesChannelDifferenceTooLong`, deve
-persistir uma Evidence explícita de descontinuidade/gap. Se essa persistência falhar, a
-resposta não é entregue ao manager e o fluxo entra em fail-stop.
+- `UpdatesGetState` -> Evidence de bootstrap/adopção de baseline remoto;
+- `UpdatesDifferenceTooLong` -> Evidence de descontinuidade common;
+- `UpdatesChannelDifferenceTooLong` -> Evidence de descontinuidade de canal.
 
-O mesmo princípio se aplica ao bootstrap via `UpdatesGetState` quando não há state local:
-o Limiar precisa registrar que adotou um baseline remoto sem afirmar observação completa
-do passado.
+Se a Evidence correspondente falhar, a resposta especial não é devolvida ao manager, a
+barrier fecha e o supervisor encerra o lifecycle.
 
-## Garantia resultante
+A Evidence real deverá carregar contexto suficiente para auditoria/reprocessamento; os
+strings usados no harness são apenas marcadores de contrato, não schema proposto.
+
+## Garantia pretendida
 
 O desenho não promete recuperar eventos que o Telegram já declarou fora da janela de
 recovery.
 
 Ele promete algo mais preciso:
 
-> o Limiar não avança silenciosamente sua autoridade operacional sobre uma perda ou
-> observação que ainda não foi representada por Evidence durável dentro do boundary que
-> controla.
+> o Limiar não avança silenciosamente sua autoridade operacional sobre uma observação,
+> bootstrap ou descontinuidade que ainda não foi representada por Evidence durável no
+> boundary que controla.
 
-Assim, os casos irrecuperáveis tornam-se descontinuidades explícitas, não ausência
-silenciosa de dados.
+## Harness da PR #151
 
-## Harness runtime
+O harness de teste agora possui casos preparados para:
 
-A PR experimental `#151` contém um harness contra a API pública de
-`telegram/updates.Manager` v0.161.0.
+| Contrato | Cobertura escrita | Execução real |
+| --- | --- | --- |
+| Evidence durável -> PTS pode avançar | sim | pendente |
+| falha de Evidence -> PTS persistido não avança | sim | pendente |
+| falha do StateStorage fecha barrier | sim | pendente |
+| barrier -> supervisor cancela Manager | sim | pendente |
+| common gap -> segundo `getDifference` após startup | sim | pendente |
+| falha durante `getDifference` deixa state antigo | sim | pendente |
+| callback `DifferenceTooLong` ocorre tarde | sim | pendente |
+| `GuardedRecoveryAPI` bloqueia common too-long quando Evidence falha | sim | pendente |
+| `GuardedRecoveryAPI` bloqueia channel too-long quando Evidence falha | sim | pendente |
+| bootstrap sem state local não é adotado se Evidence falha | sim | pendente |
+| `UpdateChannelTooLong` provoca novo `getChannelDifference` após startup | sim | pendente |
+| falha -> restart -> replay a partir do state persistido antigo | sim | pendente |
+| replay de `getDifference` chega stateless (`Pts=-1`) | sim | pendente |
 
-A execução ainda está **INCONCLUSIVE**: GitHub Actions encerrou os jobs antes de qualquer
-step/log, e o ambiente local da sessão possui Go 1.23.2 sem acesso de rede para baixar o
-toolchain/dependências atuais.
+O teste inicial de common gap que podia confundir o `getDifference` de startup foi
+superado por um caso mais forte que primeiro drena explicitamente a chamada de startup e
+só então exige uma segunda chamada após introduzir o gap. O caso antigo permanece apenas
+como cobertura fraca redundante nesta branch experimental e não deve ser usado como
+Evidence isolada.
 
-Isso não invalida o Finding de source contract acima, mas impede afirmar que o Candidate
-v3 já passou pelos contract tests reais.
+## Bloqueio de execução
 
-## Pendências
+As execuções da GitHub Action desta PR encerram o job antes de qualquer step, sem logs ou
+artifacts de teste. O ambiente local desta sessão também não possui o toolchain/deps
+necessários para executar `gotd/td v0.161.0` com race detector.
 
-Antes de promover a mecânica concreta para produção:
+Portanto:
 
-1. executar o harness real com Go atual + race detector;
-2. corrigir/validar o teste de common gap sem confundir o `getDifference` de startup com
-   o `getDifference` disparado pelo gap;
-3. cobrir `getChannelDifference` normal e `ChannelDifferenceTooLong`;
-4. cobrir restart/replay após falha de Evidence;
-5. cobrir stateless updates;
-6. testar `GuardedRecoveryAPI` para common/channel too-long e bootstrap sem state local.
+```text
+source contract: CONFIRMED
+harness design: PREPARED
+runtime contract: INCONCLUSIVE
+```
+
+Nenhum teste deve ser tratado como PASS apenas porque foi escrito.
+
+## Pendências antes de produção
+
+1. executar o harness com Go atual e `-race` em ambiente que realmente inicie os steps;
+2. remover a cobertura fraca redundante do common gap depois que a execução do caso forte
+   estiver disponível;
+3. validar runtime de `ChannelDifferenceTooLong` com diálogo/PTS válido, além da
+   interceptação já coberta pelo adapter;
+4. decidir o schema real das Evidence de bootstrap/descontinuidade no ADR de storage;
+5. decidir lifecycle/retry do supervisor quando a barrier fecha.
 
 ## Conclusão epistemológica
 
 **Finding confirmado por inspeção do source pinado.**
 
-O candidato anterior não deve ser implementado literalmente. O Candidate v3 acima é
-mais forte, mas continua não-autoritativo até os contract tests pendentes.
+O Candidate v3 é mais forte que o desenho anterior e agora possui uma suíte de contratos
+preparada, mas continua **não-autoritativo** até a execução real dos testes pendentes.
