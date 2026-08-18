@@ -1,771 +1,395 @@
-# AGENTS.md — Regras obrigatórias para agentes de IA e contribuidores
+# AGENTS.md — Constituição de desenvolvimento do Limiar
 
-Este arquivo define as regras rígidas para trabalhar no `limiar-collector` e nos
-binários relacionados do projeto `github.com/limiar/collector`.
+Authority: Constitutional
 
-Estas regras não são sugestões, nem estilo preferido, nem "boas práticas opcionais".
-Elas existem para impedir que agentes improvisem arquitetura, ignorem documentação,
-reescrevam partes estáveis sem necessidade ou assumam comportamento errado de
-bibliotecas externas.
+Este arquivo define as regras duráveis para agentes de IA e contribuidores do Limiar.
+Ele não define sozinho a arquitetura concreta, a stack completa, o schema do banco ou
+fornecedores permanentes. Essas decisões pertencem a ADRs aceitos e à documentação
+derivada deles.
 
-Se uma instrução aqui conflitar com um palpite do modelo, a instrução aqui vence.
-
----
-
-## 1) Ordem de autoridade
-
-Use esta hierarquia, nesta ordem:
-
-1. AGENTS.md
-2. `docs/adr/` (ADRs — decisões já tomadas)
-3. `docs/specs/` (TURSOGO.md, GOTD-TD.md)
-4. Skills do projeto em .agents/skills (`turso-db`, `cc-skills-golang`, entre outras), 
-5. Documentação oficial das bibliotecas e fornecedores
-6. Código existente no repositório
-
-**Se documentação e código divergirem:**
-
-- Não assumir qual está correto.
-- Identificar a divergência.
-- Registrar explicitamente.
-- Propor a correção.
-
-Nunca inventar uma solução silenciosa para resolver um conflito não compreendido.
+O objetivo desta constituição é impedir que descoberta, experimento, preferência de
+agente, código existente ou documentação histórica sejam confundidos com autoridade.
 
 ---
 
-## 2) Leitura obrigatória antes de qualquer alteração
+## 1. Idioma
 
-Antes de alterar qualquer código, leia o conjunto relevante de documentação.
-
-**Sempre consulte primeiro:**
-
-- `docs/ARCHITECTURE.md` — diagrama do pipeline, modelo de concorrência, modelo de dados
-- `docs/CONTEXT.md` — visão geral do sistema, limites de escopo, roadmap de fases
-- `docs/PRODUCT_BRIEF.md` — objetivos e posicionamento do produto
-- `docs/adr/` — registros de decisão de arquitetura
-- `docs/guidelines/` — diretrizes de extensão por camada
-
-**Para alterações relacionadas a banco de dados, consulte também:**
-
-- `docs/specs/TURSOGO.md`
-- A skill `turso-db`
-
-**Para alterações em Go, consulte também:**
-
-- `docs/specs/GOTD-TD.md`
-- A skill `cc-skills-golang` (especialmente: `golang-code-style`, `golang-database`,
-  `golang-concurrency`, `golang-context`, `golang-error-handling`, `golang-testing`,
-  `golang-project-layout`, `golang-cli`, `golang-security`, `golang-performance`,
-  `golang-observability`)
-
-**Regra rígida:** Se uma resposta puder ser obtida em `docs/` ou nas skills aprovadas,
-use isso em vez de adivinhar.
+Documentação permanente, ADRs, EvolutionDocs, comentários explicativos e comunicação
+de produto devem ser escritos em Português do Brasil (PT-BR), salvo quando um nome de
+API, identificador técnico ou termo externo exigir sua grafia original.
 
 ---
 
-## 3) Skills obrigatórias
+## 2. Ordem de autoridade
 
-Este projeto possui apenas duas skills externas aprovadas:
+Quando houver conflito, use esta ordem:
 
-- **`turso-db`**
-- **`cc-skills-golang`**
+1. instrução explícita do mantenedor;
+2. este `AGENTS.md`;
+3. ADRs com `Status: Accepted`, observada a regra de transição em `docs/adr/README.md`;
+4. `docs/BASELINE.md`;
+5. specs e documentação derivadas de decisões aceitas;
+6. implementação atual e testes, apenas como evidência do comportamento existente;
+7. EvolutionDocs: findings, experimentos e propostas;
+8. documentação histórica, audits, plans, prompts e artefatos de agentes;
+9. suposições do agente.
 
-Elas não são decorativas. Elas fazem parte do processo de trabalho do projeto.
+Uma fonte inferior não pode alterar silenciosamente uma fonte superior.
 
-### Obrigatório usar `turso-db`
+Código ou teste existente não se torna autoridade arquitetural apenas por existir ou
+ter permanecido em produção.
 
-A skill `turso-db` deve ser consultada antes de qualquer decisão, alteração, análise
-ou refatoração que envolva: Turso Database / Tursogo, SQL, schema, migrações,
-transações, concorrência de escrita, leitura de banco, replicação, sync, CDC, MVCC,
-encryption at rest, FTS, vector search, DSN / connection string, driver tursogo,
-qualquer comportamento de banco local embutido.
-
-### Obrigatório usar `cc-skills-golang`
-
-A skill `cc-skills-golang` deve ser consultada antes de qualquer alteração que envolva:
-design Go, concorrência, contexto, testes, observabilidade, performance, segurança,
-layout de projeto, CLI, logging, tratamento de erro, dependências.
-
-### Regra de não-pular skill
-
-Não é permitido concluir sobre Turso, Go ou arquitetura sem consultar a skill
-apropriada quando o assunto estiver no escopo dela.
-
-### Regra de falha
-
-Se a skill não estiver disponível, carregada ou acessível, pare e registre isso
-explicitamente. Não substitua skill por "memória do modelo".
+Se duas fontes de autoridade divergirem, registre a inconsistência antes de prosseguir.
+Não escolha silenciosamente a versão mais conveniente.
 
 ---
 
-## 4) Protocolo de raciocínio obrigatório
+## 3. Estados epistemológicos
 
-Antes de codar, o agente deve fazer o seguinte, explicitamente:
+No Limiar, estes conceitos são diferentes:
 
-1. Declarar as premissas.
-2. Apontar ambiguidades.
-3. Dizer o que ainda precisa ser verificado.
-4. Escolher a solução mínima.
-5. Definir como a solução será verificada.
+- **Evidence** — observação direta;
+- **Finding** — conclusão suportada por Evidence;
+- **Hypothesis** — explicação ou solução ainda não validada;
+- **Experiment** — teste controlado de uma hipótese;
+- **Proposal** — mudança recomendada;
+- **Decision** — escolha arquitetural aceita.
 
-**Regras do protocolo:**
+Em particular:
 
-- Não assuma comportamento de biblioteca sem prova.
-- Não silencie dúvidas.
-- Se existir mais de uma interpretação plausível, apresente as opções.
-- Se a solução puder ser menor, proponha a menor.
-- Se algo parecer excessivamente complexo, pare e simplifique.
+`Finding != Proposal != Decision`
 
-**Modelo obrigatório de raciocínio para tarefas maiores:**
-
-```
-1. [Passo] → verificar: [critério]
-2. [Passo] → verificar: [critério]
-3. [Passo] → verificar: [critério]
-```
-
-Se não houver critério verificável, a tarefa ainda está mal definida.
+Resultado de experimento `Supported` também não equivale a `Accepted`.
 
 ---
 
-## 5) Decision Record obrigatório
+## 4. Autoridade dos agentes
 
-Para qualquer decisão arquitetural não trivial, o agente deve registrar:
+Agentes podem:
 
-### Contexto
+- pesquisar e analisar código, dados e documentação;
+- registrar Evidence e Findings;
+- formular hipóteses;
+- executar experimentos isolados;
+- criar Proposals;
+- redigir ADRs com `Status: Proposed`;
+- implementar mudanças autorizadas;
+- recomendar aceitação ou rejeição de uma decisão.
 
-O problema que está sendo resolvido.
+Agentes não podem, sem instrução explícita do mantenedor:
 
-### Constraints
+- promover um ADR de `Proposed` para `Accepted`;
+- transformar hipótese, experimento ou Proposal em arquitetura de produção;
+- modificar uma invariante constitucional;
+- declarar fornecedor ou dependência como obrigatório permanentemente;
+- apagar evidência histórica material durante reestruturação.
 
-Restrições documentadas relevantes (ADRs, AGENTS.md, skills).
+Um ADR `Proposed` não autoriza uma mudança arquitetural de produção.
 
-### Alternativas consideradas
-
-1. ...
-2. ...
-3. ...
-
-### Decisão
-
-Escolha realizada.
-
-### Justificativa
-
-Por que a alternativa escolhida vence as demais.
-
-### Verificação
-
-Como validar que a decisão está correta.
-
-Se a decisão resultar em mudança permanente, ela deve virar um ADR formal em `docs/adr/`.
+A promoção `Proposed -> Accepted` deve deixar prova durável da aceitação do mantenedor
+no próprio ADR, com `Accepted-by`, `Accepted-at` e `Acceptance-reference` apontando para
+PR, issue, commit ou outro registro verificável. Uma conversa pode autorizar a ação
+corrente, mas a decisão final deve ficar registrada no repositório.
 
 ---
 
-## 6) Fases do projeto e escopo
+## 5. Invariantes constitucionais
 
-O Limiar é um pipeline com fases distintas. Cada componente tem escopo fechado.
+### C-01 — Evidence admitida não desaparece silenciosamente
 
-### Fase 1 — limiar-collector
+Uma observação que o sistema declarou como admitida não pode ser descartada
+silenciosamente por backpressure, concorrência, timeout ou conveniência interna.
+Replay e duplicidade explícita são preferíveis à perda silenciosa.
 
-**Responsabilidades:**
+### C-02 — Estado derivado é reconstruível
 
-- Autenticação Telegram (userbot)
-- Gerenciamento de canais monitorados
-- Captura bruta de mensagens
-- Persistência de payload raw como JSON
-- Backfill de histórico na primeira execução
-- Retomada a partir do cursor
-- Sessão, peers e cursor de leitura
-- Dashboard leve de inspeção (read-only + SSE)
-- Desligamento gracioso
-- Logging pretty/text/json
+Informação derivada deve ser reconstruível a partir de Evidence, regras, configuração
+e versões relevantes. Estado derivado não deve virar uma segunda fonte irrecuperável de
+verdade.
 
-**Fora do escopo da Fase 1 — NÃO implementar aqui:**
+### C-03 — Progresso não pode certificar durabilidade inexistente
 
-Normalização, classificação semântica, deduplicação inteligente, enriquecimento,
-chamadas LLM, exportação de métricas, alertas, APIs públicas de dados processados.
+Cursor, checkpoint, sync state ou outra posição operacional não pode avançar de forma
+que declare seguro algo que ainda não possui a durabilidade exigida pelo contrato.
 
-### Fase 2 — limiar-processor
+### C-04 — Evidence, Finding, Inference e Decision permanecem separados
 
-**Responsabilidades:**
+Não promover inferência a fato, Finding a Decision ou dado de apresentação a identidade
+de domínio.
 
-- Ler `raw_messages` (read-only)
-- Normalizar payloads em estrutura canônica
-- Classificar por tipo de mensagem
-- Deduplicar quando previsto
-- Escrever em `processed_messages`
+### C-05 — Determinístico e probabilístico são epistemicamente diferentes
 
-**Entradas:** `raw_messages`
-**Saídas:** `processed_messages`
+Resultados determinísticos e probabilísticos devem possuir contratos, proveniência e
+lifecycle distinguíveis. Dependência probabilística não ganha autoridade implícita
+sobre estado determinístico.
 
-### Fase 3 — limiar-ai (opcional)
+### C-06 — UNKNOWN é um estado legítimo
 
-Camada opcional de enriquecimento semântico baseada em IA.
+Ausência de evidência não equivale automaticamente a falso, vazio ou inexistente.
+Quando não houver base suficiente, preserve a incerteza.
 
-**Responsabilidades:**
+### C-07 — Identidade não é definida por conveniência de apresentação
 
-- Sumarização
-- Extração avançada de entidades (produto, marca, merchant)
-- Classificação assistida por LLM
-- Enriquecimento contextual
-- Geração de embeddings
-- Recuperação semântica (similarity search)
-- Confidence scoring
+Agrupamento de feed, URL afiliada, preço semelhante, hash conveniente ou outro artefato
+de UX não pode virar identidade canônica sem evidência adequada.
 
-**Entradas:** `processed_messages`
-**Saídas:** `enriched_messages`, embeddings, entidades semânticas
+### C-08 — Topologia não define autoridade
 
-**Regras:**
+Processo, goroutine, canal ou serviço são mecanismos de execução. Autoridade, ownership,
+lifecycle, durabilidade e failure domain devem ser definidos explicitamente.
 
-- O sistema deve continuar funcional sem esta fase.
-- Nenhum componente anterior pode depender da existência do LM.
-- Collector e Processor não podem chamar LLMs diretamente.
-- A ausência do LM não deve impedir o funcionamento da API.
+### C-09 — Complexidade precisa de evidência proporcional
 
-### Fase 4 — limiar-api (futuro)
+Entre duas soluções que satisfazem os mesmos requisitos, prefira a menor. Novas
+abstrações, processos, goroutines, dependências e mecanismos distribuídos precisam
+resolver um problema demonstrado.
 
-API pública de consulta a dados processados e enriquecidos.
+### C-10 — Agente propõe; mantenedor decide
 
-**Entradas:** `processed_messages` + `enriched_messages` (quando disponível)
+Mudanças arquiteturais permanentes exigem aceitação explícita do mantenedor.
 
-### Regra de desvio
+### C-11 — Implementação não cria autoridade por existência
 
-Se uma alteração introduzir lógica que pertence a outra fase, pare e documente
-o desvio. Não misture responsabilidades entre fases.
+Código, schema, teste, default ou comportamento já presente no repositório não se torna
+Decision apenas porque foi implementado ou permaneceu em produção.
 
 ---
 
-## 7) Invariantes Arquiteturais
+## 6. O que conta como mudança arquitetural
 
-As regras abaixo são invariantes do sistema. Um agente NÃO pode alterá-las sem
-atualizar ADRs, documentação e justificar explicitamente a mudança.
+A classificação depende do efeito da mudança, não do rótulo usado pelo autor.
 
-### Invariante 1 — O Collector não processa conteúdo
+Uma mudança provavelmente requer ADR quando altera:
 
-O Collector existe para capturar e armazenar dados. Ele NÃO existe para entender
-mensagens. Portanto o Collector:
+- source of truth;
+- modelo de durabilidade;
+- sincronização, checkpoint ou cursor;
+- modelo de dados durável;
+- identidade de domínio;
+- lifecycle de processamento;
+- semântica de reprocessamento;
+- side effects externos;
+- boundary de segurança;
+- topologia de processos quando semanticamente relevante;
+- dependência estrutural;
+- default que altere persistência, side effects, segurança, autoridade ou semântica
+  observável.
 
-- não classifica
-- não normaliza
-- não deduplica semanticamente
-- não extrai entidades
-- não chama LLMs
-- não toma decisões de negócio
+Chamar algo de "refactor", "cleanup", "experiment" ou "config change" não remove seu
+impacto arquitetural.
 
-O Collector apenas: lê updates, persiste payloads, mantém cursores, gerencia
-canais, expõe observabilidade.
-
-Qualquer lógica que tente interpretar significado pertence ao Processor.
-
-### Invariante 2 — Raw é a fonte da verdade
-
-A tabela `raw_messages` é a representação canônica do que foi recebido.
-
-- Nunca sobrescrever payloads.
-- Nunca mutar payloads históricos.
-- Nunca "corrigir" mensagens capturadas.
-- Transformações devem produzir novos registros derivados.
-
-### Invariante 3 — Reprocessamento deve ser possível
-
-Todo dado processado deve poder ser reconstruído a partir de:
-
-- `raw_messages`
-- configuração
-- código-fonte
-
-Se uma mudança impedir reprocessamento completo, ela deve ser rejeitada.
-
-### Invariante 4 — Processor é determinístico
-
-O Processor transforma dados. Ele não captura dados. Ele não conversa com
-Telegram. Ele não altera mensagens brutas.
-
-- Entrada: `raw_messages`
-- Saída: `processed_messages`
-
-O mesmo input deve produzir o mesmo output.
-
-### Invariante 5 — O banco é um detalhe físico
-
-O sistema não deve assumir que Collector e Processor podem abrir simultaneamente
-o mesmo arquivo. Qualquer desenho que dependa disso deve primeiro validar:
-
-- suporte do driver
-- suporte da engine
-- configuração ativa
-- riscos documentados
-
-Assumir suporte por analogia com SQLite é proibido.
-
-### Invariante 6 — Simplicidade vence sofisticação
-
-Entre duas soluções corretas:
-
-- menos componentes vence
-- menos processos vence
-- menos goroutines vence
-- menos canais vence
-- menos abstrações vence
-- menos dependências vence
-
-O ônus da prova pertence à solução mais complexa.
+Correções locais, testes, documentação e refatorações sem mudança semântica não exigem
+ADR por padrão. Governança deve ser proporcional ao risco.
 
 ---
 
-## 8) Arquitetura alvo do pipeline
+## 7. Lifecycle de ADR
 
-```
-Collector
-    ↓
-raw_messages
-    ↓
-Processor
-    ↓
-processed_messages
-    ├──────────────→ API
-    │
-    ▼
-LM (opcional)
-    ↓
-enriched_messages
-    ↓
-API
-    ↓
-Consumers
-```
+Estados permitidos:
 
-**Nenhum componente pode pular uma camada.** Exemplos proibidos:
+- `Proposed`
+- `Accepted`
+- `Rejected`
+- `Superseded`
 
-- Collector → processed_messages
-- Collector → API
-- Processor → Telegram
-- Dashboard → Telegram
-- Dashboard → escrita em banco
-- LM → raw_messages (escrita)
-- LM → Telegram
+Transições:
+
+`Proposed -> Accepted`
+`Proposed -> Rejected`
+`Accepted -> Superseded`
+
+Somente uma decisão aceita posterior pode substituir a autoridade de um ADR Accepted.
+
+ADRs anteriores à Rebaseline 2026 devem ser interpretados segundo o registry de
+transição em `docs/adr/README.md` até sua disposição final.
 
 ---
 
-## 9) Regras anti-abstração prematura
+## 8. Regra para produção e experimentos
 
-Antes de propor uma nova abstração, responder:
+Antes de implementar uma mudança arquitetural permanente:
 
-1. Quantas implementações existem hoje?
-2. Quantas implementações existem no roadmap?
-3. O problema já existe ou é hipotético?
-4. O código atual realmente sofre com isso?
+1. identifique a decisão que a autoriza;
+2. confirme que o ADR correspondente está `Accepted`;
+3. implemente dentro do escopo aceito;
+4. atualize documentação derivada no mesmo conjunto de mudanças.
 
-Se a resposta for "1 implementação" e "0 necessidade comprovada", não criar a
-abstração.
+Sem ADR Accepted, trabalho arquitetural só pode existir como experimento isolado ou
+código claramente não autoritativo.
 
----
+Experimento sem ADR Accepted não pode alterar o comportamento padrão de produção. Em
+particular, não pode:
 
-## 10) Sinais de arquitetura suspeita
-
-Antes de implementar, pare e reavalie se a solução contém:
-
-- Mais abstrações do que implementações.
-- Mais interfaces do que structs.
-- Mais processos do que responsabilidades.
-- Mais goroutines do que gargalos comprovados.
-- Mais configuração do que casos de uso.
-- Mais código de infraestrutura do que código de negócio.
-
-Se qualquer item for verdadeiro, simplifique primeiro.
+- mudar schema canônico;
+- mudar defaults de produção;
+- executar side effect real por padrão;
+- alterar API pública de produção;
+- alterar source of truth;
+- tornar dependência obrigatória;
+- ser requisito para o build ou run normal do produto.
 
 ---
 
-## 11) A stack fechada
+## 9. EvolutionDocs
 
-Apenas estas dependências são permitidas. **Nunca adicione uma dependência fora
-desta lista.**
+Pesquisa e evolução técnica devem usar `docs/evolution/`.
 
-| Funcionalidade | Permitido | Proibido |
-|---|---|---|
-| MTProto | `github.com/gotd/td` | GoTGProto ou qualquer outro wrapper |
-| Banco de dados | `turso.tech/database/tursogo` (driver `turso`) | Drivers SQLite, `mattn`, `modernc.org/sqlite`, GORM, qualquer ORM |
-| CLI/config | `github.com/spf13/cobra`, `github.com/spf13/viper` | — |
-| Terminal | `golang.org/x/term` (entrada mascarada no assistente/auth) | — |
-| Logging | stdlib `log/slog` (por trás de `logger.Logger`) | zerolog, zap, logrus |
-| HTTP | stdlib `net/http` (apenas para o dashboard) | chi, gin, echo, fiber |
-| Testes de propriedade | `pgregory.net/rapid` (apenas arquivos `_test.go`) | — |
+Fluxo recomendado quando necessário:
+
+`Evidence -> Finding -> Hypothesis -> Experiment -> Proposal -> ADR`
+
+Nem toda mudança precisa percorrer todas as etapas. Quanto maior a incerteza,
+irreversibilidade ou risco, maior deve ser a evidência antes da decisão.
+
+Consulte `docs/evolution/README.md`.
 
 ---
 
-## 12) Regras rígidas de Go
+## 10. Dependências externas
 
-### 12.1 Contexto
+Não assumir comportamento de biblioteca, API, protocolo ou fornecedor pela memória do
+agente.
 
-`context.Context` é o primeiro argumento de toda operação de I/O, rede, banco ou
-cancelamento.
+Quando o comportamento externo puder alterar uma decisão:
 
-### 12.2 Erros
+1. verificar a versão realmente usada;
+2. consultar documentação primária/oficial atual;
+3. consultar changelog ou release notes quando relevante;
+4. testar comportamento quando documentação não for suficiente;
+5. registrar a Evidence que sustenta a conclusão.
 
-- Use wrapping com contexto suficiente para depuração.
-- Erros atravessando camadas devem preservar causa e origem via `errors.Wrap(layer, op, err)`.
-- Formato: `"layer: op: cause"`.
-- Sentinels residem em `internal/errors/errors.go`.
-- Não use `panic()` em código de produção.
-- `recover()` só pode existir no limite da goroutine do dispatcher.
+Prefira versões stable. Não atualizar dependência apenas porque existe versão mais nova,
+mas também não manter versão antiga apenas porque já está no projeto.
 
-### 12.3 Estado global
+Uma dependência é estrutural quando controla, por exemplo, persistência, protocolo de
+fonte, runtime principal, provider obrigatório, framework principal de API,
+orquestração ou boundary de segurança. Adição ou troca estrutural exige evidência e,
+quando muda arquitetura, ADR.
 
-- Sem `init()` para comportamento de produção.
-- Sem estado mutável global em `internal/`.
-- Sem side effects escondidos na importação.
+Patch/minor update que não altera contrato não exige automaticamente novo ADR.
 
-### 12.4 Interfaces e abstrações
-
-- Não crie interface sem necessidade real.
-- Não crie camadas "flexíveis" por hipótese futura.
-- Não crie generics/abstrações quando uma função simples resolve.
-
-### 12.5 Testes
-
-- Toda mudança relevante precisa de teste.
-- Bug corrigido deve ter teste reproduzindo o erro.
-- Refatoração deve preservar o comportamento verificado por teste.
+Skills e guias auxiliares são ferramentas de trabalho, não fontes superiores à
+documentação primária nem aos ADRs aceitos.
 
 ---
 
-## 13) Regras rígidas de banco de dados
+## 11. Engenharia Go
 
-### 13.1 O driver permitido
+Estas são regras de engenharia, não decisões arquiteturais sobre packages concretos.
 
-- Banco local: `turso.tech/database/tursogo`
-- Driver registrado: `turso`
+- operações de I/O ou canceláveis devem respeitar `context.Context`;
+- não introduzir estado global mutável escondido;
+- não usar `panic` como tratamento normal de erro;
+- preservar causa e contexto de erros;
+- concorrência deve possuir ownership e lifecycle explícitos;
+- não criar goroutine, channel ou worker pool por hábito;
+- bug corrigido deve possuir teste de regressão quando praticável;
+- código concorrente relevante deve ser exercitado com race detector;
+- dinheiro não deve ser representado por `float64`;
+- evitar abstrações cuja necessidade ainda não exista.
 
-### 13.2 Proibições
-
-Não adicionar: drivers SQLite tradicionais, `mattn/go-sqlite3`, `modernc.org/sqlite`,
-GORM, ORM genérico, libs "compatíveis com SQLite" por comodidade.
-
-### 13.3 Regra de compatibilidade
-
-Não assumir comportamento de SQLite tradicional sem validar primeiro se ele existe
-no Turso Database na versão usada.
-
-### 13.4 Regra de banco compartilhado
-
-É proibido assumir que múltiplos processos podem abrir simultaneamente o mesmo
-arquivo `.db`.
-
-Antes de propor qualquer arquitetura multi-processo:
-
-1. Consultar `docs/specs/TURSOGO.md`
-2. Consultar skill `turso-db`
-3. Verificar documentação oficial da versão utilizada
-4. Verificar DSN efetivamente configurado
-
-Sem essas quatro verificações, a proposta é inválida.
-
-### 13.5 Regra para `experimental=multiprocess_wal`
-
-Só considerar essa opção se houver:
-
-- Documentação oficial relevante confirmando suporte na versão em uso
-- Aprovação explícita no desenho arquitetural (ADR)
-- Justificativa clara do risco
-- Testes comprovando funcionamento
-
-Se não houver isso, não proponha múltiplos processos compartilhando o mesmo arquivo.
-
-### 13.6 Recurso nativo antes de solução manual
-
-Antes de implementar manualmente qualquer um destes itens, verifique se o Turso
-Database já oferece suporte nativo:
-
-- CDC
-- MVCC
-- Encryption at rest
-- Sync / replication
-- FTS
-- Vector search
-- WAL / modo de journaling
-- Busy timeout
-- Change feed
-
-Se existir suporte nativo e for adequado, prefira o suporte nativo.
-
-### 13.7 SQL
-
-- Todo o SQL reside em `internal/storage/repository.go`.
-- Placeholders são apenas `?`.
-- Escritas recorrentes usam prepared statements.
-- Escrever SQL espalhado por outras camadas é proibido.
+Use a menor solução que satisfaz corretamente o contrato.
 
 ---
 
-## 14) Regras específicas para o limiar-collector
+## 12. Segurança
 
-### 14.1 Escrita no banco
-
-- Apenas uma goroutine deve escrever no banco.
-- Essa goroutine é o `Collector.dbWriter`.
-- Nenhuma outra goroutine escreve diretamente.
-- Leitura pelo dashboard é read-only.
-
-### 14.2 Telegram
-
-- Tipos do gotd/td não vazam para fora de `internal/telegram`.
-- Camadas externas usam a facade `TelegramClient` e modelos de domínio.
-- Updates deixam o pacote telegram como `[]byte` JSON em `telegram.Update`.
-
-### 14.3 Dashboard
-
-- Dashboard é leitura + SSE.
-- Dashboard nunca escreve no banco.
-- Dashboard nunca importa `internal/telegram`.
-
-### 14.4 Logging
-
-- Logging concreto é criado apenas em `internal/logger/slog.go`.
-- Outras camadas recebem `logger.Logger` por injeção.
-- Chaves sensíveis (`api_hash`, `session`, `token`, `password`, `auth_code`) são mascaradas.
-
-### 14.5 Composição
-
-- Dependências concretas são construídas apenas em `cmd/limiar-collector/main.go`.
-- A CLI depende da interface `cli.Provider`.
-- DI manual — sem framework.
+- nunca logar segredos;
+- credenciais não entram em commits, fixtures ou datasets;
+- erros não devem expor tokens, sessões ou chaves;
+- persistência de segredo exige necessidade e proteção explícitas;
+- código de teste deve respeitar os mesmos boundaries de segredo das integrações reais
+  quando aplicável.
 
 ---
 
-## 15) Regras específicas para o limiar-processor
+## 13. Verificação
 
-### 15.1 Regras do processor
+Toda mudança precisa possuir uma forma objetiva de verificação.
 
-1. **`raw_messages` são read-only.** O processor nunca escreve em `raw_messages`.
-2. **Mesmo banco, tabelas separadas.** Tabelas do collector são intocáveis.
-3. **Sem dependência do Telegram.** `internal/processor` nunca importa `internal/telegram`.
-4. **Preços são INTEGER (centavos).** Nunca usar `float64` para valor monetário.
-5. **Processamento idempotente.** `ON CONFLICT DO NOTHING` em `(channel_id, message_id)`.
-6. **Mesma closed stack.** Nenhuma dependência nova além do que este arquivo permite.
-
-### 15.2 Arquitetura do processor
-
-Antes de propor goroutines, workers, canais ou paralelismo, verificar:
-
-- Se o banco é o gargalo real.
-- Se o polling existe por limitação técnica ou por simplicidade deliberada.
-- Se há recurso nativo do Turso que elimina o polling.
-
-### 15.3 Quando pensar em CDC, MVCC, sync ou multiprocess
-
-Se a proposta tocar em: feed de mudanças, processar mudanças em tempo real,
-sincronização local/remota, multi-process access, escrita concorrente — então a
-skill `turso-db` deve ser consultada novamente antes de codar.
-
----
-
-## 16) Regras para uso de IA
-
-Nenhuma decisão de negócio pode depender exclusivamente de saída de LLM.
-
-Toda inferência de IA deve possuir:
-
-- Confidence score
-- Rastreabilidade (qual input gerou qual output)
-- Possibilidade de reprocessamento
-
-Prompts fazem parte da lógica do sistema e devem ser versionados.
-
-LLMs não podem ser chamados por:
-
-- Collector (Fase 1)
-- Processor (Fase 2)
-
-Apenas a camada de IA (Fase 3) pode invocar modelos de linguagem.
-
----
-
-## 17) Regras de concorrência
-
-### 17.1 Simplicidade primeiro
-
-- Não criar goroutine por hábito.
-- Não criar worker pool por reflexo.
-- Não criar channels "porque Go gosta disso".
-- Não paralelizar sem gargalo real comprovado.
-
-### 17.2 Verificação antes da concorrência
-
-Antes de adicionar concorrência, responder:
-
-1. O que está bloqueando de verdade?
-2. CPU, I/O, banco, rede ou mutex?
-3. Existe benchmark ou evidência?
-4. Qual parte realmente se beneficia da paralelização?
-
-### 17.3 Segurança
-
-- Evite races.
-- Evite acesso concorrente a mapas, slices compartilhados e handles de banco.
-- Se houver concorrência, ela deve ser visível e testável.
-
----
-
-## 18) Regras de segurança
-
-- Nunca logar segredos, tokens, sessão, `api_hash`, `password`, `auth_code` ou valores equivalentes.
-- Não persistir segredo em texto claro sem justificativa.
-- Não usar permissões de arquivo frouxas para dados sensíveis.
-- Não assumir que filesystem seguro substitui proteção de conteúdo.
-- Se o banco puder ser protegido por criptografia nativa e isso fizer sentido,
-  considere isso antes de criar soluções caseiras.
-
----
-
-## 19) Mudanças arquiteturais
-
-Qualquer alteração que modifique:
-
-- Modelo de concorrência
-- Modelo de dados
-- Limites entre fases
-- Estratégia de armazenamento
-- Dependências permitidas
-- Comunicação entre componentes
-
-Exige:
-
-1. ADR em `docs/adr/`
-2. Atualização da documentação relevante
-3. Justificativa explícita
-
-Sem os três, a mudança não pode ser feita.
-
----
-
-## 20) Regras de documentação
-
-### 20.1 Se mudar comportamento, atualize documentação
-
-Se a mudança alterar: arquitetura, contratos de camadas, fluxo de dados,
-dependências permitidas, restrições do banco, concorrência, configuração —
-atualize a documentação no mesmo PR/commit.
-
-### 20.2 Nunca deixar documentação e código divergirem sem nota
-
-Se o código mudou e a documentação ainda não, o agente deve deixar isso explícito.
-
----
-
-## 21) Critérios de qualidade
+Quando aplicável ao código Go:
 
 ```sh
-go build ./...        # saída 0
-go vet ./...          # zero problemas
-go test ./...         # todos passam
-go test -race ./...   # sem data races
+go build ./...
+go vet ./...
+go test ./...
+go test -race ./...
 ```
 
-O build não deve conter nenhum import de `sqlite`, `mattn` ou `gorm`.
+Não declare uma tarefa concluída se a verificação relevante não foi executada ou se uma
+limitação conhecida impede a conclusão. Registre a limitação explicitamente.
 
-**Critério mínimo de verificação:** Toda mudança precisa de uma forma objetiva de
-ser validada (teste, build, inspeção, benchmark, evidência documental). Sem
-verificação, a tarefa não está concluída.
-
----
-
-## 22) Processo esperado para qualquer tarefa
-
-### Antes de editar
-
-1. Ler `docs/` relevante.
-2. Consultar a skill correta.
-3. Declarar premissas.
-4. Identificar ambiguidade.
-5. Definir sucesso verificável.
-
-### Durante a edição
-
-- Fazer a menor mudança possível.
-- Não mexer no que não foi pedido.
-- Preservar estilo existente.
-- Remover apenas o que a própria mudança tornou inútil.
-
-### Depois de editar
-
-- Verificar build/testes.
-- Conferir impacto colateral.
-- Atualizar docs se necessário.
-- Reportar limitações ou pendências com honestidade.
+Teste legado prova comportamento existente; não prova que esse comportamento deve ser
+preservado quando uma Decision aceita muda o contrato.
 
 ---
 
-## 23) Regra final
+## 14. Documentação derivada
 
-Se o problema parecer simples, trate como simples. Se parecer complexo, prove que
-é complexo antes de complicar a solução.
+`docs/BASELINE.md`, `docs/ARCHITECTURE.md`, README e specs explicam o estado atual, mas
+não criam autoridade arquitetural independente.
 
-Não assumir. Não inventar. Não reescrever o projeto inteiro porque a intuição do
-modelo achou elegante.
+A direção correta é:
 
-Use a documentação. Use as skills. Use a menor solução que funciona.
+`Accepted ADR -> implementação -> documentação derivada`
 
----
+Nunca:
 
-## Referência rápida — Estrutura do projeto
+`edição de ARCHITECTURE.md -> nova arquitetura por acidente`
 
-```
-cmd/limiar-collector/main.go      — raiz de composição do collector
-cmd/limiar-processor/main.go      — raiz de composição do processor
-internal/
-├── cli/            — Comandos Cobra (root, auth, channels, run, dashboard)
-├── collector/      — Orquestração: Collector, MessageHandler, Classifier
-├── config/         — Carga (Viper + .env + wizard) + Validação
-├── dashboard/      — Servidor HTTP (net/http) + Broker SSE
-├── errors/         — Sentinels + ajudante Wrap
-├── logger/         — Interface Logger, SlogLogger, PrettyHandler, NopLogger
-├── processor/      — Normalização, classificação, persistência (Fase 2)
-├── storage/        — Abertura/fechamento do BD, migrações, Repository (todo SQL)
-└── telegram/       — Facade TelegramClient, Dispatcher, PeerStore,
-                      TursoSessionStorage, codificação/extração
-tools/
-└── payload-analyzer/  — Análise offline de payload (dev-time)
-docs/
-├── ARCHITECTURE.md
-├── CONTEXT.md
-├── PRODUCT_BRIEF.md
-├── adr/
-├── guidelines/
-└── specs/
-```
+Se documentação derivada divergir de uma Decision aceita, a documentação deve ser
+corrigida.
 
 ---
 
-## Referência rápida — Configuração
+## 15. Código legado, rebaseline e remoção
 
-Todas as variáveis são prefixadas com `LIMIAR_` e lidas de env + `.env` opcional.
+Durante uma migração ou rebaseline:
 
-| Variável | Padrão | Valores válidos |
-|---|---|---|
-| `LIMIAR_APP_ID` | — (obrigatório) | inteiro > 0 |
-| `LIMIAR_API_HASH` | — (obrigatório) | não vazio (mascarado nos logs) |
-| `LIMIAR_DB_PATH` | `./limiar.db` | qualquer caminho válido |
-| `LIMIAR_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `LIMIAR_LOG_FORMAT` | `pretty` | `json`, `text`, `pretty` |
-| `LIMIAR_SHUTDOWN_TIMEOUT` | `15` | 1–300 (segundos) |
-| `LIMIAR_MAX_RETRIES` | `10` | inteiro positivo |
-| `LIMIAR_IO_TIMEOUT` | `30s` | Duração Go |
-| `LIMIAR_DISPATCHER_BUFFER_SIZE` | `256` | 64–4096 |
-| `LIMIAR_DB_WRITER_BUFFER_SIZE` | `512` | 128–8192 |
-| `LIMIAR_HISTORY_MAX` | `5000` | 100–100000 |
-| `LIMIAR_HISTORY_MAX_DAYS` | `30` | 1–365 |
-| `LIMIAR_PROCESSOR_POLL_INTERVAL` | `5s` | [1s, 5m] |
-| `LIMIAR_PROCESSOR_BATCH_SIZE` | `50` | 1–1000 |
-| `LIMIAR_PROCESSOR_RESOLVE_URLS` | `false` | `true`, `false` |
-| `LIMIAR_PROCESSOR_RESOLVE_URLS_LIMIT` | `0` | inteiro >= 0 (`0` = sem limite quando habilitado) |
+- não assumir que código existente representa arquitetura desejada;
+- não apagar conhecimento útil apenas porque a implementação será substituída;
+- preservar testes, dados, benchmarks e Evidence que ainda possam validar a substituição;
+- substituir autoridade antes de destruir o legado.
+
+Classificações como `DELETE-LATER` não são autorização de deleção. Remoção significativa
+só deve ocorrer quando substitutos necessários existirem, referências úteis tiverem sido
+migradas e a rastreabilidade histórica material estiver preservada.
 
 ---
 
-## Referência rápida — Notas de estilo
+## 16. Processo mínimo de trabalho
 
-- Mensagens de log usam prefixos de emoji: 📡 📩 📜 🔄 ❌ ✅ 🛑 ⏰ 🌐 ⚠️
-- Strings visíveis ao usuário estão em Português (pt-BR).
-- Comentários de código e documentação estão em Português (pt-BR).
-- Mensagens de erro seguem o formato `"layer: op: cause"`.
+Antes:
+
+1. determine o contrato afetado;
+2. consulte a autoridade relevante;
+3. identifique incertezas materiais;
+4. decida se é implementação, experimento ou proposta;
+5. defina como verificar.
+
+Durante:
+
+- faça mudanças com escopo consciente;
+- não expanda arquitetura incidentalmente;
+- registre descobertas que invalidem premissas.
+
+Depois:
+
+- execute a verificação relevante;
+- atualize documentação derivada se necessário;
+- informe limitações e decisões pendentes;
+- nunca promova silenciosamente um artefato epistemológico.
+
+---
+
+## 17. Regra final
+
+Não confunda confiança com Evidence.
+
+Não confunda código com autoridade.
+
+Não confunda Proposal com Decision.
+
+Não complique antes de demonstrar a necessidade.
+
+Preserve a verdade observável e torne a evolução auditável.
