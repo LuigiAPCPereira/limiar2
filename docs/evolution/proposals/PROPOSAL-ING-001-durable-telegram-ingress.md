@@ -7,8 +7,9 @@ Status: Ready
 
 Os princípios desta Proposal foram aceitos pelo ADR 016.
 
-A mecânica concreta de integração com gotd continua Candidate e foi revisada pelo
-F-ING-008; nada nesta Proposal promove o Candidate v3 para produção.
+A mecânica concreta de integração com gotd foi revisada pelo F-ING-008 e agora possui
+contract tests reais aprovados. Ela passa de Candidate não validado para **Candidate
+suportado**, sem ganhar autoridade de produção.
 
 ## Problema
 
@@ -33,16 +34,14 @@ A arqueologia, EXP-LIMIAR-001 e F-ING-008 sustentam:
 
 1. live updates podem ser descartados sob backpressure no desenho atual;
 2. checkpoint/cursor pode ultrapassar Evidence ainda não durável;
-3. `(channel_id, message_id)` é insuficiente como chave física de Evidence porque edits
-   mantêm a mensagem lógica, mas são novas observações;
-4. uma Evidence pode afetar múltiplas mensagens, como em deletes compostos;
+3. `(channel_id, message_id)` é insuficiente como chave física de Evidence;
+4. uma Evidence pode afetar múltiplas mensagens;
 5. Telegram governa continuidade por `pts/qts/seq/date` e channel state;
 6. recovery possui limites como `DifferenceTooLong`/`ChannelDifferenceTooLong`;
 7. updates reconstruídos por difference podem chegar stateless ao handler;
-8. barrier linearizável é viável para impedir state persistido avançado após falha de
-   Evidence;
-9. o gotd v0.161.0 absorve erros em caminhos relevantes e callbacks de TooLong ocorrem
-   depois do avanço de state, exigindo fail-stop externo + interceptação pré-manager.
+8. handler/storage errors do gotd não constituem fail-stop confiável;
+9. callbacks de TooLong ocorrem depois do avanço de state;
+10. o Candidate v3 passou 12 contract tests no gotd v0.161.0 com Go 1.26.6 e race detector.
 
 Referências:
 
@@ -79,8 +78,7 @@ O schema físico permanece fora desta Proposal.
 Não criar unicidade global por `(channel_id, message_id)`. Replay, revisões e observações
 compostas precisam coexistir.
 
-Uma Evidence não precisa corresponder 1:1 a `SourceMessageKey`: pode alimentar nenhuma,
-uma ou várias projeções.
+Uma Evidence não precisa corresponder 1:1 a `SourceMessageKey`.
 
 ### 2. `SourceMessageKey`
 
@@ -117,7 +115,7 @@ Evidence exigida ainda não durável
 SourceSyncState persistido como avançado
 ```
 
-O Candidate v3 experimental é:
+Candidate v3 suportado:
 
 ```text
 Telegram RPC
@@ -137,21 +135,18 @@ GuardedStateStorage
 DurabilityBarrier + Supervisor
 ```
 
-Esse desenho permanece **Candidate** até os contract tests reais.
-
 ### 6. `GuardedRecoveryAPI`
 
 Bootstrap e descontinuidades precisam ser representados antes de o manager adotar o
 state correspondente.
 
-O adapter candidato intercepta:
+Interceptações candidatas:
 
 - `UpdatesGetState` -> Evidence de adoção de baseline remoto;
 - `UpdatesDifferenceTooLong` -> Evidence de descontinuidade common;
 - `UpdatesChannelDifferenceTooLong` -> Evidence de descontinuidade de canal.
 
-Se a Evidence falhar, a resposta não deve chegar ao manager e o lifecycle entra em
-fail-stop.
+Se a Evidence falhar, a resposta não chega ao manager e o lifecycle entra em fail-stop.
 
 ### 7. Replay e garantia local
 
@@ -176,26 +171,12 @@ de criação/edição que não tenha sido observado diretamente.
 
 ## Alternativas consideradas
 
-### A. `LastMessageID` como cursor live global
-
-Rejeitada: não representa `pts/qts/seq` e pode atravessar gaps/falhas.
-
-### B. Reimplementar sync Telegram no Limiar
-
-Rejeitada: o gotd já possui ordering/gap recovery especializado; o Limiar deve envolver
-essa máquina com boundaries próprios, não duplicá-la.
-
-### C. `updates.Manager` + handler error como fail-stop
-
-Rejeitada pelo F-ING-008: handler/storage errors podem ser absorvidos.
-
-### D. Somente callbacks `OnTooLong`
-
-Rejeitada: callbacks ocorrem depois do state advance nos caminhos relevantes.
-
-### E. Event log append-only + state nativo separado
-
-Recomendada nos princípios e aceita pelo ADR 016.
+- `LastMessageID` como cursor live global — rejeitada;
+- reimplementar sync Telegram no Limiar — rejeitada;
+- `updates.Manager` + handler error como fail-stop — rejeitada pelo F-ING-008;
+- somente callbacks `OnTooLong` — rejeitada;
+- event log append-only + state nativo separado — aceita nos princípios pelo ADR 016;
+- Candidate v3 acima — **suportado pelos contract tests**, ainda não autoritativo.
 
 ## Trade-offs
 
@@ -205,34 +186,33 @@ Recomendada nos princípios e aceita pelo ADR 016.
 - preserva edits/deletes/replays e updates compostos;
 - torna bootstrap/descontinuidades observáveis;
 - permite reconstrução de projeções;
-- aproxima a corretude do protocolo real;
-- mantém recovery especializado no gotd.
+- mantém recovery especializado no gotd;
+- falhas de Evidence resultam em fail-stop + replay, não avanço silencioso.
 
 ### Custos
 
 - ingress e storage ficam mais explícitos;
 - downstream precisa tolerar replay;
-- supervisor/fail-stop precisa de lifecycle testado;
-- casos irrecuperáveis deixam de ser silenciosos e passam a exigir policy operacional.
+- supervisor/fail-stop exige lifecycle operacional;
+- casos irrecuperáveis passam a exigir policy explícita.
 
 ## Riscos e pendências
 
 Antes de implementação de produção:
 
-- executar a suíte real da PR #151 com Go atual + `-race`;
-- validar runtime de `ChannelDifferenceTooLong` com PTS/dialog válido;
 - definir schema físico/versionamento de Evidence;
 - decidir engine/PRAGMAs em ADR próprio;
 - decidir session storage e boundary de segredos;
 - definir idempotência/reconciliação para Evidence commitada + state antigo;
 - definir lifecycle/retry do supervisor;
-- reduzir updates compostos sem falsificar Evidence.
+- preservar contract tests no adapter real e validar integração completa.
 
 ## Recomendação atual
 
-Manter os princípios do ADR 016 como autoridade e continuar tratando
+Manter os princípios do ADR 016 como autoridade e considerar
 `GuardedRecoveryAPI + updates.Manager + DurableEvidenceHandler + GuardedStateStorage +
-DurabilityBarrier + Supervisor` como **Candidate experimental**.
+DurabilityBarrier + Supervisor` um **Candidate suportado para implementação**.
 
-Somente após contract tests reais passarem deve existir uma Proposal/ADR que fixe essa
-mecânica como implementação de produção.
+O próximo passo não é implementá-lo silenciosamente. É decidir, sob a governança vigente,
+se a mecânica é apenas detalhe de implementação compatível com o ADR 016 ou se merece uma
+Decision complementar antes da mudança de produção.
