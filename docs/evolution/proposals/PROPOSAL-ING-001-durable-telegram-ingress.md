@@ -24,17 +24,19 @@ Esta Proposal recomenda separar:
 
 ## Evidence e Findings relevantes
 
-A arqueologia e o EXP-LIMIAR-001 sustentam os seguintes pontos:
+A arqueologia, a documentação primária e o EXP-LIMIAR-001 sustentam:
 
 1. live updates podem ser descartados sob backpressure no desenho atual;
 2. checkpoints/cursors podem ultrapassar Evidence que ainda não foi persistida;
 3. `(channel_id, message_id)` é insuficiente como chave física de Evidence porque edits
    mantêm a identidade lógica da mensagem mas constituem novas observações;
-4. deletes também são eventos relevantes para reconstruir projeções;
-5. Telegram governa continuidade de updates por `pts/qts/seq` e channel state, não por
-   maior message ID;
-6. uma DurabilityBarrier linearizável é viável para impedir state advance sobre Evidence
-   não durável no boundary do Limiar.
+4. uma única observação da fonte pode afetar múltiplas mensagens, como updates de delete;
+5. Telegram governa continuidade por `pts/qts/seq/date` e channel state, não por maior
+   message ID;
+6. o protocolo possui limites de recuperação, e o gotd também documenta limitações para
+   updates stateless e `ChannelDifferenceTooLong`;
+7. uma DurabilityBarrier linearizável é viável como hipótese de implementação para
+   impedir state advance sobre Evidence não durável no boundary do Limiar.
 
 Referência experimental:
 `docs/evolution/experiments/EXP-LIMIAR-001-durable-telegram-update-recovery.md`.
@@ -67,8 +69,12 @@ source_metadata?
 
 O schema físico exato permanece fora desta Proposal.
 
-Não criar unicidade global por `(channel_id, message_id)` na tabela de Evidence.
-Replay e múltiplas revisões precisam poder coexistir.
+Não criar unicidade global por `(channel_id, message_id)` na Evidence. Replay, revisões e
+observações compostas precisam poder coexistir.
+
+Uma Evidence representa a observação recebida da fonte; ela não precisa corresponder
+1:1 a uma `SourceMessageKey`. Uma observação pode alimentar nenhuma, uma ou várias
+projeções de mensagem.
 
 ### 2. `SourceMessageKey`
 
@@ -97,36 +103,37 @@ de que todos os updates live até aquele ID foram duravelmente observados.
 
 ### 5. Durability boundary
 
-Integrar o recovery manager do pacote `telegram/updates` do gotd a um
-`DurableEvidenceHandler`.
+Definir explicitamente o boundary de admissão entre observação da fonte, persistência de
+Evidence e avanço certificado do `SourceSyncState`.
 
-A persistência de `SourceSyncState` deve ser guardada por uma `DurabilityBarrier` de
-forma que falha na durabilidade de uma Evidence admitida impeça novo state write até
-reconciliação/cancelamento do fluxo.
-
-A implementação concreta precisa de contract tests contra a versão real do gotd antes de
-virar produção.
-
-### 6. Replays
-
-O ingress assume:
+A propriedade necessária é impedir:
 
 ```text
-at-least-once observation
+Evidence exigida pelo contrato ainda não durável
 +
-replay permitido
-+
-downstream idempotente
+SourceSyncState persistido como avançado
 ```
 
-Não prometer exactly-once.
+`DurableEvidenceHandler` + `DurabilityBarrier/GuardedStateStorage` permanece uma
+**hipótese de implementação**, não uma decisão desta Proposal. A mecânica concreta precisa
+de contract tests contra a versão real do gotd antes de produção.
 
-### 7. Deletes e edits
+### 6. Replay e garantia local
+
+Dentro do boundary controlado pelo Limiar, replay/duplicidade explícita devem ser
+permitidos e reconciliáveis. Não prometer exactly-once.
+
+Isso não é uma promessa de que o Telegram consegue recuperar indefinidamente qualquer
+evento histórico. Retenção do protocolo, `differenceTooLong`,
+`ChannelDifferenceTooLong` e updates stateless precisam de políticas explícitas.
+
+### 7. Deletes, edits e updates compostos
 
 Edits e deletes devem produzir Evidence quando observados.
 
-A reconstrução do estado corrente de uma mensagem pertence a uma Source Projection
-derivada, não ao overwrite da Evidence original.
+Updates compostos são preservados como observação de fonte e podem afetar múltiplas
+`SourceMessageKey` na projeção derivada. A Evidence original não deve ser falsificada em
+vários eventos inventados apenas para facilitar persistência.
 
 ### 8. History snapshots
 
@@ -144,9 +151,9 @@ do protocolo e pode ultrapassar falhas anteriores.
 
 ### B. Reimplementar a máquina de sync do Telegram no Limiar
 
-Rejeitada por complexidade e duplicação. O gotd já possui recovery/ordering específico do
-protocolo; o Limiar deve integrar e testar esse comportamento, não recriá-lo sem
-necessidade.
+Rejeitada por complexidade e duplicação. O gotd possui recovery/ordering específico do
+protocolo, mas sua integração precisa respeitar limitações documentadas e ser validada
+por contract tests.
 
 ### C. Persistir somente estado final da mensagem
 
@@ -164,17 +171,17 @@ Recomendada. Separa verdade observada de posição operacional e permite replay.
 ### Benefícios
 
 - elimina `LastMessageID` como falsa autoridade de sync live;
-- preserva edits/deletes/replays como Evidence;
+- preserva edits/deletes/replays e updates compostos como Evidence;
 - permite reconstrução de projeções;
 - aproxima a corretude do protocolo Telegram real;
-- torna a perda silenciosa uma violação explícita de contrato.
+- torna perda silenciosa uma violação explícita de contrato.
 
 ### Custos
 
 - schema de ingress fica mais rico;
 - downstream precisa tolerar replay;
 - sync state e backfill state deixam de ser um único cursor simples;
-- barrier adiciona lifecycle/failure handling que precisa de testes concorrentes fortes.
+- recovery possui casos-limite que exigem política explícita e testes concorrentes fortes.
 
 ---
 
@@ -183,12 +190,12 @@ Recomendada. Separa verdade observada de posição operacional e permite replay.
 Antes de implementação de produção:
 
 - concluir contract tests reais do gotd descritos no EXP-LIMIAR-001;
+- definir política para updates stateless e `differenceTooLong`/`ChannelDifferenceTooLong`;
 - decidir engine/PRAGMAs de storage em ADR próprio;
 - decidir payload físico/versionamento de Evidence;
 - decidir session storage em conjunto com o boundary de segredos;
 - definir idempotência/reconciliação quando commit de Evidence ocorre mas state write não;
-- definir como updates compostos que afetam múltiplas mensagens viram uma ou mais
-  projeções sem falsificar a Evidence recebida.
+- definir redução de updates compostos sem falsificar a Evidence recebida.
 
 ---
 
@@ -197,6 +204,6 @@ Antes de implementação de produção:
 Transformar os princípios desta Proposal em um ADR `Proposed` sobre Source Evidence e
 Telegram Synchronization.
 
-A implementação concreta do gotd recovery manager deve permanecer condicionada aos
-contract tests pendentes; aceitar os princípios não deve ser interpretado como aceitação
-prematura de toda mecânica do protótipo.
+A implementação concreta de recovery permanece Candidate até os contract tests; aceitar
+os princípios não deve ser interpretado como aceitação prematura da mecânica do
+protótipo.
