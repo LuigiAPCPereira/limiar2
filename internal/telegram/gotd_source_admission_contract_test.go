@@ -183,16 +183,17 @@ func TestSourceAdmission_LiveCompoundEnvelopeIsDurableBeforeManagerStateAdvance(
 	if !bytes.Equal(persisted, wantPayload) {
 		t.Fatalf("persisted source envelope differs from pre-manager encoding")
 	}
-	result := waitStateWrite(t, baseStorage, "pts")
-	if result.err != nil {
-		t.Fatalf("SetPts: %v", result.err)
+	firstWrite := waitStateWrite(t, baseStorage, "pts")
+	secondWrite := waitStateWrite(t, baseStorage, "pts")
+	if firstWrite.err != nil || secondWrite.err != nil {
+		t.Fatalf("SetPts errors: first=%v second=%v", firstWrite.err, secondWrite.err)
 	}
 	if got := baseStorage.snapshot().Pts; got != 2 {
 		t.Fatalf("persisted pts=%d, want 2", got)
 	}
 	events := order.snapshot()
-	if len(events) < 2 || events[0] != "evidence:live-envelope" || events[1] != "state:pts" {
-		t.Fatalf("order=%v, want live Evidence before state", events)
+	if len(events) < 3 || events[0] != "evidence:live-envelope" || events[1] != "state:pts" || events[2] != "state:pts" {
+		t.Fatalf("order=%v, want live Evidence before both PTS writes", events)
 	}
 
 	cancel()
@@ -227,9 +228,6 @@ func TestSourceAdmission_FailurePreventsManagerStateAdvance(t *testing.T) {
 	if got := storage.snapshot().Pts; got != 0 {
 		t.Fatalf("state advanced to %d after admission failure", got)
 	}
-	// Startup recovery may still leave date/seq bookkeeping in the fake result
-	// channel. The contract under test is that the failed live admission never
-	// reaches the manager and therefore cannot produce a PTS advance.
 	assertNoStateWriteKind(t, storage, "pts", 100*time.Millisecond)
 }
 
@@ -323,7 +321,6 @@ func TestRecoveryAdmission_ChannelDifferenceEvidencePrecedesChannelState(t *test
 	api := newSourcePreservingRecoveryAPI(upstream, barrier, func(_ context.Context, kind string, payload []byte) error {
 		switch kind {
 		case recoveryEvidenceDifference:
-			// Common startup recovery is independent of the channel gate.
 			return nil
 		case recoveryEvidenceChannelDifference:
 			if len(payload) == 0 {
