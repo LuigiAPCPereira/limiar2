@@ -188,8 +188,9 @@ A maior parte do ADR 017 continua suportada. Porém, esta proposta altera materi
 posição e o significado da responsabilidade chamada `DurableEvidenceHandler` no diagrama
 aceito.
 
-Por isso, a recomendação é uma **nova Decision complementar e parcialmente superseding
-apenas para essa semântica de Source Admission**, sem editar retroativamente o ADR 017.
+Por isso, a recomendação é uma **nova Decision complementar que, se aceita, prevaleça
+somente sobre a cláusula conflitante de Source Admission**, sem editar retroativamente o
+ADR 017 nem marcar o documento inteiro como `Superseded`.
 
 O ADR 018 materializa essa recomendação como `Proposed`.
 
