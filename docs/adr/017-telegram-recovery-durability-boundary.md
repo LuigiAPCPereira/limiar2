@@ -1,7 +1,10 @@
 # ADR 017 — Boundary durável de recovery Telegram
 
 Authority: Decision Record
-Status: Proposed
+Status: Accepted
+Accepted-by: LuigiAPCPereira
+Accepted-at: 2026-08-18T17:24:00-03:00
+Acceptance-reference: PR #153
 
 ## Contexto
 
@@ -16,7 +19,7 @@ A inspeção adicional de `Manager.loadState` confirmou duas propriedades releva
 
 Referências: ADR 016, PR #151, EXP-LIMIAR-001, F-ING-008 e PROPOSAL-ING-002.
 
-## Decision proposta
+## Decision
 
 ### 1. gotd continua responsável pelo ordering/recovery
 
@@ -112,6 +115,6 @@ Engine SQLite/PRAGMAs, schema físico de Evidence, payload, session/peer storage
 
 Este ADR complementa, não supersede, o ADR 016. ADR 016 define as propriedades de Evidence/sync; este ADR define o boundary de recovery do gotd que as preserva.
 
-## Escopo da eventual aceitação
+## Escopo da aceitação
 
 A aceitação autoriza implementar essas responsabilidades quando os gates e as decisões de storage necessárias estiverem satisfeitos. Não aceita automaticamente engine de storage, schema físico de Evidence ou demais itens fora de escopo.
