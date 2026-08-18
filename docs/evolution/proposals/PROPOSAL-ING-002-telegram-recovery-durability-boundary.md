@@ -5,28 +5,28 @@ Status: Ready
 
 ## Problema
 
-O ADR 016 aceitou os princípios de Evidence e sincronização Telegram, mas deixou a
-mecânica concreta de recovery fora de escopo.
+O ADR 016 aceitou os princípios de Evidence e sincronização Telegram, mas deixou a mecânica concreta de recovery fora de escopo.
 
-O EXP-LIMIAR-001 e o F-ING-008 demonstraram que integrar diretamente
-`updates.Manager -> UpdateHandler -> StateStorage` não é suficiente para preservar o
-contrato de durabilidade do Limiar:
+O EXP-LIMIAR-001 e o F-ING-008 demonstraram que integrar diretamente `updates.Manager -> UpdateHandler -> StateStorage` não é suficiente para preservar o contrato de durabilidade do Limiar:
 
 - erros do handler e do `StateStorage` podem ser absorvidos pelo gotd;
 - `DifferenceTooLong` e `ChannelDifferenceTooLong` avançam state antes dos callbacks;
 - bootstrap sem state local adota um baseline remoto;
+- `AuthOptions.Forget=true` também força substituição por state remoto;
 - recovery pode entregar updates stateless, cujos PTS/QTS não são autoridade de sync.
 
-A suíte experimental executada contra `github.com/gotd/td v0.161.0` em Go 1.26.6
-passou 12 contract tests e `go test -race`.
+A suíte experimental contra `github.com/gotd/td v0.161.0` em Go 1.26.6 passou 12 contract tests e `go test -race`.
+
+A inspeção de `Manager.loadState` também confirmou que erro de `GetState` é propagado: falha de leitura não deve ser confundida com ausência de state.
 
 ## Evidência
 
-- ADR 016 — princípios de Source Evidence e sincronização Telegram;
+- ADR 016;
 - `EXP-LIMIAR-001-durable-telegram-update-recovery.md`;
 - `F-ING-008-gotd-recovery-fail-stop-boundary.md`;
-- PR #151 — harness e EvolutionDocs;
-- execução experimental `agent-runtime` workflow run `32171500698`.
+- PR #151;
+- workflow experimental `agent-runtime` run `32171500698`;
+- gotd v0.161.0 `telegram/updates/manager.go`.
 
 ## Proposta
 
@@ -51,121 +51,84 @@ DurabilityBarrier + Supervisor
 atravessam API / Handler / StateStorage
 ```
 
-Os nomes acima descrevem responsabilidades. A implementação pode ajustar tipos,
-pacotes e nomes sem novo ADR desde que preserve os contratos abaixo.
+Os nomes descrevem responsabilidades. Tipos/pacotes podem mudar sem nova Decision se os contratos forem preservados.
 
-### 1. Durable Evidence antes de state correspondente
+### 1. Evidence autoriza transições de state
 
-Observações normais admitidas pelo handler devem atingir a durabilidade exigida antes
-de um state write correspondente poder ser certificado como avançado.
+Toda Evidence exigida pelo contrato de admissão de uma transição deve estar durável antes de o state correspondente avançar.
 
-Falha de Evidence fecha a barrier antes de retornar ao gotd.
+Isso não cria relação 1:1 entre Evidence e mensagem: updates compostos podem permanecer uma observação de fonte única e alimentar múltiplas projeções.
 
 ### 2. StateStorage guardado e linearizável
 
-A verificação de barrier + state write precisa ocorrer dentro da mesma seção crítica,
-sem janela TOCTOU.
+Barrier check + state write devem ocorrer na mesma região crítica. Falha de state write encerra o lifecycle para evitar continuar com state interno potencialmente divergente.
 
-Se um state write falhar, o lifecycle entra em fail-stop. Isso evita continuar usando
-state interno potencialmente divergente do state persistido.
+Erro de leitura de state é falha, não ausência. Nunca deve provocar bootstrap remoto por fallback.
 
-### 3. Recovery API interceptada antes do manager
+### 3. Recovery API intercepta adoção de baseline
 
-Respostas que representam adoção ou perda de continuidade devem ser materializadas como
-Evidence antes de serem entregues ao `updates.Manager`:
+Antes de o manager receber uma resposta que estabeleça/substitua baseline ou represente descontinuidade, o Limiar registra Evidence correspondente:
 
-- bootstrap por `UpdatesGetState`;
+- bootstrap sem state local;
+- resync/reset explícito que substitua state local, inclusive fluxo equivalente a `Forget=true`;
 - `UpdatesDifferenceTooLong`;
 - `UpdatesChannelDifferenceTooLong`.
 
-Se a Evidence correspondente falhar, a resposta não chega ao manager.
+`Forget=true` não deve ser default operacional; somente ação explícita de resync/reset com Evidence.
 
-### 4. Supervisor é a autoridade de fail-stop
+### 4. Supervisor é a autoridade de interrupção
 
-O sistema não depende de propagação de erro do gotd para interromper o recovery.
+O sistema não depende da propagação de erro do gotd. Barrier fechada cancela o manager e impede novos state writes.
 
-Barrier fechada cancela o lifecycle do manager e impede novos state writes. Restart
-posterior parte do state persistido durável.
+A barrier é terminal para aquela instância. Restart é uma nova tentativa partindo do state persistido antigo; a mesma barrier nunca é reaberta.
+
+Política detalhada de backoff pode ser separada, mas loops apertados de restart não são aceitáveis.
 
 ### 5. Replay é esperado
 
-`Evidence durável + state antigo` é condição segura e pode gerar replay após restart.
-O downstream deve ser idempotente/reconciliável.
-
-Não existe promessa de exactly-once.
+`Evidence durável + state antigo` é seguro e pode gerar replay. Downstream deve ser idempotente/reconciliável. Não existe exactly-once.
 
 ### 6. Updates stateless não definem sync authority
 
-PTS/QTS presentes em updates reconstruídos pelo recovery não devem ser usados pelo
-domínio para reconstruir ou avançar `SourceSyncState`.
-
-A autoridade operacional de sync permanece no recovery manager + StateStorage.
+PTS/QTS negativos/sintéticos de updates reconstruídos não avançam `SourceSyncState`. A autoridade de sync continua no recovery manager + StateStorage.
 
 ### 7. TooLong vira descontinuidade explícita
 
-Uma ocorrência `*DifferenceTooLong` significa que o passado ausente pode não ser mais
-recuperável. O Limiar registra a descontinuidade e pode adotar o novo baseline depois
-dessa Evidence, sem afirmar que observou os eventos perdidos.
+Quando o passado não é mais recuperável, o Limiar registra a descontinuidade e só então permite adoção do novo baseline. Isso não afirma observação dos eventos ausentes.
+
+Replays podem repetir a Evidence da tentativa/descontinuidade; a reconciliação é derivada, não mutação do registro original.
 
 ## Alternativas rejeitadas
 
-### Apenas retornar erro no handler
-
-Rejeitada: o gotd pode registrar o erro e continuar.
-
-### Apenas callbacks `OnTooLong` / `OnChannelTooLong`
-
-Rejeitada: os callbacks ocorrem depois do avanço de state nos caminhos relevantes.
-
-### Reimplementar `pts/qts/seq`
-
-Rejeitada: duplica a máquina especializada do gotd sem necessidade.
-
-### Permitir continuidade após falha de StateStorage
-
-Rejeitada no baseline atual: o state interno pode divergir do persistido, tornando o
-lifecycle ambíguo. Fail-stop é mais simples e seguro.
+- apenas retornar erro no handler;
+- apenas callbacks `OnTooLong` / `OnChannelTooLong`;
+- reimplementar `pts/qts/seq`;
+- continuar o mesmo lifecycle após falha de StateStorage;
+- tratar erro de `GetState` como state ausente;
+- usar `Forget=true` como reset silencioso/default.
 
 ## Trade-offs
 
-### Benefícios
+Benefícios: preserva C-01/C-03, torna bootstrap/resync/perdas auditáveis, mantém recovery especializado no gotd e explicita replay.
 
-- preserva C-01/C-03 mesmo quando o gotd absorve erros;
-- torna bootstrap e perdas irrecuperáveis auditáveis;
-- mantém recovery especializado no gotd;
-- replay fica explícito e testável;
-- evita usar payload stateless como falsa autoridade.
-
-### Custos
-
-- adiciona três boundaries/adapters e supervisor explícito;
-- indisponibilidade é preferida a continuar após falha de durabilidade;
-- downstream precisa tolerar replay;
-- Evidence de sync precisa de contrato físico ainda não decidido.
+Custos: adiciona adapters/lifecycle, prefere indisponibilidade a continuidade ambígua e exige downstream tolerante a replay.
 
 ## Fora do escopo
 
-Esta Proposal não decide:
-
-- engine SQLite ou PRAGMAs;
-- schema físico de Evidence;
-- formato do payload;
-- session/peer storage;
-- política de backoff/retry após restart;
-- Source Message Projection;
-- processamento comercial.
+Engine SQLite/PRAGMAs, schema físico de Evidence, payload, session/peer storage, política detalhada de backoff, Source Message Projection e processamento comercial.
 
 ## Gates de implementação
 
 Antes de produção:
 
-1. storage escolhido deve conseguir implementar os contratos de Evidence + state;
-2. testes de integração devem manter os 12 contratos já validados;
-3. adicionar caso end-to-end de `ChannelDifferenceTooLong` com diálogo/PTS válido;
-4. testar edit/delete/update composto e coexistência backfill/live no boundary real;
-5. `go test -race` obrigatório para o pacote de ingress/recovery.
+1. storage escolhido deve cumprir Evidence + state ordering;
+2. preservar os 12 contratos já validados;
+3. `go test -race` obrigatório;
+4. testar end-to-end `ChannelDifferenceTooLong` com diálogo/PTS válido;
+5. testar resync explícito/`Forget=true` com Evidence antes da substituição do baseline;
+6. provar que erro de leitura de state não cai em bootstrap;
+7. testar edit/delete/update composto e coexistência backfill/live.
 
 ## Recomendação
 
-Criar ADR complementar ao ADR 016 para tornar essas responsabilidades de recovery uma
-Decision explícita antes de implementar o novo ingress.
+Criar ADR complementar ao ADR 016 para tornar essas responsabilidades de recovery uma Decision explícita antes de implementar o novo ingress.
