@@ -23,13 +23,12 @@ Decision arquitetural.
 - `turso.tech/database/tursogo v0.7.2`;
 - `github.com/ncruces/go-sqlite3 v0.35.3` via `database/sql`.
 
-Ambiente de execução final:
+Ambiente das execuções:
 
 - runner self-hosted `LuigiCachyOS`;
-- Go 1.26.6 linux/amd64;
-- workflow experimental `agent-runtime` run `32183259646`.
+- Go 1.26.6 linux/amd64.
 
-## Contrato testado
+## Fase A — contrato funcional de durability
 
 O mesmo harness foi executado contra as duas engines com:
 
@@ -53,7 +52,7 @@ Casos cobertos:
 10. Evidence já commitada permanece após falha injetada de state write, enquanto o state
     persistido permanece antigo.
 
-## Execuções
+Workflow experimental: `agent-runtime` run `32183259646`.
 
 ### Execução normal + race
 
@@ -61,7 +60,6 @@ Com CGO disponível para o próprio race detector:
 
 ```text
 go test ./... -count=1 -v    PASS
-
 go test -race ./... -count=1 PASS
 ```
 
@@ -78,8 +76,63 @@ CGO_ENABLED=0 go test ./... -count=1 -v
 As duas engines passaram, incluindo o caso Evidence commitada + state write rejeitado.
 
 O `-race` não é executável em Linux com `CGO_ENABLED=0` porque essa é uma restrição do
-race detector do Go, não uma dependência das engines. A execução final separou os gates:
+race detector do Go, não uma dependência das engines. A execução separou os gates:
 runtime normal sem CGO e race com CGO habilitado; ambos passaram.
+
+## Fase B — crash abrupto entre Evidence e state/progress
+
+A Fase A usava rollback/falha injetada e reopen normal. Para aproximar o gate de
+crash/restart real, a Fase B executou cada writer em processo auxiliar e aplicou
+`SIGKILL` em boundaries observáveis antes/depois dos commits.
+
+Authorities exercitadas:
+
+- `SourceSyncState` (`pts`);
+- `BackfillProgress` (`next_offset`).
+
+Matriz esperada para cada authority:
+
+```text
+antes do commit de Evidence  -> Evidence ausente / progress antigo
+após commit de Evidence       -> Evidence presente / progress antigo
+antes do commit de progress   -> Evidence presente / progress antigo
+após commit de progress        -> Evidence presente / progress novo
+```
+
+A matriz foi executada contra as duas engines, com três repetições por combinação:
+
+```text
+2 engines x 2 authorities x 4 boundaries x 3 repetições = 48 crashes
+```
+
+Após cada `SIGKILL`, o banco foi reaberto e verificou-se:
+
+- contagem de Evidence;
+- PTS ou BackfillProgress esperado;
+- `PRAGMA integrity_check = ok`.
+
+Execução final:
+
+```text
+Workflow run: agent-runtime#32198152076
+ncruces/go-sqlite3: v0.35.3
+Tursogo: v0.7.2
+
+go test ./... -count=1 -v    PASS
+go test -race ./... -count=1 PASS
+```
+
+As duas engines preservaram todos os estados esperados. Nenhum cenário produziu
+`Evidence não durável / progress persistido como avançado`.
+
+Finding detalhado:
+`docs/evolution/findings/F-STO-002-process-crash-preserves-evidence-before-progress.md`.
+
+### Limite desta fase
+
+O teste mata o processo antes/depois de `Commit`; ele não intercepta deterministicamente
+a syscall/fsync no meio do commit. Portanto, **process crash** está coberto, enquanto
+**power-loss durante fsync** continua fora do que foi provado.
 
 ## Finding adicional — `synchronous=NORMAL`
 
@@ -97,7 +150,8 @@ Finding detalhado:
 
 ## Resultado comparativo
 
-As duas engines satisfizeram o contrato mínimo avaliado.
+As duas engines satisfizeram o contrato avaliado, inclusive o novo gate de process
+crash/restart.
 
 O experimento **não rejeita Tursogo por corretude funcional**. Entretanto,
 `ncruces/go-sqlite3` permanece candidato preferencial para a nova base porque usa a
@@ -113,7 +167,7 @@ para decidir arquitetura.
 
 - resistência real a power-loss/fsync interrompido;
 - segurança sob corrupção física do filesystem;
-- operação multi-processo;
+- operação multi-processo simultânea;
 - equivalência de locking/WAL em todos os sistemas operacionais;
 - comportamento com bancos muito grandes;
 - criptografia em repouso;
@@ -124,11 +178,13 @@ para decidir arquitetura.
 
 ## Conclusão
 
-**Supported.**
+**Supported with limitations.**
 
 Existe pelo menos uma rota cgo-free e baseada em SQLite capaz de cumprir os contratos de
-durabilidade já aceitos. Tanto Tursogo v0.7.2 quanto `ncruces/go-sqlite3 v0.35.3`
-passaram o harness atual.
+durabilidade já aceitos, incluindo restart após `SIGKILL` nos boundaries entre Evidence
+e state/progress. Tanto Tursogo v0.7.2 quanto `ncruces/go-sqlite3 v0.35.3` passaram o
+harness atual.
 
-A escolha da engine e o contrato físico mínimo permanecem Proposal até uma Decision
-explícita.
+A escolha da engine, o schema físico mínimo e a política de power-loss/filesystem
+permanecem fora da autoridade deste experimento e exigem Decision explícita quando
+estruturais.
