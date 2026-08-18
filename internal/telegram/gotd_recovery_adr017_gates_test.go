@@ -165,8 +165,6 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 	upstream := newScriptedRecoveryAPI()
 	upstream.remoteState = &tg.UpdatesState{Pts: 42, Date: 10, Seq: 3}
 	api := newGuardedRecoveryAPI(upstream, barrier, func(_ context.Context, kind string) error {
-		// The harness marker is generic baseline-adoption Evidence. Production
-		// Evidence must also record that this adoption was an explicit resync.
 		if kind != recoveryEvidenceBootstrap {
 			t.Fatalf("evidence kind = %q", kind)
 		}
