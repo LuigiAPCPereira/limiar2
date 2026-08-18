@@ -84,17 +84,29 @@ camada só se tornam autoridade quando cobertos por ADR Accepted.
 
 - a Constituição em `AGENTS.md`;
 - o lifecycle de ADR e a transição dos ADRs legados em `docs/adr/README.md`;
-- princípios legados explicitamente mantidos pelo registry de transição enquanto sua
-  disposição final não for concluída.
+- **ADR 016 — Source Evidence e sincronização Telegram**, que estabelece:
+  - Evidence de fonte append-only/versionada;
+  - separação entre Evidence e `SourceMessageKey`;
+  - sync live baseado no estado nativo do Telegram, não em `LastMessageID`;
+  - lifecycle de backfill separado do sync live;
+  - durabilidade antes de avanço certificado de sync state;
+  - replay permitido sem promessa de exactly-once end-to-end;
+  - history snapshot sem fabricação de eventos;
+  - gotd mantido como integração Telegram, sem ainda decidir a mecânica concreta de
+    recovery/barrier.
+
+Com o ADR 016 aceito, o ADR 005 fica superseded no escopo do contrato raw por mensagem e
+o ADR 006 fica retired/superseded no escopo de `LastMessageID` como autoridade de sync
+live. O princípio de gotd do ADR 002 é mantido com boundary de sincronização reescrito.
 
 ### Candidatos fortes, ainda não autoritativos
 
 Os itens abaixo são resultados de pesquisa, experimentos e propostas da rebaseline.
 **Eles não devem ser tratados como decisões apenas por aparecerem aqui.**
 
-- Evidence append-only/versionada para observações da fonte;
-- sincronização Telegram baseada no estado nativo de updates, não em `LastMessageID`;
-- barrier entre durabilidade da Evidence e persistência do sync state;
+- mecânica concreta `updates.Manager + DurableEvidenceHandler +
+  DurabilityBarrier/GuardedStateStorage`, condicionada aos contract tests do
+  EXP-LIMIAR-001;
 - migração side-by-side do banco legado, preservando o antigo como artefato imutável;
 - Processing Generations para derivados reconstruíveis e reprocessamento seguro;
 - Source Message Projection separada da Evidence;
@@ -121,7 +133,8 @@ Durante a rebaseline:
 - componentes classificados para substituição só devem ser removidos depois que sua
   função, evidência útil e caminho de migração estiverem cobertos.
 
-O registry de `docs/adr/README.md` governa a interpretação dos ADRs 001–015.
+O registry de `docs/adr/README.md` governa a interpretação dos ADRs 001–015 em conjunto
+com ADRs novos já aceitos.
 
 ---
 
@@ -143,7 +156,9 @@ com documentação primária e testes proporcionais ao risco.
 
 ## 7. Questões abertas prioritárias
 
-1. contrato final de Evidence e sincronização Telegram;
+1. contract tests reais do gotd e política para stateless updates,
+   `differenceTooLong`/`ChannelDifferenceTooLong` e recovery antes da implementação do
+   ingress decidido pelo ADR 016;
 2. escolha/validação da engine SQLite local e PRAGMAs de durabilidade;
 3. contrato físico do payload de Evidence;
 4. estratégia final de sessão/peer state;
