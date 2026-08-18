@@ -1,167 +1,172 @@
 # EXP-LIMIAR-001 — Recuperação durável de updates Telegram
 
 Authority: Non-authoritative
-Status: Supported with limitations
+Status: Supported with limitations; runtime contract confirmed
 
 ## Hipótese
 
-É possível integrar o mecanismo de recuperação/ordenação de updates do gotd com uma
-barreira de durabilidade do Limiar de forma que o estado operacional de sincronização
-não seja persistido como avançado enquanto uma Evidence admitida correspondente ainda
-não tiver atingido a durabilidade exigida.
+É possível integrar o recovery/ordering do gotd com um boundary de durabilidade do
+Limiar de forma que o sync state persistido não certifique uma observação, bootstrap ou
+descontinuidade cuja Evidence exigida ainda não esteja durável.
 
-A propriedade desejada é evitar o estado proibido:
+Estado proibido:
 
 ```text
-Evidence não durável / sync state avançado
+Evidence exigida não durável / sync state persistido como avançado
 ```
 
-sem exigir semântica de exactly-once.
-
----
+A hipótese não exige exactly-once.
 
 ## Contexto
 
-A arqueologia do ingress atual encontrou riscos materiais:
+A arqueologia do ingress encontrou perda sob backpressure, avanço prematuro de cursor,
+colisão entre revisões, ausência de Evidence para deletes e uso de `LastMessageID` como
+uma autoridade que o protocolo Telegram não define.
 
-- live updates podem ser descartados sob backpressure;
-- backfill pode avançar checkpoint antes da durabilidade do raw;
-- uma falha em mensagem anterior pode ser atravessada por um cursor posterior;
-- edits colidem com a identidade física atual `(channel_id, message_id)`;
-- deletes não são persistidos como Evidence;
-- `LastMessageID` mistura progresso histórico com corretude de sincronização live.
+Telegram usa `pts/qts/seq/date` e estado de canais, com recovery por
+`updates.getDifference`/`updates.getChannelDifference`.
 
-Telegram não define corretude de updates por maior ID de mensagem. A documentação
-oficial usa estado de sequência como `pts`, `qts`, `seq` e estado específico de canais,
-com recuperação via `updates.getDifference` e `updates.getChannelDifference`.
+Versão pinada examinada: `github.com/gotd/td v0.161.0`.
 
-O gotd atual possui pacote de recuperação de updates e seu exemplo oficial configura
-storage persistente para `qts/pts` e conecta o recovery manager ao `UpdateHandler` do
-cliente.
+## Fontes primárias
 
----
+- Telegram — Working with Updates: https://core.telegram.org/api/updates
+- Telegram — `updates.getDifference`: https://core.telegram.org/method/updates.getDifference
+- gotd/td v0.161.0 — `telegram/updates/manager.go`
+- gotd/td v0.161.0 — `telegram/updates/state.go`
+- gotd/td v0.161.0 — `telegram/updates/state_apply.go`
+- gotd/td v0.161.0 — `telegram/updates/state_channel.go`
+- gotd/td v0.161.0 — `telegram/updates/sequence_box.go`
+- gotd/td v0.161.0 — `telegram/updates/storage.go`
 
-## Fontes primárias consultadas
+## Fase A — protótipo abstrato da barrier
 
-- Telegram — Working with Updates:
-  https://core.telegram.org/api/updates
-- Telegram — `updates.getDifference`:
-  https://core.telegram.org/method/updates.getDifference
-- gotd/td — exemplo oficial de userbot com `telegram/updates` e StateStorage:
-  https://github.com/gotd/td/blob/main/examples/userbot/main.go
-- gotd/td — arquitetura do pacote `telegram/updates`:
-  https://github.com/gotd/td/blob/main/ARCHITECTURE.md
-
-Versão atualmente pinada no Limiar durante a materialização deste documento:
-`github.com/gotd/td v0.161.0`.
-
----
-
-## Modelo experimental
-
-O protótipo separou quatro papéis:
+O protótipo descartável inicial modelou:
 
 ```text
-Telegram update recovery
-        ↓
-Telegram Adapter
-        ↓
 DurableEvidenceHandler
         ↓
 Evidence Store
 
-StateStorage
+GuardedStateStorage
         ↑
-DurabilityBarrier / GuardedStateStorage
+DurabilityBarrier
 ```
 
-A ideia não é ensinar o Limiar a reimplementar `pts/qts/seq`. O recovery manager da
-biblioteca continua responsável por ordenação e gap recovery; o Limiar adiciona um
-gate para impedir que a persistência de estado certifique durabilidade inexistente.
+A primeira versão possuía TOCTOU entre checar a barrier e escrever state. A versão
+corrigida mantém verificação + state write na mesma seção crítica.
 
-### Estados considerados
+Resultado: **SUPPORTED** para a propriedade local de impedir
+`Evidence não durável / state avançado`.
 
-| Evidence | Sync state | Interpretação |
-| --- | --- | --- |
-| não | não | falha antes da admissão/durabilidade; aceitável |
-| sim | não | replay possível; aceitável |
-| sim | sim | caminho normal |
-| não | sim | **proibido** |
+## Fase B — inspeção do gotd v0.161.0
 
----
+A leitura do source pinado invalidou a suposição de que erro de handler/storage encerraria
+necessariamente o manager.
 
-## Protótipo
+Também confirmou que:
 
-Foi criado protótipo descartável fora do repositório de produção.
+- `UpdatesDifferenceTooLong` avança PTS antes de `OnTooLong`;
+- `UpdatesChannelDifferenceTooLong` avança channel PTS antes de `OnChannelTooLong`;
+- ausência de state local leva à adoção de state remoto via `UpdatesGetState`;
+- updates reconstruídos por difference podem chegar stateless ao handler.
 
-A primeira versão continha um TOCTOU: checar a barreira e escrever o state eram duas
-operações separadas. Uma falha de Evidence poderia ocorrer entre as duas.
+Finding detalhado:
+`docs/evolution/findings/F-ING-008-gotd-recovery-fail-stop-boundary.md`.
 
-A segunda versão corrigiu isso com uma operação conceitual:
+O candidato simples foi rejeitado. O Candidate v3 passou a ser:
 
-```go
-GuardStateWrite(func() error {
-    return underlyingStateStorage.Write(...)
-})
+```text
+Telegram RPC
+    ↓
+GuardedRecoveryAPI
+    ↓
+updates.Manager
+    ↓
+DurableEvidenceHandler
+    ↓
+Evidence Store
+
+updates.Manager
+    ↓
+GuardedStateStorage
+
+DurabilityBarrier + Supervisor
 ```
 
-mantendo o lock de leitura da barreira durante toda a escrita de state.
+## Fase C — contract tests reais
 
-O protótipo final passou testes concorrentes com race detector no ambiente experimental.
+A PR `limiar-collector#151` preparou 12 contratos cobrindo:
 
----
+1. Evidence durável -> PTS pode avançar;
+2. falha de Evidence -> PTS persistido antigo;
+3. falha de state write -> barrier fecha;
+4. barrier -> supervisor cancela Manager;
+5. common gap -> segundo `getDifference` após startup;
+6. falha durante `getDifference` -> state antigo;
+7. callback `DifferenceTooLong` é tardio;
+8. guard bloqueia common/channel TooLong se Evidence falha;
+9. bootstrap remoto não é adotado se sua Evidence falha;
+10. `UpdateChannelTooLong` -> novo `getChannelDifference`;
+11. falha -> restart -> replay do state persistido antigo;
+12. replay de difference chega stateless (`Pts=-1`).
 
-## Resultado
+Como o Actions do Limiar falhava antes de qualquer step, a mesma suíte foi executada em
+módulo descartável no `agent-runtime#14`, exclusivamente para usar o runner self-hosted
+já existente.
 
-**Supported**, para a propriedade local testada.
+Ambiente:
 
-O experimento demonstrou que uma barrier linearizável pode impedir a combinação
-`Evidence não durável / state avançado` no adapter do Limiar, preservando o caso
-`Evidence durável / state antigo` como replay aceitável.
+```text
+Runner: LuigiCachyOS / actions-runner 2.336.0
+Go: 1.26.6 linux/amd64
+gotd/td: v0.161.0
+Workflow run: 32171500698
+```
 
-A conclusão suportada é:
+Resultados:
 
-> uma barreira explícita entre durabilidade de Evidence e persistência do state é uma
-> estratégia viável para o boundary do Limiar.
+```text
+go test ./... -count=1 -v       -> PASS (12 contratos)
+go test -race ./... -count=1    -> PASS
+```
 
-Ela não prova que a implementação de produção já está correta.
+Portanto:
 
----
+```text
+barrier abstrata: SUPPORTED
+source contract v0.161.0: CONFIRMED
+runtime contract exercitado: CONFIRMED
+Candidate v3: SUPPORTED
+```
 
 ## O que o experimento NÃO prova
 
-- não prova exactly-once;
-- não prova ausência de chamadas externas duplicadas após crash;
-- não prova o comportamento de todos os caminhos internos do recovery manager do gotd;
-- não valida ainda, contra a versão real pinada e toolchain final, todos os casos de
-  handler error, state error, common difference, channel difference, cancel e restart;
-- não decide formato físico de Evidence;
-- não decide engine de storage;
-- não decide session storage;
-- não autoriza mudança de produção.
+- exactly-once;
+- recuperação de eventos que o Telegram já não oferece;
+- ausência de chamadas externas duplicadas após crash;
+- schema físico de Evidence;
+- engine/PRAGMAs de storage;
+- session storage;
+- policy final de retries/supervisor;
+- correção da integração completa antes de ela existir no Limiar;
+- autorização para mudança de produção.
 
-A semântica pretendida é **at-least-once observation + replay + downstream idempotente**.
+A garantia pretendida permanece **at-least-once observation dentro do boundary
+controlado + replay + downstream idempotente**, com descontinuidades explícitas quando a
+fonte não consegue mais recuperar o passado.
 
----
+## Pendências antes de produção
 
-## Próxima validação necessária
-
-Antes de aceitar um ADR que fixe o mecanismo concreto de integração com gotd, executar
-contract tests contra a versão real escolhida cobrindo pelo menos:
-
-1. handler falha antes de Evidence durável;
-2. Evidence commitada e state write falha;
-3. gap comum e `getDifference`;
-4. gap de canal e `getChannelDifference`;
-5. cancelamento durante persistência;
-6. restart após estado ambíguo;
-7. replay da mesma observação.
-
----
+1. definir schema das Evidence de bootstrap/descontinuidade junto ao storage;
+2. definir lifecycle/retry do supervisor após barrier fechada;
+3. preservar esses contract tests na implementação real do adapter;
+4. validar a integração completa do ingress no módulo do Limiar.
 
 ## Conclusão epistemológica
 
-`Supported` significa que a hipótese da barrier sobreviveu ao protótipo.
+O Candidate v3 sobreviveu ao protótipo, à inspeção do gotd pinado e à execução real com
+race detector.
 
-Não significa `Accepted`, não transforma `updates.New`/manager em arquitetura obrigatória
-e não autoriza alterar o ingress de produção sem Decision apropriada.
+Isso eleva a mecânica para **Candidate suportado**, não para Decision. `Supported` não
+significa `Accepted` e não autoriza produção sem a governança correspondente.
