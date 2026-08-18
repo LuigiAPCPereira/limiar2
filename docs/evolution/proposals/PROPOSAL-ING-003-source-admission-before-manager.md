@@ -19,12 +19,17 @@ ser a única autoridade de preservação do envelope bruto de fonte.
 - ADR 016 — Source Evidence e sincronização Telegram;
 - ADR 017 — Boundary durável de recovery Telegram;
 - EXP-LIMIAR-001;
+- EXP-LIMIAR-003;
 - F-ING-008;
 - F-ING-009;
-- PRs #151, #155 e #156;
-- contract suite executada com Go 1.26.6 + gotd/td v0.161.0 no runner self-hosted.
+- F-ING-010;
+- PRs #151, #155, #156, #157 e #158;
+- contract suites executadas com Go 1.26.6 no runner self-hosted.
 
 A Fase E do EXP-LIMIAR-001 validou o Candidate v4 com 23 contract tests e race detector.
+
+O EXP-LIMIAR-003 validou adicionalmente o gate de coexistência backfill/live com 8
+contract tests e race detector, usando authorities de progresso separadas.
 
 ## Proposta
 
@@ -111,6 +116,16 @@ O Candidate v4 passou, entre outros, os seguintes casos:
    Evidence necessária já está durável;
 8. suite completa passa com race detector.
 
+O EXP-LIMIAR-003 acrescentou a validação de que:
+
+- live só recebe authority de `SourceSyncState`;
+- backfill só recebe authority de `BackfillProgress`;
+- ambos compartilham apenas admissão de Evidence;
+- falha de Evidence não pode avançar o progresso correspondente;
+- `BackfillProgress.Completed=true` não certifica continuidade live;
+- `LastMessageID` legado não pode seedar authority atual;
+- coexistência concorrente preserva as duas authorities.
+
 ## Alternativas rejeitadas
 
 - manter o handler pós-Manager como única captura raw;
@@ -129,14 +144,16 @@ O Candidate v4 passou, entre outros, os seguintes casos:
 - permite reconstruir projeções após falhas sem prender o sync a trabalho derivado;
 - recovery com conteúdo deixa de avançar state sem uma observação durável correspondente;
 - edits, deletes e envelopes compostos podem ser interpretados posteriormente sem perda
-  causada pelo roteamento interno do manager.
+  causada pelo roteamento interno do manager;
+- backfill e live deixam de depender de um cursor genérico compartilhado.
 
 ### Custos
 
-- introduz dois pontos explícitos de admissão de Evidence: live e recovery;
+- introduz pontos explícitos de admissão de Evidence em live e recovery;
 - precisa distinguir Evidence de fonte de saída ordenada/derivada;
 - exige política clara para quais respostas de recovery vazias precisam de Evidence;
-- a implementação final depende de storage capaz de sustentar a ordem Evidence -> state.
+- a implementação final depende de storage capaz de sustentar a ordem Evidence -> state;
+- backfill precisa de storage/capability de progresso própria na implementação concreta.
 
 ## Fora do escopo
 
@@ -145,19 +162,25 @@ O Candidate v4 passou, entre outros, os seguintes casos:
 - codec JSON/BLOB/versionamento final;
 - session/peer storage;
 - Source Message Projection concreta;
-- backfill/history progress;
+- schema físico de `BackfillProgress`/`SourceSyncState`;
 - política detalhada de restart/backoff;
 - processamento comercial.
 
-## Gates restantes
+## Gates
 
-Antes de produção:
+### Suportado
 
-1. provar backfill/live com authorities de progresso independentes;
-2. integrar storage real que preserve Evidence -> state ordering;
-3. definir o envelope físico/versionamento de Evidence;
-4. preservar os contract tests no adapter de produção;
-5. validar crash/restart na integração real, não apenas nos fakes de contrato.
+1. **Backfill/live com authorities de progresso independentes** — SUPPORTED no
+   EXP-LIMIAR-003, com 8 contract tests + race detector.
+
+### Restantes antes de produção
+
+1. integrar storage real que preserve Evidence -> state/progress ordering;
+2. definir o envelope físico/versionamento de Evidence;
+3. preservar os contract tests do EXP-LIMIAR-001 e EXP-LIMIAR-003 no adapter real;
+4. validar crash/restart na integração real, não apenas nos fakes de contrato;
+5. tornar explícita e testada a classificação de respostas de recovery sem Evidence de
+   domínio.
 
 ## Relação com ADR 017
 
@@ -165,8 +188,11 @@ A maior parte do ADR 017 continua suportada. Porém, esta proposta altera materi
 posição e o significado da responsabilidade chamada `DurableEvidenceHandler` no diagrama
 aceito.
 
-Por isso, a recomendação é criar uma **nova Decision complementar/superseding apenas para
-essa semântica de Source Admission**, sem editar retroativamente o ADR 017.
+Por isso, a recomendação é uma **nova Decision complementar que, se aceita, prevaleça
+somente sobre a cláusula conflitante de Source Admission**, sem editar retroativamente o
+ADR 017 nem marcar o documento inteiro como `Superseded`.
 
-`Status: Ready` significa apenas que a proposta possui evidência suficiente para virar um
-ADR `Proposed`. Não significa aceitação arquitetural.
+O ADR 018 materializa essa recomendação como `Proposed`.
+
+`Status: Ready` significa apenas que a proposta possui evidência suficiente para avaliação
+de um ADR. Não significa aceitação arquitetural.
