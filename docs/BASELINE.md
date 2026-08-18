@@ -92,23 +92,32 @@ camada só se tornam autoridade quando cobertos por ADR Accepted.
   - durabilidade antes de avanço certificado de sync state;
   - replay permitido sem promessa de exactly-once end-to-end;
   - history snapshot sem fabricação de eventos;
-  - gotd mantido como integração Telegram, sem ainda decidir a mecânica concreta de
-    recovery/barrier.
+  - gotd mantido como integração Telegram;
+- **ADR 017 — Boundary durável de recovery Telegram**, que complementa o ADR 016 e
+  estabelece os contratos do recovery baseado em gotd:
+  - `updates.Manager` continua responsável por ordering/recovery do protocolo;
+  - o recovery é envolto por responsabilidades equivalentes a `GuardedRecoveryAPI`,
+    `DurableEvidenceHandler`, `GuardedStateStorage`, `DurabilityBarrier` e `Supervisor`;
+  - Evidence exigida precede a transição de sync state que ela autoriza;
+  - barrier check + state write são linearizáveis e uma barrier fechada é terminal para
+    aquela instância;
+  - erro de leitura de state não é tratado como ausência/bootstrap;
+  - bootstrap, resync/reset explícito e `*DifferenceTooLong` são observáveis antes da
+    adoção/substituição do baseline;
+  - `Forget=true` não é um reset operacional silencioso;
+  - updates stateless não definem autoridade de sync;
+  - replay após restart é esperado e não implica exactly-once.
 
 Com o ADR 016 aceito, o ADR 005 fica superseded no escopo do contrato raw por mensagem e
 o ADR 006 fica retired/superseded no escopo de `LastMessageID` como autoridade de sync
-live. O princípio de gotd do ADR 002 é mantido com boundary de sincronização reescrito.
+live. O princípio de gotd do ADR 002 é mantido com boundary de sincronização reescrito
+pelos ADRs 016 e 017.
 
 ### Candidatos fortes, ainda não autoritativos
 
 Os itens abaixo são resultados de pesquisa, experimentos e propostas da rebaseline.
 **Eles não devem ser tratados como decisões apenas por aparecerem aqui.**
 
-- boundary de recovery Telegram Candidate v3, validado contra gotd/td v0.161.0 por 12
-  contract tests + race detector: `GuardedRecoveryAPI + updates.Manager +
-  DurableEvidenceHandler + GuardedStateStorage + DurabilityBarrier + Supervisor`;
-  `PROPOSAL-ING-002` e ADR 017 permanecem não autoritativos enquanto o ADR 017 estiver
-  `Proposed`;
 - migração side-by-side do banco legado, preservando o antigo como artefato imutável;
 - Processing Generations para derivados reconstruíveis e reprocessamento seguro;
 - Source Message Projection separada da Evidence;
@@ -158,15 +167,18 @@ com documentação primária e testes proporcionais ao risco.
 
 ## 7. Questões abertas prioritárias
 
-1. decisão explícita sobre o boundary de recovery Telegram Candidate v3 (ADR 017);
-2. escolha/validação da engine SQLite local e PRAGMAs de durabilidade;
-3. contrato físico do payload de Evidence;
-4. estratégia final de sessão/peer state;
-5. boundary de mídia entre evidência de fonte e cache/apresentação;
-6. materialização dos contratos de Processing Generations e Source Projection;
-7. migração do banco legado;
-8. escolha de provider/modelo de IA somente quando houver corpus e credenciais para
+1. escolha/validação da engine SQLite local e PRAGMAs de durabilidade;
+2. contrato físico do payload de Evidence;
+3. estratégia final de sessão/peer state;
+4. boundary de mídia entre evidência de fonte e cache/apresentação;
+5. materialização dos contratos de Processing Generations e Source Projection;
+6. migração do banco legado;
+7. escolha de provider/modelo de IA somente quando houver corpus e credenciais para
    bake-off real.
+
+Os gates de implementação do ADR 017 — inclusive testes adicionais de resync,
+`ChannelDifferenceTooLong`, edit/delete/update composto e coexistência backfill/live —
+continuam obrigatórios antes de colocar o novo ingress em produção.
 
 ---
 
