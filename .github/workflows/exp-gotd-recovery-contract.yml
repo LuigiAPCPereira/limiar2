@@ -1,0 +1,40 @@
+name: EXP gotd recovery contract
+
+on:
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6.5.0
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Run gotd recovery contract
+        id: contract
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          go test -race -count=1 -v ./internal/telegram -run '^TestGotdRecoveryContract_' > gotd-contract.log 2>&1
+          code=$?
+          cat gotd-contract.log
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Upload diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gotd-recovery-contract-log
+          path: gotd-contract.log
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Fail when contract failed
+        if: steps.contract.outputs.exit_code != '0'
+        run: exit 1
