@@ -151,9 +151,9 @@ Esses itens devem preservar os contracts deste ADR e dos ADRs 016/017 quando for
 
 ## Relação com ADR 017
 
-Se aceito, este ADR **complementa e supersede parcialmente apenas a semântica de Source Evidence do diagrama do ADR 017**.
+Se aceito, este ADR **complementa o ADR 017 e prevalece sobre a cláusula conflitante referente à posição da Source Evidence bruta**.
 
-Em particular, fica superseded a interpretação de:
+Em particular, deixa de valer a interpretação de:
 
 ```text
 updates.Manager -> DurableEvidenceHandler -> Evidence Store
@@ -161,7 +161,9 @@ updates.Manager -> DurableEvidenceHandler -> Evidence Store
 
 como boundary único de preservação do envelope bruto de fonte.
 
-O restante dos contratos do ADR 017 continua em vigor, especialmente ordering/recovery, `GuardedStateStorage`, `DurabilityBarrier`, `Supervisor`, TooLong/resync, fail-stop e replay.
+Isso não muda o `Status: Accepted` do ADR 017 nem o transforma integralmente em `Superseded`: seus demais contratos continuam sendo autoridade, especialmente ordering/recovery, `GuardedStateStorage`, `DurabilityBarrier`, `Supervisor`, TooLong/resync, fail-stop e replay.
+
+Se uma decisão futura substituir o ADR 017 como um todo, aí sim seu lifecycle deverá seguir `Accepted -> Superseded` conforme `AGENTS.md` e `docs/adr/README.md`.
 
 O ADR 017 não deve ser editado retroativamente para esconder a evolução da decisão.
 
