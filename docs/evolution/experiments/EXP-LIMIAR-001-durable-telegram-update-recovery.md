@@ -94,7 +94,7 @@ GuardedStateStorage
 DurabilityBarrier + Supervisor
 ```
 
-## Fase C — contract tests reais
+## Fase C — contract tests de fail-stop/recovery
 
 A PR `limiar-collector#151` preparou 12 contratos cobrindo:
 
@@ -111,34 +111,59 @@ A PR `limiar-collector#151` preparou 12 contratos cobrindo:
 11. falha -> restart -> replay do state persistido antigo;
 12. replay de difference chega stateless (`Pts=-1`).
 
-Como o Actions do Limiar falhava antes de qualquer step, a mesma suíte foi executada em
-módulo descartável no `agent-runtime#14`, exclusivamente para usar o runner self-hosted
-já existente.
+A PR `limiar-collector#155` acrescentou três gates:
 
-Ambiente:
+13. `ChannelDifferenceTooLong` com Dialog/PTS válido tem Evidence antes do channel state;
+14. resync explícito (`Forget=true`) tem Evidence antes da substituição do baseline;
+15. erro de leitura de state não cai em bootstrap remoto.
+
+Como o Actions do Limiar falhava antes de qualquer step, a suíte foi executada em módulos
+descartáveis no `agent-runtime`, exclusivamente para usar o runner self-hosted existente.
+
+Ambiente confirmado:
 
 ```text
 Runner: LuigiCachyOS / actions-runner 2.336.0
 Go: 1.26.6 linux/amd64
 gotd/td: v0.161.0
-Workflow run: 32171500698
 ```
 
-Resultados:
+Os 15 contratos e `go test -race` passaram.
+
+## Fase D — preservação do source envelope
+
+A revisão do gate de edit/delete/update composto encontrou uma premissa adicional: o
+handler configurado no `updates.Manager` não recebe necessariamente o envelope bruto que
+o Telegram entregou.
+
+O source do gotd mostra que `handleUpdates` converte envelopes e que `applyCombined`:
+
+- ordena updates por PTS;
+- roteia PTS/channel/QTS por caminhos próprios;
+- pode separar um único envelope em múltiplos dispatches;
+- reconstrói novos `tg.Updates` antes do handler.
+
+O contract test
+`TestADR017Gate_PostManagerHandlerDoesNotPreserveSourceEnvelope` enviou um único envelope
+com dois `UpdateDeleteMessages` em PTS `[2, 1]` e `Date=123456`.
+
+No handler pós-Manager foram observados dois batches separados, reordenados para `[1]` e
+`[2]`, ambos sem o `Date` original.
+
+Execução:
 
 ```text
-go test ./... -count=1 -v       -> PASS (12 contratos)
-go test -race ./... -count=1    -> PASS
+Workflow run: agent-runtime#32188101306
+TestADR017Gate_PostManagerHandlerDoesNotPreserveSourceEnvelope PASS
+go test -race ./... -count=1                                 PASS
 ```
 
-Portanto:
+Finding detalhado:
+`docs/evolution/findings/F-ING-009-post-manager-handler-is-not-source-envelope.md`.
 
-```text
-barrier abstrata: SUPPORTED
-source contract v0.161.0: CONFIRMED
-runtime contract exercitado: CONFIRMED
-Candidate v3: SUPPORTED
-```
+Consequência: o Candidate v3 continua **SUPPORTED** para fail-stop, ordering de state e
+recovery já testados, mas é **INSUFICIENTE como boundary completo de Source Evidence** se
+o `DurableEvidenceHandler` pós-Manager for a única captura do envelope bruto.
 
 ## O que o experimento NÃO prova
 
@@ -149,6 +174,8 @@ Candidate v3: SUPPORTED
 - engine/PRAGMAs de storage;
 - session storage;
 - policy final de retries/supervisor;
+- boundary final de admissão da Evidence live antes/depois do manager;
+- codec final para respostas de recovery;
 - correção da integração completa antes de ela existir no Limiar;
 - autorização para mudança de produção.
 
@@ -158,15 +185,24 @@ fonte não consegue mais recuperar o passado.
 
 ## Pendências antes de produção
 
-1. definir schema das Evidence de bootstrap/descontinuidade junto ao storage;
-2. definir lifecycle/retry do supervisor após barrier fechada;
-3. preservar esses contract tests na implementação real do adapter;
-4. validar a integração completa do ingress no módulo do Limiar.
+1. testar uma captura durável do envelope live antes do `updates.Manager`;
+2. testar persistência das respostas de recovery antes de retorná-las ao manager;
+3. decidir se o handler pós-Manager é apenas saída ordenada/derivada ou se mantém algum
+   papel de Evidence adicional;
+4. cobrir edit/delete/update composto no boundary corrigido;
+5. provar coexistência backfill/live com authorities de progresso separadas;
+6. integrar o storage escolhido preservando Evidence -> state ordering;
+7. preservar os contract tests na implementação real do adapter.
 
 ## Conclusão epistemológica
 
-O Candidate v3 sobreviveu ao protótipo, à inspeção do gotd pinado e à execução real com
-race detector.
+A hipótese de **fail-stop + state ordering** sobreviveu ao protótipo, à inspeção do gotd
+pinado e aos contract tests com race detector.
 
-Isso eleva a mecânica para **Candidate suportado**, não para Decision. `Supported` não
-significa `Accepted` e não autoriza produção sem a governança correspondente.
+A hipótese de que o Candidate v3 também preservaria sozinho a **Source Evidence bruta**
+foi rejeitada pela Fase D. O candidato precisa de revisão antes de implementação de
+produção.
+
+Isso não desfaz os contratos já aceitos nos ADRs 016/017; revela que a topologia concreta
+precisa ser ajustada ou explicitamente superseded por nova Decision caso a próxima
+experiência confirme uma mudança material.
