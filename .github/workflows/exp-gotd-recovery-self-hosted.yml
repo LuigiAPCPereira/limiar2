@@ -1,0 +1,33 @@
+name: EXP gotd recovery contract (self-hosted)
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "internal/telegram/gotd_recovery_*_test.go"
+      - "docs/evolution/findings/F-ING-008-gotd-recovery-fail-stop-boundary.md"
+      - ".github/workflows/exp-gotd-recovery-self-hosted.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          cache: true
+
+      - name: Toolchain
+        run: go version
+
+      - name: Contract tests
+        run: go test -race ./internal/telegram -run '^TestGotdRecoveryContract_' -count=1 -v
