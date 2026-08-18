@@ -1,7 +1,10 @@
 # ADR 016 — Source Evidence e sincronização Telegram
 
 Authority: Decision Record
-Status: Proposed
+Status: Accepted
+Accepted-by: LuigiAPCPereira
+Accepted-at: 2026-08-18T12:46:00-03:00
+Acceptance-reference: PR #150
 
 ## Contexto
 
@@ -43,9 +46,9 @@ Base de pesquisa:
 
 ---
 
-## Decision proposta
+## Decision
 
-Se este ADR for aceito, o ingress do Limiar seguirá os princípios abaixo.
+O ingress do Limiar segue os princípios abaixo.
 
 ### 1. Evidence de fonte é append-only/versionada
 
@@ -186,17 +189,14 @@ Esses assuntos exigem decisões próprias quando estruturais.
 
 ## Relação com ADRs legados
 
-Se aceito:
+Com esta aceitação:
 
-- **ADR 002** — princípio de gotd é mantido, com boundary de sync reescrito por este ADR;
-- **ADR 005** — será superseded quanto ao contrato de persistência raw por mensagem;
-- **ADR 006** — será superseded/retired quanto ao uso de `LastMessageID` como autoridade
+- **ADR 002** — o princípio de gotd é mantido, com boundary de sync reescrito por este ADR;
+- **ADR 005** — fica superseded quanto ao contrato de persistência raw por mensagem;
+- **ADR 006** — fica superseded/retired quanto ao uso de `LastMessageID` como autoridade
   de sync live;
 - **ADR 003** — este ADR não decide writer topology, mas remove o DBWriter global como
   fonte implícita de autoridade de durabilidade.
-
-Enquanto `Status: Proposed`, nenhuma dessas supersessões entra em vigor por causa deste
-documento.
 
 ---
 
@@ -219,13 +219,13 @@ Além de testes unitários do novo boundary, executar contract tests reais cobri
 
 ---
 
-## Critério para aceitação
+## Escopo da aceitação
 
-A aceitação deste ADR deve significar aprovação somente dos **princípios de Evidence e
-sincronização** descritos acima.
+A aceitação deste ADR aprova somente os **princípios de Evidence e sincronização**
+descritos acima.
 
 Ela não aprova automaticamente a implementação experimental do gotd barrier, o schema
 físico de Evidence nem políticas ainda abertas para limites de recovery.
 
-Se aceito, registrar `Accepted-by`, `Accepted-at` e `Acceptance-reference` conforme
-`docs/adr/README.md`.
+A implementação concreta continua condicionada aos gates e contract tests descritos
+neste documento e no EXP-LIMIAR-001.
