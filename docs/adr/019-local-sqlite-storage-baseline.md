@@ -29,9 +29,11 @@ turso.tech/database/tursogo@latest   = v0.7.2
 
 O probe foi executado em workflow descartável com roteamento explícito `[self-hosted, Linux, X64]` no runner `LuigiCachyOS` e removido sem merge após a coleta da Evidence.
 
-A documentação upstream do `ncruces/go-sqlite3` declara o driver `database/sql` como cgo-free, baseado em SQLite com VFS em Go e execução por conexão em ambiente Wasm. Também alerta que cada conexão possui custo de memória próprio e documenta constraints de concorrência por conexão.
+A documentação upstream do `ncruces/go-sqlite3` declara o driver `database/sql` como cgo-free e informa que ele executa uma build Wasm do SQLite, traduzida para Go. Ao mesmo tempo, o módulo substitui a SQLite OS Interface/VFS por uma implementação Go própria, com diferenças documentadas sobretudo em file locking e suporte a WAL. Cada conexão também executa em ambiente Wasm próprio e possui custo de memória correspondente.
 
-A matriz oficial de compatibilidade do Turso declara compatibilidade SQLite ainda parcial em pontos da query language e documenta `PRAGMA synchronous` somente para `OFF` e `FULL`. Isso não torna Tursogo incorreto: ele passou nossos contracts. A escolha abaixo é uma preferência de baseline para reduzir a superfície semântica específica do storage novo, não uma alegação de falha do legado.
+Logo, escolher `ncruces/go-sqlite3` **não** equivale a assumir que seu VFS possui comportamento idêntico ao VFS nativo do SQLite em toda plataforma. O que foi suportado pela Evidence do Limiar é a combinação concreta testada em Linux X64; locking/WAL em outras plataformas continuam gate explícito.
+
+A matriz oficial de compatibilidade do Turso declara compatibilidade SQLite ainda parcial em pontos da query language e documenta `PRAGMA synchronous` somente para `OFF` e `FULL`. Isso não torna Tursogo incorreto: ele passou nossos contracts. A escolha abaixo prefere, para o banco novo, executar a engine SQLite via ncruces e manter explícita a superfície própria do Go VFS, em vez de carregar por inércia a reimplementação SQLite do storage legado.
 
 Proposal de origem:
 `docs/evolution/proposals/PROPOSAL-STO-001-local-sqlite-and-evidence-storage.md`.
@@ -70,7 +72,9 @@ PRAGMA busy_timeout=5000
 
 `cache_size` não entra no baseline.
 
-A limitação inicial a uma conexão reduz concorrência implícita, simplifica ownership e limita o custo por conexão da implementação escolhida. Aumentar o número de conexões exige Evidence de necessidade e revalidação de locking/ordering, mas não exige automaticamente novo ADR se não mudar autoridade ou durabilidade.
+A limitação inicial a uma conexão reduz concorrência implícita, simplifica ownership e limita o custo por conexão da implementação escolhida. Ela também corresponde à configuração concretamente exercitada pelos contracts atuais. Não é uma inferência de que o driver exija globalmente uma única conexão.
+
+Aumentar o número de conexões exige Evidence de necessidade e revalidação de locking/ordering, mas não exige automaticamente novo ADR se não mudar autoridade ou durabilidade.
 
 ### 3. Evidence precede state/progress também no boundary físico
 
@@ -169,11 +173,11 @@ Enquanto importação/rollback do legado depender dele, o driver pode permanecer
 
 ### Positivas
 
-- o novo storage usa uma implementação SQLite com semântica upstream mais próxima do contrato que queremos preservar;
+- o novo storage executa a engine SQLite via ncruces, enquanto as diferenças do Go VFS permanecem explícitas e gated por plataforma;
 - runtime normal continua sem requisito de CGO;
 - `database/sql` continua disponível sem virar authority global;
-- `WAL + FULL` possui contrato explícito e foi exercitado nas versões escolhidas;
-- Evidence/state/progress possuem ordering físico verificável;
+- `WAL + FULL` possui contrato explícito e foi exercitado na combinação Linux X64 testada;
+- Evidence/state/progress possuem ordering físico verificável no ambiente exercitado;
 - o banco histórico não é colocado em risco por migração in-place;
 - migrations deixam de competir com “schema repair” dinâmico.
 
@@ -215,7 +219,7 @@ Este ADR não muda o status dos ADRs legados no registry por si só; a limpeza f
 - `F-STO-002-process-crash-preserves-evidence-before-progress.md`;
 - `PROPOSAL-STO-001-local-sqlite-and-evidence-storage.md`;
 - probe `@latest` executado no Go module proxy em 2026-08-19;
-- documentação oficial de `ncruces/go-sqlite3` sobre driver cgo-free, VFS, memória e concorrência;
+- documentação oficial de `ncruces/go-sqlite3` sobre driver cgo-free, engine SQLite/Wasm, Go VFS, memória, locking/WAL e concorrência;
 - matriz oficial de compatibilidade do Turso para SQLite/PRAGMAs.
 
 ## Gates antes de produção
@@ -232,11 +236,13 @@ Mesmo se este ADR vier a ser aceito, a implementação de produção continua co
 8. revalidar locking/WAL em cada plataforma oficialmente declarada como suportada;
 9. não alegar resistência a power-loss durante `fsync` sem Evidence específica.
 
+O upstream do ncruces possui testes em Linux ARM64, mas isso não é Evidence de integração do Limiar nem valida automaticamente o ambiente Android/Termux/PRoot do `LuigiTablet`. A Evidence física deste ciclo continua sendo Linux X64 no `LuigiCachyOS`; qualquer suporte ARM64 do Limiar deve ter gate próprio e roteamento explícito.
+
 ## Limite epistemológico
 
-Os testes atuais suportam process crash nos boundaries observáveis de commit. Eles não simulam queda física de energia durante `fsync`, corrupção do dispositivo, bugs de filesystem ou equivalência automática em toda plataforma.
+Os testes atuais suportam process crash nos boundaries observáveis de commit em Linux X64. Eles não simulam queda física de energia durante `fsync`, corrupção do dispositivo, bugs de filesystem ou equivalência automática em toda plataforma.
 
-A escolha de `ncruces/go-sqlite3` é baseada na superfície semântica preferida para o novo SQLite + contratos já executados, não em benchmark isolado nem em falha do Tursogo.
+A escolha de `ncruces/go-sqlite3` é baseada em executar SQLite, preservar runtime cgo-free e nos contratos concretamente exercitados, aceitando explicitamente que o Go VFS continua uma superfície de compatibilidade própria. Não se baseia em benchmark isolado nem em falha do Tursogo.
 
 ## Escopo da proposta
 
