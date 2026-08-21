@@ -1,7 +1,7 @@
 # EXP-LIMIAR-004 — Identidade e envelope físico mínimo de Evidence
 
 Authority: Non-authoritative
-Status: In progress
+Status: Supported
 
 ## Hipótese
 
@@ -52,6 +52,14 @@ Dependência pinada:
 
 `github.com/ncruces/go-sqlite3 v0.35.3`
 
+Ambiente da execução registrada:
+
+- GitHub-hosted `ubuntu-latest`, Linux X64;
+- Go 1.26.2;
+- PR #162, workflow run
+  [32523066883](https://github.com/SignalShards/limiar/actions/runs/32523066883);
+- commit `70e9d31f5fa5157e0db9e6b48cbe4a00370bd066`.
+
 Baseline exercitada:
 
 ```text
@@ -86,37 +94,67 @@ go test -race ./... -count=1
 A documentação oficial do SQLite classifica `WITHOUT ROWID` como otimização, não como
 nova capability, e recomenda medir o efeito em tabelas com linhas grandes. Como Evidence
 pode carregar payloads BLOB substanciais, a simples viabilidade funcional dessa opção não
-será interpretada como recomendação de produção.
+é interpretada como recomendação de produção.
 
 ## Critérios
 
-A hipótese principal será suportada se:
+A hipótese principal seria suportada se:
 
-1. 100.000 IDs gerados tiverem shape UUIDv4 válido e nenhuma colisão observada;
-2. falha de entropia retornar erro sem produzir identidade utilizável;
-3. ID, payload e hash sobreviverem byte a byte ao round-trip;
-4. export/import de 1.000 registros preservar IDs e hashes;
-5. 100 observações com payload e timestamp iguais coexistirem como Evidence distintas;
-6. o schema recusar ID de 15 bytes e hash de 31 bytes;
-7. `rowid` não estiver disponível na tabela experimental;
-8. o banco reabrir com `integrity_check = ok`;
-9. `go vet`, runtime sem CGO e race detector passarem.
-
-A hipótese ficará inconclusiva se o contrato funcional passar, mas o resultado não for
-suficiente para escolher entre UUIDv4 e uma identidade temporal, ou entre rowid table e
-`WITHOUT ROWID`.
+1. 100.000 IDs gerados tivessem shape UUIDv4 válido e nenhuma colisão observada;
+2. falha de entropia retornasse erro sem produzir identidade utilizável;
+3. ID, payload e hash sobrevivessem byte a byte ao round-trip;
+4. export/import de 1.000 registros preservasse IDs e hashes;
+5. 100 observações com payload e timestamp iguais coexistissem como Evidence distintas;
+6. o schema recusasse ID de 15 bytes e hash de 31 bytes;
+7. `rowid` não estivesse disponível na tabela experimental;
+8. o banco reabrisse com `integrity_check = ok`;
+9. `go vet`, runtime sem CGO e race detector passassem.
 
 ## Resultado
 
-Pendente de execução reproduzível no GitHub Actions.
+Todos os critérios definidos passaram no workflow run 32523066883:
+
+```text
+go vet ./...                              PASS
+CGO_ENABLED=0 go test ./... -count=1 -v PASS
+go test -race ./... -count=1            PASS
+```
+
+Resultados observados:
+
+- 100.000 UUIDv4 gerados, sem colisão observada;
+- falha de entropia retornou erro e zero value não utilizável;
+- constraints de 16 bytes para ID e 32 bytes para hash foram exercitadas;
+- round-trip binário e export/import de 1.000 registros preservaram identidade e hash;
+- 100 Evidence com mesmo payload e timestamp coexistiram;
+- `rowid` permaneceu indisponível;
+- reopen final retornou `PRAGMA integrity_check = ok`;
+- o tamanho de 12.288 bytes do banco vazio foi registrado somente como diagnóstico.
+
+As duas primeiras execuções do workflow falharam antes dos testes e revelaram que o
+módulo isolado não possuía `go.sum` nem as dependências transitivas materializadas pelo
+`go mod tidy`. O módulo foi corrigido, os checksums foram commitados e a execução final
+passou sem modificar `go.mod`.
 
 ## Conclusão
 
-Pendente.
+**Supported.**
+
+UUIDv4 randômico em `BLOB(16)` é um candidato funcional para identidade estável de
+Evidence no boundary avaliado. Ele permanece independente de timestamp, posição local e
+hash do payload, falha fechado sem entropia e sobrevive a export/import.
+
+O experimento suporta a viabilidade funcional de `STRICT, WITHOUT ROWID`, mas não
+suporta escolher `WITHOUT ROWID` como baseline de produção. Essa parte continua
+inconclusiva até existir workload com payloads e queries representativos.
+
+O resultado também não demonstra superioridade de UUIDv4 sobre UUIDv7, ULID ou outro ID
+estável. Ele elimina a necessidade de reutilizar o RunID legado e oferece um candidato
+menor que satisfaz o contrato testado.
 
 ## Limitações
 
-Mesmo em caso de sucesso, este experimento não prova:
+Este experimento não prova:
 
 - ausência matemática de colisões; a amostra somente procura falhas observáveis;
 - superioridade de UUIDv4 sobre UUIDv7, ULID ou outro ID estável;
