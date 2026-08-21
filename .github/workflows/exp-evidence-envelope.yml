@@ -30,8 +30,11 @@ jobs:
           check-latest: false
           cache: false
 
-      - name: Download pinned dependencies
-        run: go mod download
+      - name: Resolve pinned dependencies
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod
+          cat go.sum
 
       - name: Vet
         run: go vet ./...
