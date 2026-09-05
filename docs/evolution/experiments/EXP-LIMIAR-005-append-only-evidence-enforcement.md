@@ -1,7 +1,7 @@
 # EXP-LIMIAR-005 — Enforcement append-only de Evidence
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Supported
 
 ## Hipótese
 
@@ -62,12 +62,34 @@ A hipótese é suportada se:
 6. `PRAGMA integrity_check` retornar `ok`;
 7. `go vet`, runtime sem CGO e race detector passarem no módulo experimental.
 
-## Interpretação antecipada
-
-Mesmo que todos os critérios passem, o resultado demonstrará somente enforcement defensivo no boundary testado. Triggers não constituem um boundary de segurança contra um ator que controla o arquivo ou possui capacidade de executar DDL arbitrário.
-
-Um resultado `Supported` também não decide que triggers são obrigatórias no schema final; ele apenas prova que a combinação capability estreita + guard físico é viável e detecta mutações acidentais de forma fail-closed.
-
 ## Resultado
 
-Pendente de execução dos gates do branch experimental.
+Supported.
+
+No head `0a567c6e8df8656f11a739b541df9cfffa6b8b2e`, o workflow dedicado `EXP-LIMIAR-005` executou com sucesso todos os gates do módulo experimental:
+
+- `go vet` — PASS;
+- `CGO_ENABLED=0 go test` — PASS;
+- `go test -race` — PASS.
+
+O harness confirmou que:
+
+- append via capability estreita funciona;
+- `UPDATE` direto é rejeitado pelo guard físico;
+- `DELETE` direto é rejeitado pelo guard físico;
+- payload e hash permanecem preservados após as tentativas rejeitadas;
+- novos appends continuam possíveis após os rejects;
+- os guards sobrevivem a close/reopen;
+- `PRAGMA integrity_check` retorna `ok` após reopen.
+
+A CI geral do repositório também concluiu com sucesso no mesmo head, incluindo lint, gosec, `go vet`, build e testes com race detector/coverage.
+
+## Interpretação
+
+A hipótese foi suportada no boundary experimental: capability estreita + triggers persistentes é uma defesa viável para tornar mutações acidentais de Evidence observáveis e fail-closed.
+
+Isso não transforma os triggers em boundary de segurança contra um ator com controle do arquivo SQLite ou capacidade DDL, e não decide que esse mecanismo deva integrar o schema final. O resultado permanece Evidence não autoritativa e não promove nem aceita o ADR 019.
+
+## Próximo gate
+
+Com o enforcement append-only demonstrado, o próximo gap conhecido de maior valor antes de qualquer migração de produção é validar importação side-by-side de uma cópia legado para o envelope experimental preservando identidade, bytes/hash e possibilidade de auditoria/reconciliação, sem alterar o banco de origem.
