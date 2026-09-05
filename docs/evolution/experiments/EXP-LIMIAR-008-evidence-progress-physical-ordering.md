@@ -1,7 +1,7 @@
 # EXP-LIMIAR-008 — Ordering físico Evidence → state/progress
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Supported
 
 ## Hipótese
 
@@ -102,6 +102,8 @@ EXP-LIMIAR-007 permanece `In Progress` e continua exigindo uma cópia real desca
 
 ## Resultado atual
 
-`In Progress`.
+`Supported` no boundary experimental exercitado.
 
-O harness foi materializado. O status só muda após os gates executáveis do head correspondente.
+No head `75937e509c689e5a4d686c58f6e01e79126c256b`, os três cenários do harness passaram e os gates executáveis do módulo foram confirmados pelo workflow dedicado `EXP-LIMIAR-008`: verificação do módulo, `go vet`, testes com `CGO_ENABLED=0` e race detector. No mesmo head, a CI geral do repositório, EXP-LIMIAR-005 e EXP-LIMIAR-006 também concluíram com sucesso.
+
+A Evidence suporta a hipótese de ordering físico dentro deste harness e destas capabilities estreitas. Ela não promove o ADR 019, não prova integração com o lifecycle real de produção e não substitui a execução do EXP-LIMIAR-007 contra uma cópia real do legado.
