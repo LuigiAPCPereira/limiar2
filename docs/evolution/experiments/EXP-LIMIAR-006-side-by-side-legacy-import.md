@@ -1,7 +1,7 @@
 # EXP-LIMIAR-006 — Importação side-by-side do legado
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Supported
 
 ## Hipótese
 
@@ -74,8 +74,20 @@ Esse segundo gate deve usar uma cópia descartável/read-only do arquivo histór
 
 ## Resultado
 
-Pendente dos gates executáveis.
+Supported no boundary de fixture.
+
+No head `7a7413ab160c056ba1856023c32e706c96b7f8e1`, o workflow `EXP-LIMIAR-006` (run `33964927070`) concluiu com sucesso. O job `side-by-side-legacy-import` executou e passou:
+
+- verificação do módulo;
+- `gofmt`;
+- `go vet`;
+- testes com `CGO_ENABLED=0`;
+- race detector.
+
+O harness confirmou, para a fixture baseada no schema legado versionado no repositório, o contrato definido nos critérios: origem read-only, SHA-256 da origem preservado, payloads byte-identical, hashes reconciliáveis, nova identidade de Evidence independente da identidade legada, persistência atômica de Evidence + ledger, retry idempotente e `integrity_check` do destino.
+
+Esse resultado suporta a hipótese apenas para o boundary exercitado. Ele não prova compatibilidade com um arquivo operacional real, não define o schema final do ledger, não transforma ids legados em identidade canônica e não autoriza migração ou alteração de produção.
 
 ## Próximo gate
 
-Se o harness ficar verde, executar o mesmo reconciliador contra uma cópia real do banco legado e registrar apenas métricas/provas não sensíveis: contagem de linhas, contagem importada, mismatches, hashes agregados apropriados e `integrity_check`. Nenhum payload real ou segredo deve entrar no repositório.
+Executar o mesmo reconciliador contra uma cópia real do banco legado e registrar apenas métricas/provas não sensíveis: contagem de linhas, contagem importada, mismatches, hashes agregados apropriados e `integrity_check`. Nenhum payload real ou segredo deve entrar no repositório.
