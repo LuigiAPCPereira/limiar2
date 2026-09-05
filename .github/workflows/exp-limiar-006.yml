@@ -2,7 +2,9 @@ name: EXP-LIMIAR-006
 
 on:
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - "main"
+      - "exp/limiar-005-append-only-evidence"
     paths:
       - "experiments/evidence-envelope/**"
       - "docs/evolution/experiments/EXP-LIMIAR-006-side-by-side-legacy-import.md"
