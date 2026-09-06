@@ -43,12 +43,68 @@ func (s *orderedChannelStorage) SetChannelPts(ctx context.Context, userID, chann
 
 type orderedStateStorage struct {
 	*contractStorage
-	order *orderedRecoveryEvents
+	order     *orderedRecoveryEvents
+	persisted chan struct{}
+	expected  updates.State
+}
+
+func (s *orderedStateStorage) signalIfExpected() {
+	if s.persisted == nil || s.snapshot() != s.expected {
+		return
+	}
+	select {
+	case s.persisted <- struct{}{}:
+	default:
+	}
 }
 
 func (s *orderedStateStorage) SetState(ctx context.Context, userID int64, state updates.State) error {
 	s.order.add("state:user")
-	return s.contractStorage.SetState(ctx, userID, state)
+	if err := s.contractStorage.SetState(ctx, userID, state); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetPts(ctx context.Context, userID int64, pts int) error {
+	if err := s.contractStorage.SetPts(ctx, userID, pts); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetQts(ctx context.Context, userID int64, qts int) error {
+	if err := s.contractStorage.SetQts(ctx, userID, qts); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetDate(ctx context.Context, userID int64, date int) error {
+	if err := s.contractStorage.SetDate(ctx, userID, date); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetSeq(ctx context.Context, userID int64, seq int) error {
+	if err := s.contractStorage.SetSeq(ctx, userID, seq); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetDateSeq(ctx context.Context, userID int64, date, seq int) error {
+	if err := s.contractStorage.SetDateSeq(ctx, userID, date, seq); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
 }
 
 type failingStateReadStorage struct {
@@ -160,10 +216,17 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 	barrier := newDurabilityBarrier()
 	baseStorage := newContractStorage(barrier, updates.State{Pts: 7, Date: 1, Seq: 1})
 	order := &orderedRecoveryEvents{}
-	storage := &orderedStateStorage{contractStorage: baseStorage, order: order}
+	remoteBaseline := updates.State{Pts: 42, Date: 10, Seq: 3}
+	persisted := make(chan struct{}, 1)
+	storage := &orderedStateStorage{
+		contractStorage: baseStorage,
+		order:           order,
+		persisted:       persisted,
+		expected:        remoteBaseline,
+	}
 
 	upstream := newScriptedRecoveryAPI()
-	upstream.remoteState = &tg.UpdatesState{Pts: 42, Date: 10, Seq: 3}
+	upstream.remoteState = &tg.UpdatesState{Pts: remoteBaseline.Pts, Qts: remoteBaseline.Qts, Date: remoteBaseline.Date, Seq: remoteBaseline.Seq}
 	api := newGuardedRecoveryAPI(upstream, barrier, func(_ context.Context, kind string) error {
 		if kind != recoveryEvidenceBootstrap {
 			t.Fatalf("evidence kind = %q", kind)
@@ -194,10 +257,17 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 		t.Fatal("explicit resync did not start")
 	}
 
-	state := baseStorage.snapshot()
-	if state.Pts != 42 || state.Date != 10 || state.Seq != 3 {
+	select {
+	case <-persisted:
+	case <-time.After(3 * time.Second):
 		cancel()
-		t.Fatalf("persisted state = %+v, want remote baseline", state)
+		t.Fatal("complete remote baseline was not persisted after explicit resync")
+	}
+
+	state := baseStorage.snapshot()
+	if state != remoteBaseline {
+		cancel()
+		t.Fatalf("persisted state = %+v, want remote baseline %+v", state, remoteBaseline)
 	}
 
 	events := order.snapshot()
