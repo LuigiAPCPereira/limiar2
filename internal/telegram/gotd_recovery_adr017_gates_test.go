@@ -45,6 +45,7 @@ type orderedStateStorage struct {
 	*contractStorage
 	order     *orderedRecoveryEvents
 	persisted chan struct{}
+	expected  updates.State
 }
 
 func (s *orderedStateStorage) SetState(ctx context.Context, userID int64, state updates.State) error {
@@ -52,7 +53,7 @@ func (s *orderedStateStorage) SetState(ctx context.Context, userID int64, state 
 	if err := s.contractStorage.SetState(ctx, userID, state); err != nil {
 		return err
 	}
-	if s.persisted != nil {
+	if s.persisted != nil && state == s.expected {
 		select {
 		case s.persisted <- struct{}{}:
 		default:
@@ -170,11 +171,17 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 	barrier := newDurabilityBarrier()
 	baseStorage := newContractStorage(barrier, updates.State{Pts: 7, Date: 1, Seq: 1})
 	order := &orderedRecoveryEvents{}
+	remoteBaseline := updates.State{Pts: 42, Date: 10, Seq: 3}
 	persisted := make(chan struct{}, 1)
-	storage := &orderedStateStorage{contractStorage: baseStorage, order: order, persisted: persisted}
+	storage := &orderedStateStorage{
+		contractStorage: baseStorage,
+		order:           order,
+		persisted:       persisted,
+		expected:        remoteBaseline,
+	}
 
 	upstream := newScriptedRecoveryAPI()
-	upstream.remoteState = &tg.UpdatesState{Pts: 42, Date: 10, Seq: 3}
+	upstream.remoteState = &tg.UpdatesState{Pts: remoteBaseline.Pts, Qts: remoteBaseline.Qts, Date: remoteBaseline.Date, Seq: remoteBaseline.Seq}
 	api := newGuardedRecoveryAPI(upstream, barrier, func(_ context.Context, kind string) error {
 		if kind != recoveryEvidenceBootstrap {
 			t.Fatalf("evidence kind = %q", kind)
@@ -209,13 +216,13 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 	case <-persisted:
 	case <-time.After(3 * time.Second):
 		cancel()
-		t.Fatal("remote baseline was not persisted after explicit resync")
+		t.Fatal("complete remote baseline was not persisted after explicit resync")
 	}
 
 	state := baseStorage.snapshot()
-	if state.Pts != 42 || state.Date != 10 || state.Seq != 3 {
+	if state != remoteBaseline {
 		cancel()
-		t.Fatalf("persisted state = %+v, want remote baseline", state)
+		t.Fatalf("persisted state = %+v, want remote baseline %+v", state, remoteBaseline)
 	}
 
 	events := order.snapshot()
