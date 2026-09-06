@@ -1,7 +1,7 @@
 # EXP-LIMIAR-010 — `updates.Manager` + ncruces/go-sqlite3 ordering físico
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Supported
 
 ## Hipótese
 
@@ -85,9 +85,20 @@ A hipótese pode mudar para `Supported` quando, no mesmo head:
 6. a suíte normal sem a build tag continuar verde;
 7. a CI geral não revelar regressão relacionada.
 
+## Evidence
+
+No head executável `91a16a7586d00e03d6f92767b1bd75c00763dcee`, os dois gates materializados para esta hipótese concluíram com sucesso:
+
+- `EXP-LIMIAR-010 #1`: success;
+- `CI #514`: success.
+
+O workflow dedicado executou os cenários físicos com o driver ncruces instalado apenas no checkout efêmero, incluindo os gates definidos acima: `CGO_ENABLED=0`, close + reopen, `integrity_check`, vet com a build tag, race detector e suíte normal sem a tag. A CI geral no mesmo head também ficou verde.
+
+Essa Evidence suporta a composição exercitada `updates.Manager → Evidence → DurabilityBarrier → SourceSyncState.pts` sobre `ncruces/go-sqlite3`, incluindo a falha injetada imediatamente após o commit de Evidence sem produzir o estado proibido de state avançado sem Evidence.
+
 ## Limites epistemológicos
 
-Mesmo se suportado, este experimento não prova:
+Mesmo suportado, este experimento não prova:
 
 - crash por `SIGKILL` exatamente durante fsync da composição real;
 - power-loss;
@@ -100,12 +111,12 @@ Mesmo se suportado, este experimento não prova:
 ## Relação com decisões
 
 - ADR 016 e ADR 017 permanecem como contracts arquiteturais existentes.
-- ADR 019 permanece `Proposed` durante todo este experimento.
+- ADR 019 permanece `Proposed`; este resultado não o aceita automaticamente.
 - EXP-LIMIAR-007 permanece `In Progress` e independente.
 - Nenhum default, schema ou dependency de produção é alterado.
 
 ## Resultado atual
 
-`In Progress`.
+`Supported`.
 
-O harness e o workflow dedicado foram materializados para obter Evidence executável. Nenhuma conclusão de suporte é registrada antes dos gates do mesmo head.
+A lacuna composicional entre EXP-LIMIAR-008 e EXP-LIMIAR-009 está fechada para o boundary exercitado. O próximo avanço deve usar esta Evidence para informar a decisão sobre o candidato físico, sem confundir suporte experimental com aceitação do ADR 019 ou implementação de produção.
