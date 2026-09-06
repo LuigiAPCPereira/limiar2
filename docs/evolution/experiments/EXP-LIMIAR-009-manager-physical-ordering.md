@@ -1,7 +1,7 @@
 # EXP-LIMIAR-009 — `updates.Manager` sobre ordering físico de live sync
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Supported
 
 ## Hipótese
 
@@ -105,8 +105,21 @@ O uso de Tursogo aqui é deliberadamente instrumental: ele já existe no módulo
 - EXP-LIMIAR-008 permanece `Supported` no boundary experimental com ncruces.
 - ADR 019 permanece `Proposed`.
 
-Se este experimento for suportado, ainda restará um gate explícito para testar a composição completa do candidato `ncruces/go-sqlite3` com os contracts ADR 016/017 antes de produção.
+Mesmo com este experimento suportado, ainda resta um gate explícito para testar a composição completa do candidato `ncruces/go-sqlite3` com os contracts ADR 016/017 antes de produção.
 
-## Resultado atual
+## Resultado
 
-`In Progress` até os gates executáveis deste head concluírem.
+`Supported` no head `f50e3a1a4557e248a9e2e30bd1202aec68e3386c`.
+
+Evidence executável no mesmo head:
+
+- workflow `EXP-LIMIAR-009` run #4: PASS;
+- `go vet ./...`: PASS;
+- cenários específicos do EXP-LIMIAR-009 com `CGO_ENABLED=0`: PASS;
+- `CGO_ENABLED=0 go test ./... -count=1`: PASS;
+- `go test -race ./... -count=1`: PASS;
+- CI geral run #511: PASS.
+
+Os cenários exercitam close + reopen físico e o cenário de falha exige `PRAGMA integrity_check = ok`, conforme o harness do experimento.
+
+A conclusão suportada é estritamente a hipótese deste documento: o lifecycle real de `updates.Manager`, quando composto com um boundary SQLite físico e a `DurabilityBarrier` dos contracts atuais, preservou o ordering Evidence → `SourceSyncState.pts` nos cenários exercitados. Isso não aceita o ADR 019 nem prova a composição com `ncruces/go-sqlite3`.
