@@ -43,12 +43,22 @@ func (s *orderedChannelStorage) SetChannelPts(ctx context.Context, userID, chann
 
 type orderedStateStorage struct {
 	*contractStorage
-	order *orderedRecoveryEvents
+	order     *orderedRecoveryEvents
+	persisted chan struct{}
 }
 
 func (s *orderedStateStorage) SetState(ctx context.Context, userID int64, state updates.State) error {
 	s.order.add("state:user")
-	return s.contractStorage.SetState(ctx, userID, state)
+	if err := s.contractStorage.SetState(ctx, userID, state); err != nil {
+		return err
+	}
+	if s.persisted != nil {
+		select {
+		case s.persisted <- struct{}{}:
+		default:
+		}
+	}
+	return nil
 }
 
 type failingStateReadStorage struct {
@@ -160,7 +170,8 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 	barrier := newDurabilityBarrier()
 	baseStorage := newContractStorage(barrier, updates.State{Pts: 7, Date: 1, Seq: 1})
 	order := &orderedRecoveryEvents{}
-	storage := &orderedStateStorage{contractStorage: baseStorage, order: order}
+	persisted := make(chan struct{}, 1)
+	storage := &orderedStateStorage{contractStorage: baseStorage, order: order, persisted: persisted}
 
 	upstream := newScriptedRecoveryAPI()
 	upstream.remoteState = &tg.UpdatesState{Pts: 42, Date: 10, Seq: 3}
@@ -192,6 +203,13 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 	case <-time.After(3 * time.Second):
 		cancel()
 		t.Fatal("explicit resync did not start")
+	}
+
+	select {
+	case <-persisted:
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Fatal("remote baseline was not persisted after explicit resync")
 	}
 
 	state := baseStorage.snapshot()
