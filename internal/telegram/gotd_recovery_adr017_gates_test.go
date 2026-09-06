@@ -48,17 +48,62 @@ type orderedStateStorage struct {
 	expected  updates.State
 }
 
+func (s *orderedStateStorage) signalIfExpected() {
+	if s.persisted == nil || s.contractStorage.snapshot() != s.expected {
+		return
+	}
+	select {
+	case s.persisted <- struct{}{}:
+	default:
+	}
+}
+
 func (s *orderedStateStorage) SetState(ctx context.Context, userID int64, state updates.State) error {
 	s.order.add("state:user")
 	if err := s.contractStorage.SetState(ctx, userID, state); err != nil {
 		return err
 	}
-	if s.persisted != nil && state == s.expected {
-		select {
-		case s.persisted <- struct{}{}:
-		default:
-		}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetPts(ctx context.Context, userID int64, pts int) error {
+	if err := s.contractStorage.SetPts(ctx, userID, pts); err != nil {
+		return err
 	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetQts(ctx context.Context, userID int64, qts int) error {
+	if err := s.contractStorage.SetQts(ctx, userID, qts); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetDate(ctx context.Context, userID int64, date int) error {
+	if err := s.contractStorage.SetDate(ctx, userID, date); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetSeq(ctx context.Context, userID int64, seq int) error {
+	if err := s.contractStorage.SetSeq(ctx, userID, seq); err != nil {
+		return err
+	}
+	s.signalIfExpected()
+	return nil
+}
+
+func (s *orderedStateStorage) SetDateSeq(ctx context.Context, userID int64, date, seq int) error {
+	if err := s.contractStorage.SetDateSeq(ctx, userID, date, seq); err != nil {
+		return err
+	}
+	s.signalIfExpected()
 	return nil
 }
 
