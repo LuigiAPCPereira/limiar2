@@ -49,7 +49,7 @@ type orderedStateStorage struct {
 }
 
 func (s *orderedStateStorage) signalIfExpected() {
-	if s.persisted == nil || s.contractStorage.snapshot() != s.expected {
+	if s.persisted == nil || s.snapshot() != s.expected {
 		return
 	}
 	select {
