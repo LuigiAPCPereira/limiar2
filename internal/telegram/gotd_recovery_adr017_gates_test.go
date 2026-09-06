@@ -44,16 +44,20 @@ func (s *orderedChannelStorage) SetChannelPts(ctx context.Context, userID, chann
 type orderedStateStorage struct {
 	*contractStorage
 	order     *orderedRecoveryEvents
-	persisted chan struct{}
+	persisted chan updates.State
 	expected  updates.State
 }
 
 func (s *orderedStateStorage) signalIfExpected() {
-	if s.persisted == nil || s.snapshot() != s.expected {
+	if s.persisted == nil {
+		return
+	}
+	snapshot := s.snapshot()
+	if snapshot != s.expected {
 		return
 	}
 	select {
-	case s.persisted <- struct{}{}:
+	case s.persisted <- snapshot:
 	default:
 	}
 }
@@ -217,7 +221,7 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 	baseStorage := newContractStorage(barrier, updates.State{Pts: 7, Date: 1, Seq: 1})
 	order := &orderedRecoveryEvents{}
 	remoteBaseline := updates.State{Pts: 42, Date: 10, Seq: 3}
-	persisted := make(chan struct{}, 1)
+	persisted := make(chan updates.State, 1)
 	storage := &orderedStateStorage{
 		contractStorage: baseStorage,
 		order:           order,
@@ -257,14 +261,14 @@ func TestADR017Gate_ExplicitForgetPersistsEvidenceBeforeBaselineReplacement(t *t
 		t.Fatal("explicit resync did not start")
 	}
 
+	var state updates.State
 	select {
-	case <-persisted:
+	case state = <-persisted:
 	case <-time.After(3 * time.Second):
 		cancel()
 		t.Fatal("complete remote baseline was not persisted after explicit resync")
 	}
 
-	state := baseStorage.snapshot()
 	if state != remoteBaseline {
 		cancel()
 		t.Fatalf("persisted state = %+v, want remote baseline %+v", state, remoteBaseline)
