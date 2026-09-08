@@ -22,10 +22,6 @@ func TestOpenResumesClaimedUnmigratedDatabase(t *testing.T) {
 		_ = db.Close()
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `PRAGMA synchronous=FULL`); err != nil {
-		_ = db.Close()
-		t.Fatal(err)
-	}
 	if err := claimNewDatabase(ctx, db); err != nil {
 		_ = db.Close()
 		t.Fatal(err)
@@ -72,5 +68,28 @@ func TestOpenResumesClaimedUnmigratedDatabase(t *testing.T) {
 	}
 	if evidenceTables != 1 {
 		t.Fatalf("evidence table count=%d, want 1", evidenceTables)
+	}
+}
+
+func TestOperationalBaselineSurvivesPhysicalConnectionReplacement(t *testing.T) {
+	ctx := context.Background()
+	_, store := openTestStore(t)
+	defer func() { _ = store.Close() }()
+
+	if err := verifyOperationalBaseline(ctx, store.db); err != nil {
+		t.Fatalf("baseline inicial: %v", err)
+	}
+
+	// Zero conexões ociosas força database/sql a fechar a conexão física quando ela
+	// volta ao pool. Ao restaurar o limite, a próxima operação abre outra conexão;
+	// os _pragma do DSN precisam reaplicar FULL/FKs/busy_timeout automaticamente.
+	store.db.SetMaxIdleConns(0)
+	store.db.SetMaxIdleConns(1)
+
+	if err := store.db.PingContext(ctx); err != nil {
+		t.Fatalf("ping após substituir conexão: %v", err)
+	}
+	if err := verifyOperationalBaseline(ctx, store.db); err != nil {
+		t.Fatalf("baseline após substituir conexão: %v", err)
 	}
 }
