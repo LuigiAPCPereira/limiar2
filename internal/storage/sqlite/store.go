@@ -38,6 +38,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("sqlite storage: caminho do banco vazio")
 	}
 
+	needsClaim := false
 	info, err := os.Stat(path)
 	switch {
 	case err == nil && info.IsDir():
@@ -47,7 +48,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			return nil, err
 		}
 	case err == nil:
-		// Arquivo vazio é equivalente a um banco ainda não inicializado.
+		// Arquivo vazio é equivalente a um banco ainda não inicializado e pode ser
+		// reivindicado pelo novo storage antes de qualquer migration.
+		needsClaim = true
 	case os.IsNotExist(err):
 		f, createErr := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 -- path fornecido pela configuração validada do chamador.
 		if createErr != nil {
@@ -56,6 +59,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		if closeErr := f.Close(); closeErr != nil {
 			return nil, fmt.Errorf("sqlite storage: fechar arquivo criado %q: %w", path, closeErr)
 		}
+		needsClaim = true
 	default:
 		return nil, fmt.Errorf("sqlite storage: stat %q: %w", path, err)
 	}
@@ -82,9 +86,20 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return closeWith(fmt.Errorf("sqlite storage: ping: %w", err))
 	}
 
+	// FULL é aplicado antes do primeiro write do arquivo novo. O application_id é um
+	// marker de ownership/lifecycle, não schema; gravá-lo antes das migrations torna
+	// um bootstrap parcialmente concluído retomável sem permitir tocar SQLite legado.
+	if _, err := db.ExecContext(ctx, `PRAGMA synchronous=FULL`); err != nil {
+		return closeWith(fmt.Errorf("sqlite storage: aplicar PRAGMA synchronous=FULL: %w", err))
+	}
+	if needsClaim {
+		if err := claimNewDatabase(ctx, db); err != nil {
+			return closeWith(err)
+		}
+	}
+
 	for _, pragma := range []string{
 		`PRAGMA journal_mode=WAL`,
-		`PRAGMA synchronous=FULL`,
 		`PRAGMA foreign_keys=ON`,
 		`PRAGMA busy_timeout=5000`,
 	} {
@@ -98,6 +113,22 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 
 	return &Store{db: db}, nil
+}
+
+func claimNewDatabase(ctx context.Context, db *sql.DB) error {
+	pragma := fmt.Sprintf(`PRAGMA application_id = %d`, applicationID)
+	if _, err := db.ExecContext(ctx, pragma); err != nil {
+		return fmt.Errorf("sqlite storage: reivindicar banco novo: %w", err)
+	}
+
+	var got int64
+	if err := db.QueryRowContext(ctx, `PRAGMA application_id`).Scan(&got); err != nil {
+		return fmt.Errorf("sqlite storage: verificar application_id após claim: %w", err)
+	}
+	if got != applicationID {
+		return fmt.Errorf("sqlite storage: application_id após claim=%d, esperado=%d", got, applicationID)
+	}
+	return nil
 }
 
 func verifyExistingDatabase(ctx context.Context, path string) error {
