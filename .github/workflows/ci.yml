@@ -58,6 +58,11 @@ jobs:
         done
         echo "Validação de boundaries de storage concluída com sucesso."
 
+    - name: Test SQLite Storage without CGO
+      env:
+        CGO_ENABLED: "0"
+      run: go test -count=1 ./internal/storage/sqlite/...
+
     - name: Build
       run: go build -v ./...
 
