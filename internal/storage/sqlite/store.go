@@ -10,12 +10,16 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
-const driverName = "sqlite3"
+const (
+	driverName    = "sqlite3"
+	applicationID = 0x4c494d32 // "LIM2": identifica somente o banco novo da Rebaseline.
+)
 
 // Store possui o ciclo de vida do novo banco SQLite sem expor *sql.DB aos consumidores.
 type Store struct {
@@ -24,6 +28,11 @@ type Store struct {
 
 // Open abre ou cria o novo banco, aplica a baseline operacional do ADR 019 e executa
 // migrations SQL versionadas antes de retornar capabilities aos consumidores.
+//
+// Um arquivo existente e não vazio só é aberto para escrita quando já carrega o
+// application_id do novo storage. Isso faz o boundary falhar fechado caso o chamador
+// forneça por engano o path do banco legado ou de outro SQLite, preservando a regra
+// side-by-side do ADR 019.
 func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		return nil, fmt.Errorf("sqlite storage: caminho do banco vazio")
@@ -33,8 +42,12 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	switch {
 	case err == nil && info.IsDir():
 		return nil, fmt.Errorf("sqlite storage: caminho do banco %q é um diretório", path)
+	case err == nil && info.Size() > 0:
+		if err := verifyExistingDatabase(ctx, path); err != nil {
+			return nil, err
+		}
 	case err == nil:
-		// Arquivo existente; as permissões são normalizadas abaixo.
+		// Arquivo vazio é equivalente a um banco ainda não inicializado.
 	case os.IsNotExist(err):
 		f, createErr := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 -- path fornecido pela configuração validada do chamador.
 		if createErr != nil {
@@ -47,11 +60,13 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("sqlite storage: stat %q: %w", path, err)
 	}
 
+	// Só normaliza permissões depois de provar que um arquivo existente pertence ao
+	// novo storage. Um banco legado rejeitado não sofre chmod nem migration.
 	if err := os.Chmod(path, 0o600); err != nil {
 		return nil, fmt.Errorf("sqlite storage: chmod %q: %w", path, err)
 	}
 
-	db, err := sql.Open(driverName, "file:"+path)
+	db, err := sql.Open(driverName, databaseURI(path, false))
 	if err != nil {
 		return nil, fmt.Errorf("sqlite storage: abrir %q: %w", path, err)
 	}
@@ -83,6 +98,35 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 
 	return &Store{db: db}, nil
+}
+
+func verifyExistingDatabase(ctx context.Context, path string) error {
+	db, err := sql.Open(driverName, databaseURI(path, true))
+	if err != nil {
+		return fmt.Errorf("sqlite storage: inspecionar banco existente %q: %w", path, err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	defer func() { _ = db.Close() }()
+
+	var got int64
+	if err := db.QueryRowContext(ctx, `PRAGMA application_id`).Scan(&got); err != nil {
+		return fmt.Errorf("sqlite storage: ler application_id de %q: %w", path, err)
+	}
+	if got != applicationID {
+		return fmt.Errorf("sqlite storage: recusar banco existente %q: application_id=%d não pertence ao novo storage", path, got)
+	}
+	return nil
+}
+
+func databaseURI(path string, readOnly bool) string {
+	u := &url.URL{Scheme: "file", Path: path}
+	if readOnly {
+		q := u.Query()
+		q.Set("mode", "ro")
+		u.RawQuery = q.Encode()
+	}
+	return u.String()
 }
 
 // Close fecha o novo banco.
