@@ -70,6 +70,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("sqlite storage: chmod %q: %w", path, err)
 	}
 
+	// databaseURI injeta os PRAGMAs connection-local via _pragma. O driver ncruces
+	// reaplica esses parâmetros sempre que database/sql abre uma conexão física nova,
+	// preservando FULL/FKs/busy_timeout mesmo se a conexão do pool for substituída.
 	db, err := sql.Open(driverName, databaseURI(path, false))
 	if err != nil {
 		return nil, fmt.Errorf("sqlite storage: abrir %q: %w", path, err)
@@ -86,26 +89,27 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return closeWith(fmt.Errorf("sqlite storage: ping: %w", err))
 	}
 
-	// FULL é aplicado antes do primeiro write do arquivo novo. O application_id é um
-	// marker de ownership/lifecycle, não schema; gravá-lo antes das migrations torna
-	// um bootstrap parcialmente concluído retomável sem permitir tocar SQLite legado.
-	if _, err := db.ExecContext(ctx, `PRAGMA synchronous=FULL`); err != nil {
-		return closeWith(fmt.Errorf("sqlite storage: aplicar PRAGMA synchronous=FULL: %w", err))
-	}
+	// O application_id é ownership/lifecycle, não schema. Ele é persistido antes de
+	// entrar em WAL/migrations para que um bootstrap já reivindicado possa ser retomado
+	// sem permitir que o novo boundary escreva em um SQLite legado.
 	if needsClaim {
 		if err := claimNewDatabase(ctx, db); err != nil {
 			return closeWith(err)
 		}
 	}
 
-	for _, pragma := range []string{
-		`PRAGMA journal_mode=WAL`,
-		`PRAGMA foreign_keys=ON`,
-		`PRAGMA busy_timeout=5000`,
-	} {
-		if _, err := db.ExecContext(ctx, pragma); err != nil {
-			return closeWith(fmt.Errorf("sqlite storage: aplicar %s: %w", pragma, err))
-		}
+	// journal_mode é persistente no arquivo. PRAGMA journal_mode=WAL pode responder
+	// com outro modo quando a troca não é possível, portanto ausência de erro não basta.
+	var journal string
+	if err := db.QueryRowContext(ctx, `PRAGMA journal_mode=WAL`).Scan(&journal); err != nil {
+		return closeWith(fmt.Errorf("sqlite storage: aplicar WAL: %w", err))
+	}
+	if journal != "wal" {
+		return closeWith(fmt.Errorf("sqlite storage: journal_mode=%q, esperado=wal", journal))
+	}
+
+	if err := verifyOperationalBaseline(ctx, db); err != nil {
+		return closeWith(err)
 	}
 
 	if err := migrate(ctx, db); err != nil {
@@ -131,6 +135,36 @@ func claimNewDatabase(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+func verifyOperationalBaseline(ctx context.Context, db *sql.DB) error {
+	var journal string
+	if err := db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journal); err != nil {
+		return fmt.Errorf("sqlite storage: verificar journal_mode: %w", err)
+	}
+	if journal != "wal" {
+		return fmt.Errorf("sqlite storage: journal_mode=%q após configuração, esperado=wal", journal)
+	}
+
+	checks := []struct {
+		name  string
+		query string
+		want  int
+	}{
+		{name: "synchronous", query: `PRAGMA synchronous`, want: 2},
+		{name: "foreign_keys", query: `PRAGMA foreign_keys`, want: 1},
+		{name: "busy_timeout", query: `PRAGMA busy_timeout`, want: 5000},
+	}
+	for _, check := range checks {
+		var got int
+		if err := db.QueryRowContext(ctx, check.query).Scan(&got); err != nil {
+			return fmt.Errorf("sqlite storage: verificar %s: %w", check.name, err)
+		}
+		if got != check.want {
+			return fmt.Errorf("sqlite storage: %s=%d, esperado=%d", check.name, got, check.want)
+		}
+	}
+	return nil
+}
+
 func verifyExistingDatabase(ctx context.Context, path string) error {
 	db, err := sql.Open(driverName, databaseURI(path, true))
 	if err != nil {
@@ -152,11 +186,18 @@ func verifyExistingDatabase(ctx context.Context, path string) error {
 
 func databaseURI(path string, readOnly bool) string {
 	u := &url.URL{Scheme: "file", Path: path}
+	q := u.Query()
 	if readOnly {
-		q := u.Query()
 		q.Set("mode", "ro")
-		u.RawQuery = q.Encode()
+	} else {
+		// O driver executa cada _pragma sempre que uma conexão física é aberta.
+		// Busy timeout vem primeiro conforme a recomendação upstream; WAL não entra
+		// aqui porque só pode ser ativado depois do claim explícito do arquivo novo.
+		q.Add("_pragma", "busy_timeout(5000)")
+		q.Add("_pragma", "foreign_keys(ON)")
+		q.Add("_pragma", "synchronous(FULL)")
 	}
+	u.RawQuery = q.Encode()
 	return u.String()
 }
 
