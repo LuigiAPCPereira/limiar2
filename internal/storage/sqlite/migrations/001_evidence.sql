@@ -24,7 +24,4 @@ BEGIN
     SELECT RAISE(ABORT, 'evidence is append-only');
 END;
 
--- 0x4c494d32 = "LIM2". O marker permite que Open recuse fail-closed qualquer
--- arquivo SQLite existente que não pertença ao novo storage da Rebaseline.
-PRAGMA application_id = 1279872306;
 PRAGMA user_version = 1;
