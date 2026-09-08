@@ -1,9 +1,12 @@
 # ADR 020 — Schema físico mínimo de Evidence
 
 Authority: Decision Record
-Status: Proposed
+Status: Accepted
+Accepted-by: LuigiAPCPereira
+Accepted-at: 2026-09-08T07:58:00-03:00
+Acceptance-reference: https://github.com/LuigiAPCPereira/limiar2/pull/174#issuecomment-5584088724
 
-> Enquanto este ADR estiver `Proposed`, ele não cria schema canônico de produção nem autoriza migration de dados.
+> Este ADR está `Accepted`. A aceitação autoriza o schema físico mínimo de Evidence descrito abaixo, mas todos os gates de implementação continuam obrigatórios e não há autorização para migração in-place do banco legado.
 
 ## Contexto
 
@@ -16,11 +19,11 @@ Há Evidence executável suficiente para decidir um núcleo menor sem inventar u
 - `EXP-LIMIAR-005` está `Supported` para capability de append + triggers persistentes contra `UPDATE`/`DELETE`; no harness, a própria capability calcula `SHA-256` a partir dos bytes de payload antes do `INSERT`;
 - `EXP-LIMIAR-008`, 009 e 010 suportam o ordering físico Evidence-before-state/progress nos boundaries exercitados.
 
-O objetivo desta Decision proposta é fixar somente o envelope físico mínimo necessário para começar o novo storage sem transformar conveniências de query, projeção ou apresentação em identidade de domínio.
+Esta Decision fixa somente o envelope físico mínimo necessário para começar o novo storage sem transformar conveniências de query, projeção ou apresentação em identidade de domínio.
 
-## Decision proposta
+## Decision
 
-Se aceito, o novo banco passa a ter uma tabela canônica `evidence` com o contrato abaixo.
+O novo banco passa a ter uma tabela canônica `evidence` com o contrato abaixo.
 
 ### 1. Identidade física
 
@@ -129,7 +132,7 @@ Se replay operacional exigir ordenação/indexação adicional, ela deve preserv
 
 ### 8. Migrations são a authority
 
-A criação desta tabela e de seus guards, quando autorizada, ocorre em migration SQL versionada do novo banco definido pelo ADR 019.
+A criação desta tabela e de seus guards ocorre em migration SQL versionada do novo banco definido pelo ADR 019.
 
 Não existe repair concorrente em runtime que reconstrua ou altere esse schema ad hoc.
 
@@ -179,7 +182,7 @@ Este ADR não decide:
 - RFC 9562, UUID version 4;
 - documentação oficial SQLite para `STRICT` e triggers.
 
-## Gates de implementação se aceito
+## Gates de implementação
 
 1. migration SQL versionada cria `evidence` e guards em banco novo vazio;
 2. UUIDv4 válido + falha fechada de entropia;
@@ -193,8 +196,8 @@ Este ADR não decide:
 10. nenhum caminho de produção toca o banco Tursogo legado in-place;
 11. a integração com state/progress mantém os gates do ADR 019.
 
-## Escopo da proposta
+## Escopo da aceitação
 
-`Status: Proposed` não autoriza criar o schema canônico em produção.
+A aceitação deste ADR aprova somente o **schema físico mínimo de Evidence e seu boundary append-only** descritos acima.
 
-A aceitação exige instrução explícita do mantenedor e os metadados definidos em `AGENTS.md`/`docs/adr/README.md`.
+Ela não aprova automaticamente schemas de sync/backfill, integração completa dos handlers Telegram, migração do banco legado, políticas de backup/restore ou qualquer bypass dos gates do ADR 019. Esses itens continuam condicionados às Decisions e Evidence correspondentes.
