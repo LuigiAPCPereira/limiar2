@@ -7,13 +7,13 @@ Status: Proposed
 
 ## Contexto
 
-Os ADRs 016 e 017 já tornam Evidence append-only/versionada uma authority separada de `SourceSyncState` e `BackfillProgress`. O ADR 019, uma vez aceito, define o novo banco SQLite/ncruces, migrations SQL versionadas e payload de Evidence codec-agnostic, mas deixa explicitamente abertos o schema SQL final, o tipo físico de `EvidenceRecord.id`, a precisão dos timestamps, os índices e a identidade/deduplicação física.
+Os ADRs 016 e 017 já tornam Evidence append-only/versionada uma authority separada de `SourceSyncState` e `BackfillProgress`. O ADR 019, agora `Accepted`, define o novo banco SQLite/ncruces, migrations SQL versionadas e payload de Evidence codec-agnostic, mas deixa explicitamente abertos o schema SQL final, o tipo físico de `EvidenceRecord.id`, a precisão dos timestamps, os índices e a identidade/deduplicação física.
 
 Há Evidence executável suficiente para decidir um núcleo menor sem inventar um schema de produto completo:
 
 - `F-STO-004` confirma que o RunID legado não satisfaz o contrato de identidade de Evidence;
 - `EXP-LIMIAR-004` está `Supported` para UUIDv4 aleatório em `BLOB(16)`, falha fechada de entropia, payload/hash binários, timestamps Unix em milissegundos, export/import, reopen e tabela `STRICT`;
-- `EXP-LIMIAR-005` está `Supported` para capability de append + triggers persistentes contra `UPDATE`/`DELETE`, com a limitação explícita de que isso não é um security boundary contra DDL/acesso offline;
+- `EXP-LIMIAR-005` está `Supported` para capability de append + triggers persistentes contra `UPDATE`/`DELETE`; no harness, a própria capability calcula `SHA-256` a partir dos bytes de payload antes do `INSERT`;
 - `EXP-LIMIAR-008`, 009 e 010 suportam o ordering físico Evidence-before-state/progress nos boundaries exercitados.
 
 O objetivo desta Decision proposta é fixar somente o envelope físico mínimo necessário para começar o novo storage sem transformar conveniências de query, projeção ou apresentação em identidade de domínio.
@@ -65,7 +65,7 @@ Semântica:
 - `source_occurred_at` é opcional porque a fonte pode não fornecer um instante confiável para todo evento;
 - `received_at` registra quando o Limiar admitiu/recebeu a observação;
 - `payload_format` e `payload_schema` tornam o BLOB reprocessável/versionável;
-- `payload_sha256` é integridade/proveniência, não identidade.
+- `payload_sha256` é metadata derivada de integridade/proveniência, não identidade.
 
 ### 3. Representação temporal
 
@@ -84,6 +84,10 @@ Não há `UNIQUE` em:
 - `(channel_id, message_id)`.
 
 Evidence repetida pode ser semanticamente necessária para replay, auditoria ou observações distintas da mesma mensagem.
+
+O `payload_sha256` não é fornecido como valor autoritativo pelo consumidor da capability de append. O storage calcula `SHA-256` internamente sobre os mesmos bytes que serão persistidos em `payload` e grava ambos na mesma operação. Assim, o `CHECK(length(payload_sha256) = 32)` valida somente o shape físico; a correspondência hash/payload é responsabilidade do boundary de persistência e pode ser revalidada por auditoria/reopen.
+
+Importadores side-by-side também devem derivar o hash dos bytes efetivamente importados, em vez de confiar em hash legado inexistente ou não verificável.
 
 ### 5. `STRICT` é baseline; `WITHOUT ROWID` não
 
@@ -150,6 +154,7 @@ Este ADR não decide:
 
 - identidade de Evidence deixa de depender de detalhes locais/legados;
 - payload permanece byte-preserving e reprocessável;
+- hash é derivado dentro do mesmo boundary que persiste o payload, evitando uma segunda autoridade do caller;
 - tempo é explícito e independente da identidade;
 - replay/duplicidade legítimos não são colapsados pelo schema;
 - append-only possui uma capability clara e defesa física observável;
@@ -161,7 +166,8 @@ Este ADR não decide:
 - BLOB PK não possui ordenação temporal natural;
 - triggers não protegem contra DDL/offline access;
 - ausência inicial de índices secundários pode exigir tuning posterior;
-- `subscription_id` passa a ser metadata persistida e precisa de contract estável no ingress.
+- `subscription_id` passa a ser metadata persistida e precisa de contract estável no ingress;
+- auditoria de integridade precisa recomputar hash quando quiser validar conteúdo histórico, pois SQLite não garante a correspondência payload/hash apenas pelo `CHECK` de tamanho.
 
 ## Evidência de suporte
 
@@ -177,14 +183,15 @@ Este ADR não decide:
 
 1. migration SQL versionada cria `evidence` e guards em banco novo vazio;
 2. UUIDv4 válido + falha fechada de entropia;
-3. round-trip byte a byte de ID/payload/hash;
-4. payload/timestamp repetidos coexistem;
-5. `UPDATE` e `DELETE` são rejeitados e não alteram a linha;
-6. close/reopen + `PRAGMA integrity_check = ok`;
-7. export/import preserva ID e hash;
-8. `CGO_ENABLED=0 go test ./...` e `go test -race ./...` passam no slice relevante;
-9. nenhum caminho de produção toca o banco Tursogo legado in-place;
-10. a integração com state/progress mantém os gates do ADR 019.
+3. capability de append calcula `payload_sha256` internamente a partir dos mesmos bytes persistidos em `payload`;
+4. round-trip byte a byte de ID/payload/hash e recomputação confirma a correspondência payload/hash;
+5. payload/timestamp repetidos coexistem;
+6. `UPDATE` e `DELETE` são rejeitados e não alteram a linha;
+7. close/reopen + `PRAGMA integrity_check = ok`;
+8. export/import preserva ID e bytes e produz hash correspondente ao payload importado;
+9. `CGO_ENABLED=0 go test ./...` e `go test -race ./...` passam no slice relevante;
+10. nenhum caminho de produção toca o banco Tursogo legado in-place;
+11. a integração com state/progress mantém os gates do ADR 019.
 
 ## Escopo da proposta
 
