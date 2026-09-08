@@ -17,22 +17,24 @@ O **Limiar** transforma o ruído dos canais de ofertas do Telegram em dados estr
 
 O Limiar resolve isso através de um **Pipeline de Dados** construído em **Go** (Golang), que se conecta nativamente ao Telegram usando a tecnologia de _userbot_ (MTProto), monitora seus canais favoritos, extrai os links/preços/cupons e os disponibiliza em tempo real.
 
-> [!NOTE]  
-> Atualmente estamos finalizando as Fases 1 (Coleta) e 2 (Processamento), que rodam num orquestrador unificado (`limiar run`) e utilizam um banco local SQLite embeddado (`Tursogo`).
+> [!NOTE]
+> A implementação legada atual das Fases 1 (Coleta) e 2 (Processamento) ainda roda no orquestrador unificado (`limiar run`) sobre o banco local Tursogo (`limiar.db`). A Rebaseline 2026 já aceitou, pelo ADR 019, um **novo storage SQLite side-by-side com `github.com/ncruces/go-sqlite3`**. Essa arquitetura está sendo implementada por slices; o banco legado não é migrado in-place e continua preservado enquanto importação/rollback dependerem dele.
 
 ## 🛠 Como Funciona
+
+O diagrama abaixo descreve a **implementação legada atualmente executável**, não a forma final do novo storage da Rebaseline:
 
 ```mermaid
 flowchart LR
     A[Telegram] -- "MTProto" --> B[Collector]
-    B -- "raw_messages" --> DB[(Tursogo .db)]
+    B -- "raw_messages" --> DB[(Tursogo .db legado)]
     DB -- "polling" --> C[Processor]
     C -- "Normalização\nClassificação" --> DB
     DB -- "processed_messages" --> D[Limiar API/Dashboard]
 ```
 
-1. **Collector:** Autentica como um usuário (não bot), faz download de mensagens antigas (backfill) e fica escutando em tempo real (livestream). Salva a versão bruta no banco de dados.
-2. **Processor:** Pega os payloads brutos, extrai URLs, detecta preços e cupons, categoriza se a promoção acabou, deduplica produtos iguais em canais diferentes, e gera os *processed_messages*.
+1. **Collector:** Autentica como um usuário (não bot), faz download de mensagens antigas (backfill) e fica escutando em tempo real (livestream). Na implementação atual, persiste payloads no banco legado; na Rebaseline, Evidence admitida é append-only/versionada conforme ADR 016.
+2. **Processor:** Na implementação atual, pega os payloads brutos, extrai URLs, detecta preços e cupons, categoriza se a promoção acabou, deduplica produtos iguais em canais diferentes, e gera os *processed_messages*.
 3. **API & Dashboard:** Entrega os dados formatados (REST) e atualizações ao vivo (Server-Sent Events) para que o *Limiar Frontend* mostre a mágica acontecendo.
 
 ## ⚡ Quickstart
@@ -75,21 +77,22 @@ Você pode usar variáveis de ambiente ou colocar um arquivo `.env` na raiz do p
 |----------|-----------|---------|
 | `LIMIAR_APP_ID` | Telegram API ID (Obrigatório) | - |
 | `LIMIAR_API_HASH` | Telegram API Hash (Obrigatório) | - |
-| `LIMIAR_DB_PATH` | Caminho para o banco local | `./limiar.db` |
+| `LIMIAR_DB_PATH` | Caminho para o banco local legado atual | `./limiar.db` |
 | `LIMIAR_LOG_LEVEL` | Verbosiade do log (`debug`, `info`, `warn`, `error`) | `info` |
 | `LIMIAR_LOG_FORMAT` | Estilo do Log (`pretty`, `json`, `text`) | `pretty` |
 
-> [!TIP]  
+> [!TIP]
 > Para desenvolvimento local, recomendamos usar `LIMIAR_LOG_FORMAT=pretty` para ver as mensagens chegarem coloridas no terminal com emojis indicativos!
 
 ## ⚠️ Regras do Projeto (Para Contribuidores e IAs)
 
-> [!CAUTION]  
-> Este repositório é governado por regras estritas documentadas no [AGENTS.md](file:///home/projetos/Projetos/Limiar2/AGENTS.md). **A LEITURA É OBRIGATÓRIA ANTES DE QUALQUER COMMIT.**
+> [!CAUTION]
+> Este repositório é governado por regras estritas documentadas no [AGENTS.md](AGENTS.md). **A LEITURA É OBRIGATÓRIA ANTES DE QUALQUER COMMIT.**
 
-**Alguns dos invariantes do sistema:**
-- **Nenhum ORM permitido:** Todo acesso a dados é via SQL explícito em `internal/storage`.
-- **Closed Stack:** Só dependemos do `gotd/td` para Telegram, `tursogo` para o DB e `cobra/viper` pra CLI. Não instale novos pacotes levianamente.
-- **Raw is the Truth:** O Collector nunca muta dados recebidos. A tarefa do Processor é criar cópias processadas.
+**Alguns dos invariantes e decisões vigentes:**
+- **Evidence antes de progresso:** Evidence exigida deve estar durável antes de `SourceSyncState`/`BackfillProgress` certificar avanço; replay é preferível à perda silenciosa (ADRs 016/017).
+- **Storage da Rebaseline:** ADR 019 aceita `github.com/ncruces/go-sqlite3` como baseline do novo banco SQLite, com `WAL`, `synchronous=FULL`, migrations SQL versionadas e banco novo side-by-side. Tursogo continua somente onde o legado/importação ainda exigir.
+- **Sem ORM por conveniência:** O ADR 019 rejeita adicionar ORM sem necessidade demonstrada; dependências estruturais seguem a autoridade de ADRs aceitos, não listas históricas de "closed stack".
+- **Evidence não é `raw_messages`:** `raw_messages` descreve a implementação legada. A autoridade atual é o contrato de Evidence append-only/versionada do ADR 016; projeções derivadas não substituem a observação admitida.
 
-Consulte a pasta `docs/` para mergulhar nos *Architecture Decision Records* (ADRs) e nas especificações de negócio (`docs/PRODUCT_BRIEF.md`, `docs/ARCHITECTURE.md`).
+Consulte `AGENTS.md`, `docs/BASELINE.md` e `docs/adr/` para a autoridade arquitetural atual. `docs/ARCHITECTURE.md` também descreve partes importantes da implementação existente e deve ser lido distinguindo implementação legada de Decisions da Rebaseline.
