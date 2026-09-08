@@ -106,19 +106,32 @@ camada só se tornam autoridade quando cobertos por ADR Accepted.
     adoção/substituição do baseline;
   - `Forget=true` não é um reset operacional silencioso;
   - updates stateless não definem autoridade de sync;
-  - replay após restart é esperado e não implica exactly-once.
+  - replay após restart é esperado e não implica exactly-once;
+- **ADR 019 — Baseline local SQLite para o novo storage**, que estabelece:
+  - `github.com/ncruces/go-sqlite3 v0.35.3` como baseline do novo banco através de `database/sql`;
+  - uma conexão lógica inicialmente, com `WAL`, `synchronous=FULL`, foreign keys e busy timeout;
+  - ordering físico `Evidence -> SourceSyncState/BackfillProgress`;
+  - novo banco side-by-side, preservando o Tursogo legado como fonte histórica/read-only;
+  - migrations SQL versionadas como única authority de schema do banco novo;
+  - capabilities/repositories estreitos em vez de `*sql.DB` global como authority;
+  - payload de Evidence opaco/codec-agnostic no storage;
+  - `SourceSyncState` e `BackfillProgress` como authorities distintas mesmo no mesmo arquivo físico.
 
 Com o ADR 016 aceito, o ADR 005 fica superseded no escopo do contrato raw por mensagem e
 o ADR 006 fica retired/superseded no escopo de `LastMessageID` como autoridade de sync
 live. O princípio de gotd do ADR 002 é mantido com boundary de sincronização reescrito
 pelos ADRs 016 e 017.
 
+Com o ADR 019 aceito, o ADR 001 deixa de orientar o **novo** storage. Tursogo continua
+permitido onde for necessário para compatibilidade, importação e rollback do banco legado,
+sem criar authority sobre o novo banco.
+
 ### Candidatos fortes, ainda não autoritativos
 
 Os itens abaixo são resultados de pesquisa, experimentos e propostas da rebaseline.
 **Eles não devem ser tratados como decisões apenas por aparecerem aqui.**
 
-- migração side-by-side do banco legado, preservando o antigo como artefato imutável;
+- política e tooling concretos de importação side-by-side do banco legado;
 - Processing Generations para derivados reconstruíveis e reprocessamento seguro;
 - Source Message Projection separada da Evidence;
 - Commercial Findings tipados e com proveniência;
@@ -142,7 +155,9 @@ Durante a rebaseline:
 - testes e benchmarks úteis devem ser preservados como regressão/evidência;
 - migrations antigas continuam relevantes para importar e compreender o banco legado;
 - componentes classificados para substituição só devem ser removidos depois que sua
-  função, evidência útil e caminho de migração estiverem cobertos.
+  função, evidência útil e caminho de migração estiverem cobertos;
+- o arquivo Tursogo legado não deve ser migrado in-place para o novo schema;
+- o novo banco nasce em arquivo separado e o legado permanece read-only durante importação/rollback.
 
 O registry de `docs/adr/README.md` governa a interpretação dos ADRs 001–015 em conjunto
 com ADRs novos já aceitos.
@@ -155,9 +170,14 @@ A implementação atual usa, entre outras dependências:
 
 - Go 1.26.2 no `go.mod`;
 - `github.com/gotd/td` v0.161.0 para Telegram/MTProto;
-- `turso.tech/database/tursogo` v0.7.2 para storage local;
+- `turso.tech/database/tursogo` v0.7.2 para o storage legado atualmente em produção;
 - Cobra/Viper para CLI/config;
 - `net/http` para o dashboard atual.
+
+O ADR 019 já escolhe `github.com/ncruces/go-sqlite3 v0.35.3` como baseline estrutural do
+**novo** storage, mas essa dependência só deve entrar no caminho normal de produção junto
+do slice autorizado e verificado correspondente. A coexistência temporária com Tursogo é
+esperada durante a transição side-by-side.
 
 Essas versões descrevem o repositório atual. Não são congeladas pela baseline.
 Mudanças estruturais seguem `AGENTS.md` e ADRs; updates compatíveis devem ser avaliados
@@ -167,18 +187,19 @@ com documentação primária e testes proporcionais ao risco.
 
 ## 7. Questões abertas prioritárias
 
-1. escolha/validação da engine SQLite local e PRAGMAs de durabilidade;
-2. contrato físico do payload de Evidence;
-3. estratégia final de sessão/peer state;
-4. boundary de mídia entre evidência de fonte e cache/apresentação;
-5. materialização dos contratos de Processing Generations e Source Projection;
-6. migração do banco legado;
-7. escolha de provider/modelo de IA somente quando houver corpus e credenciais para
-   bake-off real.
+1. schema físico mínimo e versionado de Evidence, incluindo ID, timestamps e índices essenciais;
+2. integração do novo storage com os contracts reais de Evidence, `SourceSyncState` e `BackfillProgress`;
+3. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007);
+4. backup/restore do schema final e revalidação de locking/WAL nas plataformas suportadas;
+5. estratégia final de sessão/peer state;
+6. boundary de mídia entre evidência de fonte e cache/apresentação;
+7. materialização dos contratos de Processing Generations e Source Projection;
+8. escolha de provider/modelo de IA somente quando houver corpus e credenciais para bake-off real.
 
-Os gates de implementação do ADR 017 — inclusive testes adicionais de resync,
-`ChannelDifferenceTooLong`, edit/delete/update composto e coexistência backfill/live —
-continuam obrigatórios antes de colocar o novo ingress em produção.
+Os gates de implementação dos ADRs 017 e 019 — inclusive crash/restart da integração
+real, `ChannelDifferenceTooLong`, edit/delete/update composto, coexistência backfill/live,
+`CGO_ENABLED=0 go test`, race detector e preservação do legado — continuam obrigatórios
+antes de colocar o novo ingress/storage em produção.
 
 ---
 
