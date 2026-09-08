@@ -1,9 +1,12 @@
 # ADR 019 — Baseline local SQLite para o novo storage
 
 Authority: Decision Record
-Status: Proposed
+Status: Accepted
+Accepted-by: LuigiAPCPereira
+Accepted-at: 2026-09-08T05:27:00-03:00
+Acceptance-reference: https://github.com/LuigiAPCPereira/limiar2/issues/172#issuecomment-5581795839
 
-> Enquanto este ADR estiver `Proposed`, ele não altera o storage de produção nem autoriza troca de engine, schema, dependência ou banco legado.
+> Este ADR está `Accepted`. A aceitação autoriza a arquitetura descrita abaixo, mas os gates listados em "Gates antes de produção" continuam obrigatórios antes de promover cada slice ao caminho produtivo.
 
 ## Contexto
 
@@ -20,7 +23,7 @@ As duas engines passaram o contrato funcional avaliado com `database/sql`, uma c
 
 O F-STO-002 acrescentou uma matriz física de 48 encerramentos por `SIGKILL` entre os commits de Evidence e de `SourceSyncState`/`BackfillProgress`. Após reopen, nenhum cenário produziu o estado proibido `Evidence não durável / progresso avançado`.
 
-Antes desta proposta de Decision, um probe no Go module proxy em Go 1.26.6 confirmou em 2026-08-19:
+Antes desta Decision, um probe no Go module proxy em Go 1.26.6 confirmou em 2026-08-19:
 
 ```text
 github.com/ncruces/go-sqlite3@latest = v0.35.3
@@ -38,9 +41,9 @@ A matriz oficial de compatibilidade do Turso declara compatibilidade SQLite aind
 Proposal de origem:
 `docs/evolution/proposals/PROPOSAL-STO-001-local-sqlite-and-evidence-storage.md`.
 
-## Decision proposta
+## Decision
 
-Se este ADR for aceito, passam a valer os contratos abaixo para o **novo banco da rebaseline**.
+Com a aceitação deste ADR, passam a valer os contratos abaixo para o **novo banco da rebaseline**.
 
 ### 1. Engine do novo banco: ncruces/go-sqlite3
 
@@ -201,7 +204,7 @@ Enquanto importação/rollback do legado depender dele, o driver pode permanecer
 
 ## Relação com ADRs legados e atuais
 
-Se aceito:
+Com este ADR aceito:
 
 - ADR 001 deixa de orientar o **novo** storage; Tursogo permanece somente onde explicitamente necessário ao legado/importação;
 - ADR 003 não fornece authority ao novo writer; o fan-in DBWriter legado continua sem promoção automática;
@@ -224,7 +227,7 @@ Este ADR não muda o status dos ADRs legados no registry por si só; a limpeza f
 
 ## Gates antes de produção
 
-Mesmo se este ADR vier a ser aceito, a implementação de produção continua condicionada a:
+Mesmo com este ADR aceito, a implementação de produção continua condicionada a:
 
 1. decidir o schema físico mínimo e versionado de Evidence, incluindo ID e timestamps;
 2. preservar os contracts de `Evidence -> SourceSyncState/BackfillProgress` no storage real;
@@ -244,10 +247,6 @@ Os testes atuais suportam process crash nos boundaries observáveis de commit em
 
 A escolha de `ncruces/go-sqlite3` é baseada em executar SQLite, preservar runtime cgo-free e nos contratos concretamente exercitados, aceitando explicitamente que o Go VFS continua uma superfície de compatibilidade própria. Não se baseia em benchmark isolado nem em falha do Tursogo.
 
-## Escopo da proposta
+## Registro de aceitação
 
-`Status: Proposed` significa apenas que a Decision está pronta para avaliação.
-
-Mergear este documento, aprovar a PR ou dizer `continue` não promove o ADR para `Accepted`.
-
-Uma eventual aceitação exige instrução explícita do mantenedor e os metadados definidos em `AGENTS.md`.
+A transição `Proposed -> Accepted` foi autorizada explicitamente pelo mantenedor em 2026-09-08 e registrada na Issue #172. Esta aceitação transforma os contratos deste ADR em autoridade arquitetural para o novo storage, sem dispensar os gates de implementação e produção acima.
