@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -93,12 +94,86 @@ func TestOpenAppliesADR019BaselineAndMigration(t *testing.T) {
 		t.Fatalf("user_version=%d, want 1", userVersion)
 	}
 
+	var gotApplicationID int64
+	if err := store.db.QueryRow(`PRAGMA application_id`).Scan(&gotApplicationID); err != nil {
+		t.Fatal(err)
+	}
+	if gotApplicationID != applicationID {
+		t.Fatalf("application_id=%d, want %d", gotApplicationID, applicationID)
+	}
+
 	var tableSQL string
 	if err := store.db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='evidence'`).Scan(&tableSQL); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Contains([]byte(tableSQL), []byte("STRICT")) {
 		t.Fatalf("evidence schema não contém STRICT: %s", tableSQL)
+	}
+}
+
+func TestOpenRejectsUnownedExistingSQLiteWithoutMutation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	legacy, err := sql.Open(driverName, databaseURI(path, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.Exec(`CREATE TABLE legacy_marker(value TEXT NOT NULL); INSERT INTO legacy_marker(value) VALUES ('preserve-me')`); err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := os.ReadFile(path) // #nosec G304 -- path pertence ao TempDir do teste.
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := Open(context.Background(), path)
+	if err == nil {
+		_ = store.Close()
+		t.Fatal("Open deveria recusar SQLite existente sem application_id do novo storage")
+	}
+
+	after, err := os.ReadFile(path) // #nosec G304 -- path pertence ao TempDir do teste.
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("arquivo SQLite recusado foi modificado")
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("permissões do SQLite recusado=%#o, want 0644", got)
+	}
+
+	readOnly, err := sql.Open(driverName, databaseURI(path, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = readOnly.Close() }()
+
+	var marker string
+	if err := readOnly.QueryRow(`SELECT value FROM legacy_marker`).Scan(&marker); err != nil {
+		t.Fatal(err)
+	}
+	if marker != "preserve-me" {
+		t.Fatalf("legacy marker=%q, want preserve-me", marker)
+	}
+	var evidenceTables int
+	if err := readOnly.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='evidence'`).Scan(&evidenceTables); err != nil {
+		t.Fatal(err)
+	}
+	if evidenceTables != 0 {
+		t.Fatalf("evidence table criada no SQLite recusado: count=%d", evidenceTables)
 	}
 }
 
@@ -195,6 +270,75 @@ func TestRepeatedEvidenceCoexists(t *testing.T) {
 	}
 	if count != 2 || distinctHashes != 1 || distinctTimes != 1 {
 		t.Fatalf("rows=%d hashes=%d times=%d, want 2/1/1", count, distinctHashes, distinctTimes)
+	}
+}
+
+func TestEvidencePhysicalConstraintsRejectInvalidShape(t *testing.T) {
+	_, store := openTestStore(t)
+	defer func() { _ = store.Close() }()
+
+	insert := `INSERT INTO evidence(
+		id, subscription_id, acquisition, event_kind, source_event_type,
+		received_at, payload_format, payload_schema, payload, payload_sha256
+	) VALUES (?, 's', 'live', 'update', 'updates', 1, 'telegram-tl', 'v1', x'01', ?)`
+
+	if _, err := store.db.Exec(insert, make([]byte, 15), make([]byte, 32)); err == nil {
+		t.Fatal("schema deveria recusar EvidenceID de 15 bytes")
+	}
+	if _, err := store.db.Exec(insert, make([]byte, 16), make([]byte, 31)); err == nil {
+		t.Fatal("schema deveria recusar payload_sha256 de 31 bytes")
+	}
+}
+
+func TestEvidencePhysicalExportImportPreservesIdentityAndHash(t *testing.T) {
+	_, source := openTestStore(t)
+	defer func() { _ = source.Close() }()
+	_, target := openTestStore(t)
+	defer func() { _ = target.Close() }()
+
+	id, err := source.EvidenceAppender().Append(context.Background(), sampleEvidence([]byte("export-import")))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var (
+		gotID, payload, hash                                      []byte
+		subscription, acquisition, eventKind, sourceType          string
+		payloadFormat, payloadSchema                              string
+		sourceOccurredAt                                          sql.NullInt64
+		receivedAt                                                int64
+	)
+	if err := source.db.QueryRow(`SELECT id, subscription_id, acquisition, event_kind, source_event_type,
+		source_occurred_at, received_at, payload_format, payload_schema, payload, payload_sha256
+		FROM evidence WHERE id = ?`, id[:]).Scan(
+		&gotID, &subscription, &acquisition, &eventKind, &sourceType,
+		&sourceOccurredAt, &receivedAt, &payloadFormat, &payloadSchema, &payload, &hash,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := target.db.Exec(`INSERT INTO evidence(
+		id, subscription_id, acquisition, event_kind, source_event_type,
+		source_occurred_at, received_at, payload_format, payload_schema, payload, payload_sha256
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		gotID, subscription, acquisition, eventKind, sourceType,
+		sourceOccurredAt, receivedAt, payloadFormat, payloadSchema, payload, hash,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	var importedID, importedPayload, importedHash []byte
+	if err := target.db.QueryRow(`SELECT id, payload, payload_sha256 FROM evidence WHERE id = ?`, id[:]).Scan(
+		&importedID, &importedPayload, &importedHash,
+	); err != nil {
+		t.Fatal(err)
+	}
+	wantHash := sha256.Sum256(importedPayload)
+	if !bytes.Equal(importedID, id[:]) || !bytes.Equal(importedPayload, payload) || !bytes.Equal(importedHash, hash) {
+		t.Fatal("export/import não preservou identidade, payload ou hash")
+	}
+	if !bytes.Equal(importedHash, wantHash[:]) {
+		t.Fatal("hash importado não corresponde aos bytes importados")
 	}
 }
 
