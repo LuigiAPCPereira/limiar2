@@ -1,0 +1,51 @@
+language: go
+os: linux
+dist: noble
+
+go:
+  - "1.26.2"
+
+if: (type = push AND branch = main) OR (type = pull_request AND branch = main)
+
+cache:
+  directories:
+    - $HOME/.cache/go-build
+    - $GOPATH/pkg/mod
+
+addons:
+  apt:
+    packages:
+      - gnupg
+
+install:
+  - go mod download
+  - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+  - go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+
+script:
+  - go mod verify
+  - "$(go env GOPATH)/bin/golangci-lint run --timeout=5m"
+  - "$(go env GOPATH)/bin/gosec -exclude-dir=.agents ./..."
+  - go vet ./...
+  - bash scripts/ci/check-storage-dependencies.sh
+  - go build -v ./...
+  - go test -v -race -coverprofile=coverage.out -count=1 ./...
+  - go tool cover -func=coverage.out
+
+after_success:
+  - |
+    if [ -z "${CODECOV_TOKEN:-}" ]; then
+      echo "CODECOV_TOKEN não configurado no Travis; upload de cobertura ignorado."
+    else
+      curl -fsSLo codecov https://cli.codecov.io/latest/linux/codecov
+      curl -fsSLo codecov.SHA256SUM https://cli.codecov.io/latest/linux/codecov.SHA256SUM
+      curl -fsSLo codecov.SHA256SUM.sig https://cli.codecov.io/latest/linux/codecov.SHA256SUM.sig
+      curl -fsSL https://keybase.io/codecovsecops/pgp_keys.asc > codecov.asc
+      gpg --batch --no-default-keyring --keyring ./codecov-trustedkeys.gpg --import codecov.asc
+      gpg --batch --no-default-keyring --keyring ./codecov-trustedkeys.gpg --verify codecov.SHA256SUM.sig codecov.SHA256SUM
+      sha256sum -c codecov.SHA256SUM
+      chmod +x codecov
+      ./codecov --verbose upload-process --disable-search --fail-on-error \
+        -n "travis-${TRAVIS_BUILD_NUMBER}" \
+        -f coverage.out
+    fi
