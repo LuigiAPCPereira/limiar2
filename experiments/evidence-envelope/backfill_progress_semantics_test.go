@@ -78,6 +78,20 @@ func advanceBackfillProgress(db *sql.DB, subscription string, lastMessageID int6
 	return errors.New("backfill progress regression rejected")
 }
 
+func requireBackfillProgress(t *testing.T, db *sql.DB, subscription string, want backfillProgress) {
+	t.Helper()
+	got, found, err := readBackfillProgress(db, subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatalf("progress for %q not found", subscription)
+	}
+	if got != want {
+		t.Fatalf("progress for %q=%+v, want %+v", subscription, got, want)
+	}
+}
+
 func TestBackfillProgressAbsenceIsDistinctFromZero(t *testing.T) {
 	_, db := openBackfillProgressDB(t)
 	defer func() { _ = db.Close() }()
@@ -92,13 +106,7 @@ func TestBackfillProgressAbsenceIsDistinctFromZero(t *testing.T) {
 	if err := advanceBackfillProgress(db, subscription, 0, false); err != nil {
 		t.Fatal(err)
 	}
-	progress, found, err := readBackfillProgress(db, subscription)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !found || progress.lastMessageID != 0 || progress.completed {
-		t.Fatalf("zero progress not preserved distinctly: found=%v progress=%+v", found, progress)
-	}
+	requireBackfillProgress(t, db, subscription, backfillProgress{lastMessageID: 0, completed: false})
 }
 
 func TestBackfillProgressRejectsRegressionAndPersistsAfterReopen(t *testing.T) {
@@ -120,13 +128,7 @@ func TestBackfillProgressRejectsRegressionAndPersistsAfterReopen(t *testing.T) {
 
 	reopened := openDB(t, path)
 	defer func() { _ = reopened.Close() }()
-	progress, found, err := readBackfillProgress(reopened, subscription)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !found || progress.lastMessageID != 125 || !progress.completed {
-		t.Fatalf("reopened progress=%+v found=%v, want last_message_id=125 completed=true", progress, found)
-	}
+	requireBackfillProgress(t, reopened, subscription, backfillProgress{lastMessageID: 125, completed: true})
 }
 
 func TestBackfillProgressIsolatedBySubscription(t *testing.T) {
@@ -140,15 +142,6 @@ func TestBackfillProgressIsolatedBySubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, firstFound, err := readBackfillProgress(db, "telegram:channel:1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, secondFound, err := readBackfillProgress(db, "telegram:channel:2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !firstFound || !secondFound || first.lastMessageID != 10 || first.completed || second.lastMessageID != 20 || !second.completed {
-		t.Fatalf("isolated progress mismatch: first=%+v/%v second=%+v/%v", first, firstFound, second, secondFound)
-	}
+	requireBackfillProgress(t, db, "telegram:channel:1", backfillProgress{lastMessageID: 10, completed: false})
+	requireBackfillProgress(t, db, "telegram:channel:2", backfillProgress{lastMessageID: 20, completed: true})
 }
