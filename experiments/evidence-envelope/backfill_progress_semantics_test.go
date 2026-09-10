@@ -51,7 +51,14 @@ func advanceBackfillProgress(db *sql.DB, subscription string, lastMessageID int6
 	if completed {
 		completedValue = 1
 	}
-	result, err := db.Exec(`UPDATE backfill_progress_semantics
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	result, err := tx.Exec(`UPDATE backfill_progress_semantics
 		SET last_message_id=?, completed=?
 		WHERE subscription_id=? AND last_message_id <= ?`,
 		lastMessageID, completedValue, subscription, lastMessageID)
@@ -63,19 +70,21 @@ func advanceBackfillProgress(db *sql.DB, subscription string, lastMessageID int6
 		return err
 	}
 	if rows == 1 {
-		return nil
+		return tx.Commit()
 	}
 
 	var exists int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM backfill_progress_semantics WHERE subscription_id=?`, subscription).Scan(&exists); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM backfill_progress_semantics WHERE subscription_id=?`, subscription).Scan(&exists); err != nil {
 		return err
 	}
-	if exists == 0 {
-		_, err = db.Exec(`INSERT INTO backfill_progress_semantics(subscription_id, last_message_id, completed)
-			VALUES (?, ?, ?)`, subscription, lastMessageID, completedValue)
+	if exists != 0 {
+		return errors.New("backfill progress regression rejected")
+	}
+	if _, err := tx.Exec(`INSERT INTO backfill_progress_semantics(subscription_id, last_message_id, completed)
+		VALUES (?, ?, ?)`, subscription, lastMessageID, completedValue); err != nil {
 		return err
 	}
-	return errors.New("backfill progress regression rejected")
+	return tx.Commit()
 }
 
 func requireBackfillProgress(t *testing.T, db *sql.DB, subscription string, want backfillProgress) {
@@ -97,9 +106,11 @@ func TestBackfillProgressAbsenceIsDistinctFromZero(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	const subscription = "telegram:channel:42"
-	if progress, found, err := readBackfillProgress(db, subscription); err != nil {
+	progress, found, err := readBackfillProgress(db, subscription)
+	if err != nil {
 		t.Fatal(err)
-	} else if found {
+	}
+	if found {
 		t.Fatalf("unexpected progress for absent subscription: %+v", progress)
 	}
 
