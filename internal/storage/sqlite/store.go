@@ -18,7 +18,7 @@ import (
 
 const (
 	driverName    = "sqlite3"
-	applicationID = 0x4c494d32 // "LIM2": identifica somente o banco novo da Rebaseline.
+	applicationID = 0x4c494d32 // LIM2 em ASCII: L=4c, I=49, M=4d, 2=32.
 )
 
 // Store possui o ciclo de vida do novo banco SQLite sem expor *sql.DB aos consumidores.
@@ -34,42 +34,73 @@ type Store struct {
 // forneça por engano o path do banco legado ou de outro SQLite, preservando a regra
 // side-by-side do ADR 019.
 func Open(ctx context.Context, path string) (*Store, error) {
+	needsClaim, err := prepareDatabaseFile(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := openWritableDatabase(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	if err := initializeDatabase(ctx, db, needsClaim); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return &Store{db: db}, nil
+}
+
+func prepareDatabaseFile(ctx context.Context, path string) (bool, error) {
 	if path == "" {
-		return nil, fmt.Errorf("sqlite storage: caminho do banco vazio")
+		return false, fmt.Errorf("sqlite storage: caminho do banco vazio")
 	}
 
-	needsClaim := false
 	info, err := os.Stat(path)
-	switch {
-	case err == nil && info.IsDir():
-		return nil, fmt.Errorf("sqlite storage: caminho do banco %q é um diretório", path)
-	case err == nil && info.Size() > 0:
-		if err := verifyExistingDatabase(ctx, path); err != nil {
-			return nil, err
-		}
-	case err == nil:
-		// Arquivo vazio é equivalente a um banco ainda não inicializado e pode ser
-		// reivindicado pelo novo storage antes de qualquer migration.
-		needsClaim = true
-	case os.IsNotExist(err):
-		f, createErr := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 -- path fornecido pela configuração validada do chamador.
-		if createErr != nil {
-			return nil, fmt.Errorf("sqlite storage: criar %q: %w", path, createErr)
-		}
-		if closeErr := f.Close(); closeErr != nil {
-			return nil, fmt.Errorf("sqlite storage: fechar arquivo criado %q: %w", path, closeErr)
-		}
-		needsClaim = true
-	default:
-		return nil, fmt.Errorf("sqlite storage: stat %q: %w", path, err)
+	if err == nil {
+		return prepareExistingDatabase(ctx, path, info)
+	}
+	if !os.IsNotExist(err) {
+		return false, fmt.Errorf("sqlite storage: stat %q: %w", path, err)
+	}
+	if err := createDatabaseFile(path); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func prepareExistingDatabase(ctx context.Context, path string, info os.FileInfo) (bool, error) {
+	if info.IsDir() {
+		return false, fmt.Errorf("sqlite storage: caminho do banco %q é um diretório", path)
 	}
 
-	// Só normaliza permissões depois de provar que um arquivo existente pertence ao
+	needsClaim := info.Size() == 0
+	if !needsClaim {
+		if err := verifyExistingDatabase(ctx, path); err != nil {
+			return false, err
+		}
+	}
+
+	// Só normaliza permissões depois de provar que um arquivo não vazio pertence ao
 	// novo storage. Um banco legado rejeitado não sofre chmod nem migration.
 	if err := os.Chmod(path, 0o600); err != nil {
-		return nil, fmt.Errorf("sqlite storage: chmod %q: %w", path, err)
+		return false, fmt.Errorf("sqlite storage: chmod %q: %w", path, err)
 	}
+	return needsClaim, nil
+}
 
+func createDatabaseFile(path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 -- path fornecido pela configuração validada do chamador.
+	if err != nil {
+		return fmt.Errorf("sqlite storage: criar %q: %w", path, err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("sqlite storage: fechar arquivo criado %q: %w", path, err)
+	}
+	return nil
+}
+
+func openWritableDatabase(ctx context.Context, path string) (*sql.DB, error) {
 	// databaseURI injeta os PRAGMAs connection-local via _pragma. O driver ncruces
 	// reaplica esses parâmetros sempre que database/sql abre uma conexão física nova,
 	// preservando FULL/FKs/busy_timeout mesmo se a conexão do pool for substituída.
@@ -80,43 +111,45 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	closeWith := func(cause error) (*Store, error) {
-		_ = db.Close()
-		return nil, cause
-	}
-
 	if err := db.PingContext(ctx); err != nil {
-		return closeWith(fmt.Errorf("sqlite storage: ping: %w", err))
+		_ = db.Close()
+		return nil, fmt.Errorf("sqlite storage: ping: %w", err)
 	}
+	return db, nil
+}
 
+func initializeDatabase(ctx context.Context, db *sql.DB, needsClaim bool) error {
 	// O application_id é ownership/lifecycle, não schema. Ele é persistido antes de
 	// entrar em WAL/migrations para que um bootstrap já reivindicado possa ser retomado
 	// sem permitir que o novo boundary escreva em um SQLite legado.
 	if needsClaim {
 		if err := claimNewDatabase(ctx, db); err != nil {
-			return closeWith(err)
+			return err
 		}
 	}
+	if err := enableWAL(ctx, db); err != nil {
+		return err
+	}
+	if err := verifyOperationalBaseline(ctx, db); err != nil {
+		return err
+	}
+	if err := migrate(ctx, db); err != nil {
+		return fmt.Errorf("sqlite storage: migrations: %w", err)
+	}
+	return nil
+}
 
+func enableWAL(ctx context.Context, db *sql.DB) error {
 	// journal_mode é persistente no arquivo. PRAGMA journal_mode=WAL pode responder
 	// com outro modo quando a troca não é possível, portanto ausência de erro não basta.
 	var journal string
 	if err := db.QueryRowContext(ctx, `PRAGMA journal_mode=WAL`).Scan(&journal); err != nil {
-		return closeWith(fmt.Errorf("sqlite storage: aplicar WAL: %w", err))
+		return fmt.Errorf("sqlite storage: aplicar WAL: %w", err)
 	}
 	if journal != "wal" {
-		return closeWith(fmt.Errorf("sqlite storage: journal_mode=%q, esperado=wal", journal))
+		return fmt.Errorf("sqlite storage: journal_mode=%q, esperado=wal", journal)
 	}
-
-	if err := verifyOperationalBaseline(ctx, db); err != nil {
-		return closeWith(err)
-	}
-
-	if err := migrate(ctx, db); err != nil {
-		return closeWith(fmt.Errorf("sqlite storage: migrations: %w", err))
-	}
-
-	return &Store{db: db}, nil
+	return nil
 }
 
 func claimNewDatabase(ctx context.Context, db *sql.DB) error {
@@ -190,7 +223,7 @@ func databaseURI(path string, readOnly bool) string {
 	if readOnly {
 		q.Set("mode", "ro")
 	} else {
-		// O driver executa cada _pragma sempre que uma conexão física é aberta.
+		// O driver ncruces/go-sqlite3 executa cada _pragma sempre que uma conexão física é aberta.
 		// Busy timeout vem primeiro conforme a recomendação upstream; WAL não entra
 		// aqui porque só pode ser ativado depois do claim explícito do arquivo novo.
 		q.Add("_pragma", "busy_timeout(5000)")
