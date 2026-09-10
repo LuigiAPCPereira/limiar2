@@ -20,9 +20,19 @@ CREATE TABLE source_sync_channel_state (
 ) STRICT;
 `
 
+type channelStateKey struct {
+	userID    int64
+	channelID int64
+}
+
 type channelStateRow struct {
 	channelID int64
 	pts       int
+}
+
+type channelStateWrite struct {
+	key channelStateKey
+	pts int
 }
 
 func openChannelStateDB(t *testing.T, path string) *sql.DB {
@@ -40,16 +50,16 @@ func openChannelStateDB(t *testing.T, path string) *sql.DB {
 	return db
 }
 
-func setChannelPts(ctx context.Context, db *sql.DB, userID, channelID int64, pts int) error {
+func setChannelPts(ctx context.Context, db *sql.DB, key channelStateKey, pts int) error {
 	_, err := db.ExecContext(ctx, `INSERT INTO source_sync_channel_state(user_id, channel_id, pts)
 		VALUES (?, ?, ?)
-		ON CONFLICT(user_id, channel_id) DO UPDATE SET pts=excluded.pts`, userID, channelID, pts)
+		ON CONFLICT(user_id, channel_id) DO UPDATE SET pts=excluded.pts`, key.userID, key.channelID, pts)
 	return err
 }
 
-func getChannelPts(ctx context.Context, db *sql.DB, userID, channelID int64) (int, bool, error) {
+func getChannelPts(ctx context.Context, db *sql.DB, key channelStateKey) (int, bool, error) {
 	var pts int
-	err := db.QueryRowContext(ctx, `SELECT pts FROM source_sync_channel_state WHERE user_id=? AND channel_id=?`, userID, channelID).Scan(&pts)
+	err := db.QueryRowContext(ctx, `SELECT pts FROM source_sync_channel_state WHERE user_id=? AND channel_id=?`, key.userID, key.channelID).Scan(&pts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}
@@ -74,6 +84,54 @@ func listChannelPts(ctx context.Context, db *sql.DB, userID int64) ([]channelSta
 	return got, rows.Err()
 }
 
+func requireAbsentChannelState(t *testing.T, ctx context.Context, db *sql.DB, key channelStateKey) {
+	t.Helper()
+	pts, ok, err := getChannelPts(ctx, db, key)
+	if err != nil {
+		t.Fatalf("get absent channel state: %v", err)
+	}
+	if ok || pts != 0 {
+		t.Fatalf("absent channel state=(pts=%d ok=%v), want zero/false", pts, ok)
+	}
+}
+
+func applyChannelWrites(t *testing.T, ctx context.Context, db *sql.DB, writes []channelStateWrite) {
+	t.Helper()
+	for _, write := range writes {
+		if err := setChannelPts(ctx, db, write.key, write.pts); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func requireChannelState(t *testing.T, ctx context.Context, db *sql.DB, want channelStateWrite) {
+	t.Helper()
+	pts, ok, err := getChannelPts(ctx, db, want.key)
+	if err != nil {
+		t.Fatalf("channel state user=%d channel=%d: %v", want.key.userID, want.key.channelID, err)
+	}
+	if !ok || pts != want.pts {
+		t.Fatalf("channel state user=%d channel=%d: pts=%d ok=%v, want pts=%d/true", want.key.userID, want.key.channelID, pts, ok, want.pts)
+	}
+}
+
+func requireUserChannels(t *testing.T, ctx context.Context, db *sql.DB, userID int64, want []channelStateRow) {
+	t.Helper()
+	rows, err := listChannelPts(ctx, db, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].channelID < rows[j].channelID })
+	if len(rows) != len(want) {
+		t.Fatalf("ForEach-equivalent user=%d rows=%v, want=%v", userID, rows, want)
+	}
+	for i := range want {
+		if rows[i] != want[i] {
+			t.Fatalf("ForEach-equivalent user=%d rows=%v, want=%v", userID, rows, want)
+		}
+	}
+}
+
 func TestChannelPtsCompositeAuthoritySurvivesReopen(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "channel-state.db")
@@ -89,26 +147,17 @@ func TestChannelPtsCompositeAuthoritySurvivesReopen(t *testing.T) {
 		channelX int64 = 1001
 		channelY int64 = 1002
 	)
+	keyAX := channelStateKey{userID: userA, channelID: channelX}
+	keyAY := channelStateKey{userID: userA, channelID: channelY}
+	keyBX := channelStateKey{userID: userB, channelID: channelX}
 
-	if pts, ok, err := getChannelPts(ctx, db, userA, channelX); err != nil || ok || pts != 0 {
-		_ = db.Close()
-		t.Fatalf("absent channel state=(pts=%d ok=%v err=%v), want zero/false/nil", pts, ok, err)
-	}
-
-	for _, write := range []struct {
-		userID, channelID int64
-		pts               int
-	}{
-		{userA, channelX, 11},
-		{userA, channelY, 21},
-		{userB, channelX, 31},
-		{userA, channelX, 12},
-	} {
-		if err := setChannelPts(ctx, db, write.userID, write.channelID, write.pts); err != nil {
-			_ = db.Close()
-			t.Fatal(err)
-		}
-	}
+	requireAbsentChannelState(t, ctx, db, keyAX)
+	applyChannelWrites(t, ctx, db, []channelStateWrite{
+		{key: keyAX, pts: 11},
+		{key: keyAY, pts: 21},
+		{key: keyBX, pts: 31},
+		{key: keyAX, pts: 12},
+	})
 
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
@@ -116,26 +165,15 @@ func TestChannelPtsCompositeAuthoritySurvivesReopen(t *testing.T) {
 	db = openChannelStateDB(t, path)
 	defer func() { _ = db.Close() }()
 
-	for _, want := range []struct {
-		userID, channelID int64
-		pts               int
-	}{
-		{userA, channelX, 12},
-		{userA, channelY, 21},
-		{userB, channelX, 31},
+	for _, want := range []channelStateWrite{
+		{key: keyAX, pts: 12},
+		{key: keyAY, pts: 21},
+		{key: keyBX, pts: 31},
 	} {
-		pts, ok, err := getChannelPts(ctx, db, want.userID, want.channelID)
-		if err != nil || !ok || pts != want.pts {
-			t.Fatalf("channel state user=%d channel=%d: pts=%d ok=%v err=%v, want pts=%d/true/nil", want.userID, want.channelID, pts, ok, err, want.pts)
-		}
+		requireChannelState(t, ctx, db, want)
 	}
-
-	rows, err := listChannelPts(ctx, db, userA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].channelID < rows[j].channelID })
-	if len(rows) != 2 || rows[0] != (channelStateRow{channelID: channelX, pts: 12}) || rows[1] != (channelStateRow{channelID: channelY, pts: 21}) {
-		t.Fatalf("ForEach-equivalent user A=%v, want [{%d 12} {%d 21}]", rows, channelX, channelY)
-	}
+	requireUserChannels(t, ctx, db, userA, []channelStateRow{
+		{channelID: channelX, pts: 12},
+		{channelID: channelY, pts: 21},
+	})
 }
