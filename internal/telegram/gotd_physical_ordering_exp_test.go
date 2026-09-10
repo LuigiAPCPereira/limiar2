@@ -96,38 +96,48 @@ func (s *managerPhysicalStorage) SetState(ctx context.Context, userID int64, sta
 	})
 }
 
+func updateExistingState(ctx context.Context, db *sql.DB, query string, args ...any) error {
+	result, err := db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (s *managerPhysicalStorage) SetPts(ctx context.Context, userID int64, pts int) error {
 	return s.write("pts", func() error {
-		_, err := s.db.ExecContext(ctx, `UPDATE source_sync_state SET pts=? WHERE user_id=?`, pts, userID)
-		return err
+		return updateExistingState(ctx, s.db, `UPDATE source_sync_state SET pts=? WHERE user_id=?`, pts, userID)
 	})
 }
 
 func (s *managerPhysicalStorage) SetQts(ctx context.Context, userID int64, qts int) error {
 	return s.write("qts", func() error {
-		_, err := s.db.ExecContext(ctx, `UPDATE source_sync_state SET qts=? WHERE user_id=?`, qts, userID)
-		return err
+		return updateExistingState(ctx, s.db, `UPDATE source_sync_state SET qts=? WHERE user_id=?`, qts, userID)
 	})
 }
 
 func (s *managerPhysicalStorage) SetDate(ctx context.Context, userID int64, date int) error {
 	return s.write("date", func() error {
-		_, err := s.db.ExecContext(ctx, `UPDATE source_sync_state SET date=? WHERE user_id=?`, date, userID)
-		return err
+		return updateExistingState(ctx, s.db, `UPDATE source_sync_state SET date=? WHERE user_id=?`, date, userID)
 	})
 }
 
 func (s *managerPhysicalStorage) SetSeq(ctx context.Context, userID int64, seq int) error {
 	return s.write("seq", func() error {
-		_, err := s.db.ExecContext(ctx, `UPDATE source_sync_state SET seq=? WHERE user_id=?`, seq, userID)
-		return err
+		return updateExistingState(ctx, s.db, `UPDATE source_sync_state SET seq=? WHERE user_id=?`, seq, userID)
 	})
 }
 
 func (s *managerPhysicalStorage) SetDateSeq(ctx context.Context, userID int64, date, seq int) error {
 	return s.write("date-seq", func() error {
-		_, err := s.db.ExecContext(ctx, `UPDATE source_sync_state SET date=?, seq=? WHERE user_id=?`, date, seq, userID)
-		return err
+		return updateExistingState(ctx, s.db, `UPDATE source_sync_state SET date=?, seq=? WHERE user_id=?`, date, seq, userID)
 	})
 }
 
