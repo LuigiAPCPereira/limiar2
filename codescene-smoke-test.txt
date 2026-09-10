@@ -1,0 +1,2 @@
+Temporary pull-request event used to verify CodeScene GitHub integration.
+Do not merge; close after the CodeScene check is observed.
