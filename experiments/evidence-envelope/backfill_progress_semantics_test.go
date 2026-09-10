@@ -46,42 +46,68 @@ func readBackfillProgress(db *sql.DB, subscription string) (backfillProgress, bo
 	return progress, true, nil
 }
 
-func advanceBackfillProgress(db *sql.DB, subscription string, lastMessageID int64, completed bool) error {
-	completedValue := 0
+func completedInt(completed bool) int {
 	if completed {
-		completedValue = 1
+		return 1
 	}
+	return 0
+}
 
+func updateBackfillProgress(tx *sql.Tx, subscription string, lastMessageID int64, completed int) (bool, error) {
+	result, err := tx.Exec(`UPDATE backfill_progress_semantics
+		SET last_message_id=?, completed=?
+		WHERE subscription_id=? AND last_message_id <= ?`,
+		lastMessageID, completed, subscription, lastMessageID)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows == 1, nil
+}
+
+func backfillProgressExists(tx *sql.Tx, subscription string) (bool, error) {
+	var exists int
+	if err := tx.QueryRow(`SELECT EXISTS(
+		SELECT 1 FROM backfill_progress_semantics WHERE subscription_id=?
+	)`, subscription).Scan(&exists); err != nil {
+		return false, err
+	}
+	return exists == 1, nil
+}
+
+func insertBackfillProgress(tx *sql.Tx, subscription string, lastMessageID int64, completed int) error {
+	_, err := tx.Exec(`INSERT INTO backfill_progress_semantics(subscription_id, last_message_id, completed)
+		VALUES (?, ?, ?)`, subscription, lastMessageID, completed)
+	return err
+}
+
+func advanceBackfillProgress(db *sql.DB, subscription string, lastMessageID int64, completed bool) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	result, err := tx.Exec(`UPDATE backfill_progress_semantics
-		SET last_message_id=?, completed=?
-		WHERE subscription_id=? AND last_message_id <= ?`,
-		lastMessageID, completedValue, subscription, lastMessageID)
+	completedValue := completedInt(completed)
+	updated, err := updateBackfillProgress(tx, subscription, lastMessageID, completedValue)
 	if err != nil {
 		return err
 	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 1 {
+	if updated {
 		return tx.Commit()
 	}
 
-	var exists int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM backfill_progress_semantics WHERE subscription_id=?`, subscription).Scan(&exists); err != nil {
+	exists, err := backfillProgressExists(tx, subscription)
+	if err != nil {
 		return err
 	}
-	if exists != 0 {
+	if exists {
 		return errors.New("backfill progress regression rejected")
 	}
-	if _, err := tx.Exec(`INSERT INTO backfill_progress_semantics(subscription_id, last_message_id, completed)
-		VALUES (?, ?, ?)`, subscription, lastMessageID, completedValue); err != nil {
+	if err := insertBackfillProgress(tx, subscription, lastMessageID, completedValue); err != nil {
 		return err
 	}
 	return tx.Commit()
