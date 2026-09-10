@@ -2,19 +2,13 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
 	"testing"
 )
 
-func TestOpenResumesClaimedUnmigratedDatabase(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "partially-initialized.db")
-
-	db, err := sql.Open(driverName, databaseURI(path, false))
-	if err != nil {
-		t.Fatal(err)
-	}
+func claimUnmigratedTestDatabase(t *testing.T, ctx context.Context, path string) {
+	t.Helper()
+	db := mustOpenSQL(t, path, false)
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
@@ -26,55 +20,32 @@ func TestOpenResumesClaimedUnmigratedDatabase(t *testing.T) {
 		_ = db.Close()
 		t.Fatal(err)
 	}
-
-	var beforeVersion int
-	if err := db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&beforeVersion); err != nil {
-		_ = db.Close()
-		t.Fatal(err)
-	}
-	if beforeVersion != 0 {
-		_ = db.Close()
-		t.Fatalf("user_version antes do restart=%d, want 0", beforeVersion)
-	}
+	requireEqual(t, "user_version antes do restart",
+		mustQueryInt64(t, db, `PRAGMA user_version`), int64(0))
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
+}
 
-	store, err := Open(ctx, path)
-	if err != nil {
-		t.Fatalf("Open não retomou bootstrap parcial: %v", err)
-	}
-	defer func() { _ = store.Close() }()
+func TestOpenResumesClaimedUnmigratedDatabase(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "partially-initialized.db")
+	claimUnmigratedTestDatabase(t, ctx, path)
 
-	var gotApplicationID int64
-	if err := store.db.QueryRowContext(ctx, `PRAGMA application_id`).Scan(&gotApplicationID); err != nil {
-		t.Fatal(err)
-	}
-	if gotApplicationID != applicationID {
-		t.Fatalf("application_id=%d, want %d", gotApplicationID, applicationID)
-	}
-
-	var userVersion int
-	if err := store.db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&userVersion); err != nil {
-		t.Fatal(err)
-	}
-	if userVersion != 1 {
-		t.Fatalf("user_version após retomada=%d, want 1", userVersion)
-	}
-
-	var evidenceTables int
-	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='evidence'`).Scan(&evidenceTables); err != nil {
-		t.Fatal(err)
-	}
-	if evidenceTables != 1 {
-		t.Fatalf("evidence table count=%d, want 1", evidenceTables)
-	}
+	store := mustOpenStoreAt(t, path)
+	defer closeTestStore(t, store)
+	requireEqual(t, "application_id",
+		mustQueryInt64(t, store.db, `PRAGMA application_id`), int64(applicationID))
+	requireEqual(t, "user_version após retomada",
+		mustQueryInt64(t, store.db, `PRAGMA user_version`), int64(1))
+	requireEqual(t, "evidence table count", mustQueryInt64(t, store.db,
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='evidence'`), int64(1))
 }
 
 func TestOperationalBaselineSurvivesPhysicalConnectionReplacement(t *testing.T) {
 	ctx := context.Background()
 	_, store := openTestStore(t)
-	defer func() { _ = store.Close() }()
+	defer closeTestStore(t, store)
 
 	if err := verifyOperationalBaseline(ctx, store.db); err != nil {
 		t.Fatalf("baseline inicial: %v", err)
