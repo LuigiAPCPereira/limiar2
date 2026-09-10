@@ -35,6 +35,11 @@ type channelStateWrite struct {
 	pts int
 }
 
+type channelEnumerationExpectation struct {
+	userID int64
+	rows   []channelStateRow
+}
+
 func openChannelStateDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite3", "file:"+path)
@@ -115,19 +120,19 @@ func requireChannelState(t *testing.T, ctx context.Context, db *sql.DB, want cha
 	}
 }
 
-func requireUserChannels(t *testing.T, ctx context.Context, db *sql.DB, userID int64, want []channelStateRow) {
+func requireUserChannels(t *testing.T, ctx context.Context, db *sql.DB, want channelEnumerationExpectation) {
 	t.Helper()
-	rows, err := listChannelPts(ctx, db, userID)
+	rows, err := listChannelPts(ctx, db, want.userID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].channelID < rows[j].channelID })
-	if len(rows) != len(want) {
-		t.Fatalf("ForEach-equivalent user=%d rows=%v, want=%v", userID, rows, want)
+	if len(rows) != len(want.rows) {
+		t.Fatalf("ForEach-equivalent user=%d rows=%v, want=%v", want.userID, rows, want.rows)
 	}
-	for i := range want {
-		if rows[i] != want[i] {
-			t.Fatalf("ForEach-equivalent user=%d rows=%v, want=%v", userID, rows, want)
+	for i := range want.rows {
+		if rows[i] != want.rows[i] {
+			t.Fatalf("ForEach-equivalent user=%d rows=%v, want=%v", want.userID, rows, want.rows)
 		}
 	}
 }
@@ -172,8 +177,11 @@ func TestChannelPtsCompositeAuthoritySurvivesReopen(t *testing.T) {
 	} {
 		requireChannelState(t, ctx, db, want)
 	}
-	requireUserChannels(t, ctx, db, userA, []channelStateRow{
-		{channelID: channelX, pts: 12},
-		{channelID: channelY, pts: 21},
+	requireUserChannels(t, ctx, db, channelEnumerationExpectation{
+		userID: userA,
+		rows: []channelStateRow{
+			{channelID: channelX, pts: 12},
+			{channelID: channelY, pts: 21},
+		},
 	})
 }
