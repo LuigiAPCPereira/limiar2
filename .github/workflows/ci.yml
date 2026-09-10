@@ -40,6 +40,11 @@ jobs:
     - name: Enforce Accepted Storage Dependency Boundaries
       run: bash scripts/ci/check-storage-dependencies.sh
 
+    - name: Test SQLite Storage without CGO
+      env:
+        CGO_ENABLED: "0"
+      run: go test -count=1 ./internal/storage/sqlite/...
+
     - name: Build
       run: go build -v ./...
 
