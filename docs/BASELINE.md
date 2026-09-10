@@ -115,7 +115,16 @@ camada só se tornam autoridade quando cobertos por ADR Accepted.
   - migrations SQL versionadas como única authority de schema do banco novo;
   - capabilities/repositories estreitos em vez de `*sql.DB` global como authority;
   - payload de Evidence opaco/codec-agnostic no storage;
-  - `SourceSyncState` e `BackfillProgress` como authorities distintas mesmo no mesmo arquivo físico.
+  - `SourceSyncState` e `BackfillProgress` como authorities distintas mesmo no mesmo arquivo físico;
+- **ADR 020 — Schema físico mínimo de Evidence**, que estabelece:
+  - UUIDv4 via `crypto/rand` persistido como `BLOB(16)`;
+  - payload byte-preserving e `payload_sha256` calculado pelo boundary de persistência;
+  - timestamps Unix em milissegundos;
+  - Evidence repetida permitida sem deduplicação física por hash/message ID;
+  - tabela `STRICT`, capability estreita de append e guards persistentes contra `UPDATE`/`DELETE`;
+  - ausência inicial de índices secundários sem workload que os justifique.
+
+O primeiro slice autorizado pelos ADRs 019 e 020 já está materializado em `internal/storage/sqlite`: o novo banco é aberto side-by-side, reivindicado por `application_id`, aplica a baseline operacional, executa migrations versionadas e expõe `EvidenceAppender` sem colocar o storage legado sob migração in-place.
 
 Com o ADR 016 aceito, o ADR 005 fica superseded no escopo do contrato raw por mensagem e
 o ADR 006 fica retired/superseded no escopo de `LastMessageID` como autoridade de sync
@@ -131,6 +140,7 @@ sem criar authority sobre o novo banco.
 Os itens abaixo são resultados de pesquisa, experimentos e propostas da rebaseline.
 **Eles não devem ser tratados como decisões apenas por aparecerem aqui.**
 
+- **ADR 021 — Schema físico de SourceSyncState** está `Proposed`: common state completo por `user_id`, channel PTS por `(user_id, channel_id)`, ausência distinta de zero/erro e setters parciais restritos a state existente. A proposta não autoriza implementação até aceitação explícita do mantenedor;
 - política e tooling concretos de importação side-by-side do banco legado;
 - Processing Generations para derivados reconstruíveis e reprocessamento seguro;
 - Source Message Projection separada da Evidence;
@@ -171,13 +181,11 @@ A implementação atual usa, entre outras dependências:
 - Go 1.26.2 no `go.mod`;
 - `github.com/gotd/td` v0.161.0 para Telegram/MTProto;
 - `turso.tech/database/tursogo` v0.7.2 para o storage legado atualmente em produção;
+- `github.com/ncruces/go-sqlite3 v0.35.3` para o novo storage SQLite side-by-side;
 - Cobra/Viper para CLI/config;
 - `net/http` para o dashboard atual.
 
-O ADR 019 já escolhe `github.com/ncruces/go-sqlite3 v0.35.3` como baseline estrutural do
-**novo** storage, mas essa dependência só deve entrar no caminho normal de produção junto
-do slice autorizado e verificado correspondente. A coexistência temporária com Tursogo é
-esperada durante a transição side-by-side.
+A coexistência temporária entre ncruces/SQLite e Tursogo é deliberada: o primeiro atende o novo storage autorizado pelos ADRs 019/020, enquanto o segundo permanece restrito ao legado durante compatibilidade, importação e rollback.
 
 Essas versões descrevem o repositório atual. Não são congeladas pela baseline.
 Mudanças estruturais seguem `AGENTS.md` e ADRs; updates compatíveis devem ser avaliados
@@ -187,10 +195,10 @@ com documentação primária e testes proporcionais ao risco.
 
 ## 7. Questões abertas prioritárias
 
-1. schema físico mínimo e versionado de Evidence, incluindo ID, timestamps e índices essenciais;
-2. integração do novo storage com os contracts reais de Evidence, `SourceSyncState` e `BackfillProgress`;
+1. aceitação ou revisão do ADR 021 antes de materializar o schema físico de `SourceSyncState`;
+2. contrato físico de `BackfillProgress` e sua integração com o ordering Evidence-before-progress;
 3. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007);
-4. backup/restore do schema final e revalidação de locking/WAL nas plataformas suportadas;
+4. backup/restore do novo storage e revalidação de locking/WAL nas plataformas suportadas;
 5. estratégia final de sessão/peer state;
 6. boundary de mídia entre evidência de fonte e cache/apresentação;
 7. materialização dos contratos de Processing Generations e Source Projection;
