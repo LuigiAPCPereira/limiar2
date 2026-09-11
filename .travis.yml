@@ -59,8 +59,8 @@ script:
         echo "Esperado GOARCH=arm64, obtido $(go env GOARCH)" >&2
         exit 1
       fi
-      if [ "${CGO_ENABLED:-unset}" != "0" ]; then
-        echo "Esperado CGO_ENABLED=0, obtido ${CGO_ENABLED:-unset}" >&2
+      if [ "$(go env CGO_ENABLED)" != "0" ]; then
+        echo "Esperado CGO_ENABLED efetivo=0, obtido $(go env CGO_ENABLED)" >&2
         exit 1
       fi
       echo "Executando internal/storage/sqlite nativamente em Linux ARM64 com CGO_ENABLED=0"
