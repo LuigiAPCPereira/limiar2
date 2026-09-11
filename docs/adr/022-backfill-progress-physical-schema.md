@@ -9,9 +9,9 @@ O ADR 016 define que backfill histórico possui lifecycle e progresso próprios 
 
 A evidência acumulada agora cobre também a semântica física mínima de `BackfillProgress`:
 
-- EXP-LIMIAR-003 suportou a separação de authority entre `SourceSyncState` e `BackfillProgress` e explicitou que `Completed=true` descreve apenas cobertura histórica;
+- EXP-LIMIAR-003 suportou a separação de autoridade entre `SourceSyncState` e `BackfillProgress` e explicitou que `Completed=true` descreve apenas cobertura histórica;
 - EXP-LIMIAR-008 suportou ordering físico `Evidence -> BackfillProgress` no mesmo SQLite experimental;
-- o legado mostrou `LastMessageID == 0` como sentinel de primeira execução, mas o F-ING-010 já demonstrou que esse campo mistura live e history e não pode ser promovido diretamente a nova authority;
+- o legado mostrou `LastMessageID == 0` como sentinela de primeira execução, mas o F-ING-010 já demonstrou que esse campo mistura live e history e não pode ser promovido diretamente a nova autoridade;
 - PR #185 validou em SQLite real que ausência pode ser distinguida de `last_message_id=0`, que o progresso pode ser isolado por `subscription_id`, que avanço monotônico e persistência sobrevivem a reopen e que regressões podem ser rejeitadas atomicamente.
 
 A proposta abaixo congela somente o contrato físico mínimo que essas evidências suportam. Ela não decide paginação final, política de janela histórica, wiring do collector legado nem importação do cursor antigo.
@@ -30,7 +30,7 @@ CREATE TABLE backfill_progress (
 ) STRICT, WITHOUT ROWID;
 ```
 
-`subscription_id` identifica o lifecycle histórico cuja posição está sendo certificada. Essa authority é operacional e não substitui identidade de domínio nem `SourceSyncState`.
+`subscription_id` identifica o lifecycle histórico cuja posição está sendo certificada. Essa autoridade é operacional e não substitui identidade de domínio nem `SourceSyncState`.
 
 ### 2. Ausência é diferente de posição zero
 
@@ -42,7 +42,7 @@ progress ausente
 falha de storage
 ```
 
-Uma linha existente com `last_message_id = 0` não equivale a ausência. Isso evita transportar para o novo storage o sentinel implícito usado pelo legado.
+Uma linha existente com `last_message_id = 0` não equivale a ausência. Isso evita transportar para o novo storage a sentinela implícita usada pelo legado.
 
 ### 3. Avanço de posição é monotônico
 
@@ -79,7 +79,7 @@ SourceSyncState  -> continuidade live certificada
 BackfillProgress -> posição/cobertura histórica
 ```
 
-Não haverá FK ou write path que transforme `BackfillProgress` em requisito de existência de `SourceSyncState`, ou vice-versa, sem evidência futura específica.
+Não haverá FK ou caminho de escrita que transforme `BackfillProgress` em requisito de existência de `SourceSyncState`, ou vice-versa, sem evidência futura específica.
 
 ### 6. Evidence durável precede avanço de BackfillProgress
 
@@ -95,26 +95,26 @@ Evidence necessária durável
 BackfillProgress pode avançar
 ```
 
-Se a persistência da Evidence falhar, o progresso não avança. Evidence durável com progresso antigo é aceitável e implica replay preferível a perda silenciosa.
+Se a persistência da Evidence falhar, o progresso não avança. Evidence durável com progresso antigo é aceitável e implica reprocessamento preferível a perda silenciosa.
 
-### 7. Migrations SQL são a authority do schema
+### 7. Migrations SQL são a autoridade do schema
 
 A tabela entra no novo banco por migration SQL versionada conforme ADR 019.
 
-O adapter não cria nem repara schema ad hoc durante reads/writes.
+O adapter não cria nem repara schema ad hoc durante leituras/escritas.
 
 ### 8. Capability permanece estreita
 
 Consumidores não recebem `*sql.DB`. A implementação deve expor apenas operações necessárias ao lifecycle de backfill, incluindo leitura, avanço monotônico e marcação de conclusão quando aplicável.
 
-A API concreta pode ser refinada durante implementação, desde que não permita regressão silenciosa nem misture authority live.
+A API concreta pode ser refinada durante implementação, desde que não permita regressão silenciosa nem misture autoridade live.
 
 ## Consequências
 
 ### Positivas
 
-- ausência não depende de sentinel numérico;
-- progresso histórico deixa de compartilhar authority com live sync;
+- ausência não depende de sentinela numérico;
+- progresso histórico deixa de compartilhar autoridade com live sync;
 - regressões são rejeitadas explicitamente;
 - posição e conclusão sobrevivem a restart;
 - o contrato continua pequeno e compatível com o SQLite já adotado;
@@ -122,7 +122,7 @@ A API concreta pode ser refinada durante implementação, desde que não permita
 
 ### Custos
 
-- o write path precisa de atomicidade para avanço/criação;
+- o caminho de escrita precisa de atomicidade para avanço/criação;
 - `completed` exige semântica disciplinada para não ser confundido com integridade live;
 - importação do legado precisa decidir separadamente como interpretar `channels.last_message_id`;
 - paginação e política de janela histórica continuam fora deste ADR.
