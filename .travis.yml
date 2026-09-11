@@ -11,6 +11,10 @@ jobs:
   include:
     - name: "Linux X64 / race"
       env: LIMIAR_CI_MODE=default CGO_ENABLED=1
+      addons:
+        apt:
+          packages:
+            - gnupg
     - name: "Linux X64 / CGO disabled experiment"
       env: LIMIAR_CI_MODE=cgo-disabled CGO_ENABLED=0
     - name: "SQLite portability / cross-build experiment"
@@ -26,11 +30,6 @@ cache:
   directories:
     - $HOME/.cache/go-build
     - $GOPATH/pkg/mod
-
-addons:
-  apt:
-    packages:
-      - gnupg
 
 install:
   - go mod download
