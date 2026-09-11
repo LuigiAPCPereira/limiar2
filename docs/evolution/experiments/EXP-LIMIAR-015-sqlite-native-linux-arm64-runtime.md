@@ -36,7 +36,7 @@ O job confirma o target efetivo do toolchain e o modo CGO antes de executar a su
 Em seguida executa:
 
 ```sh
-go test -v -count=1 -timeout=5m ./internal/storage/sqlite
+go test -v -count=1 ./internal/storage/sqlite
 ```
 
 Os jobs Linux X64/race, Linux X64/CGO-disabled e cross-build permanecem presentes para detectar regressões independentes do novo runner.
@@ -51,16 +51,18 @@ Os jobs independentes Linux X64/race, Linux X64/CGO-disabled e cross-build tamb�
 
 A hipótese é, portanto, `Supported` para o boundary e ambiente efetivamente exercitados: `internal/storage/sqlite`, Linux ARM64 nativo, Noble, Go 1.26.2 e `CGO_ENABLED=0`.
 
+Um endurecimento posterior do harness adicionou diagnósticos de target, verificação explícita de `CGO_ENABLED=0` e `-timeout=5m`. O build Travis `278804127`, no HEAD `2b62e8615b6d89dcea904cc304143645ff70cf6c`, manteve verdes os três jobs independentes, mas falhou no job ARM64. Como o resultado disponível do check não atribui a falha a uma asserção específica, a correção seguinte isola a única mudança que altera o orçamento temporal da suíte: remove `-timeout=5m` e preserva os diagnósticos de GOOS/GOARCH/CGO. Essa falha não é tratada como Evidence contra o storage sem reprodução que a vincule ao comportamento do SQLite.
+
 ## Critério de suporte
 
 A hipótese é marcada `Supported` porque:
 
 1. o job foi provisionado como runner Travis Linux ARM64 nativo;
 2. o harness exige `go env GOOS=linux` e `go env GOARCH=arm64` antes da suíte;
-3. o job foi configurado com `CGO_ENABLED=0`, e o harness passa a verificá-lo explicitamente;
+3. o job é configurado com `CGO_ENABLED=0`, e o harness também o verifica explicitamente;
 4. a suíte `internal/storage/sqlite` concluiu com sucesso no CI real do HEAD executável correspondente.
 
-A verificação explícita de `CGO_ENABLED` e os diagnósticos de target foram endurecidos depois da coleta inicial de Evidence; essa mudança não amplia a conclusão e deve fechar seus próprios gates antes do merge da PR.
+Os diagnósticos de target e a verificação explícita de `CGO_ENABLED` foram endurecidos depois da coleta inicial de Evidence. O HEAD que preserva esses checks sem introduzir um timeout artificial deve fechar seus próprios gates antes do merge da PR.
 
 ## Limites
 
