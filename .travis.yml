@@ -13,6 +13,8 @@ jobs:
       env: LIMIAR_CI_MODE=default CGO_ENABLED=1
     - name: "Linux X64 / CGO disabled experiment"
       env: LIMIAR_CI_MODE=cgo-disabled CGO_ENABLED=0
+    - name: "SQLite portability / cross-build experiment"
+      env: LIMIAR_CI_MODE=sqlite-cross-build CGO_ENABLED=0
 
 cache:
   directories:
@@ -34,17 +36,29 @@ install:
 
 script:
   - go mod verify
-  - go vet ./...
-  - bash scripts/ci/check-storage-dependencies.sh
-  - go build -v ./...
   - |
-    if [ "${LIMIAR_CI_MODE}" = "default" ]; then
-      "$(go env GOPATH)/bin/golangci-lint" run --timeout=5m
-      "$(go env GOPATH)/bin/gosec" -exclude-dir=.agents ./...
-      go test -v -race -coverprofile=coverage.out -count=1 ./...
-      go tool cover -func=coverage.out
+    if [ "${LIMIAR_CI_MODE}" = "sqlite-cross-build" ]; then
+      for target in linux/arm64 windows/amd64 darwin/arm64; do
+        GOOS=${target%/*}
+        GOARCH=${target#*/}
+        output="/tmp/sqlite-${GOOS}-${GOARCH}.test"
+        echo "Compilando internal/storage/sqlite para ${GOOS}/${GOARCH} com CGO_ENABLED=0"
+        GOOS="${GOOS}" GOARCH="${GOARCH}" CGO_ENABLED=0 \
+          go test -c -o "${output}" ./internal/storage/sqlite
+        test -s "${output}"
+      done
     else
-      go test -v -count=1 ./...
+      go vet ./...
+      bash scripts/ci/check-storage-dependencies.sh
+      go build -v ./...
+      if [ "${LIMIAR_CI_MODE}" = "default" ]; then
+        "$(go env GOPATH)/bin/golangci-lint" run --timeout=5m
+        "$(go env GOPATH)/bin/gosec" -exclude-dir=.agents ./...
+        go test -v -race -coverprofile=coverage.out -count=1 ./...
+        go tool cover -func=coverage.out
+      else
+        go test -v -count=1 ./...
+      fi
     fi
 
 after_success:
@@ -65,6 +79,8 @@ after_success:
           -n "travis-${TRAVIS_BUILD_NUMBER}" \
           -f coverage.out
       fi
-    else
+    elif [ "${LIMIAR_CI_MODE}" = "cgo-disabled" ]; then
       echo "Job experimental CGO_ENABLED=0 concluído; upload de cobertura não se aplica."
+    else
+      echo "Job experimental de cross-build do SQLite concluído; upload de cobertura não se aplica."
     fi
