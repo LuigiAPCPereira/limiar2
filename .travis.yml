@@ -15,6 +15,9 @@ jobs:
       env: LIMIAR_CI_MODE=cgo-disabled CGO_ENABLED=0
     - name: "SQLite portability / cross-build experiment"
       env: LIMIAR_CI_MODE=sqlite-cross-build CGO_ENABLED=0
+    - name: "SQLite runtime / native Linux ARM64 experiment"
+      arch: arm64
+      env: LIMIAR_CI_MODE=sqlite-native-arm64 CGO_ENABLED=0
 
 cache:
   directories:
@@ -47,6 +50,11 @@ script:
           go test -c -o "${output}" ./internal/storage/sqlite
         test -s "${output}"
       done
+    elif [ "${LIMIAR_CI_MODE}" = "sqlite-native-arm64" ]; then
+      test "$(go env GOOS)" = "linux"
+      test "$(go env GOARCH)" = "arm64"
+      echo "Executando internal/storage/sqlite nativamente em Linux ARM64 com CGO_ENABLED=0"
+      go test -v -count=1 ./internal/storage/sqlite
     else
       go vet ./...
       bash scripts/ci/check-storage-dependencies.sh
@@ -81,6 +89,8 @@ after_success:
       fi
     elif [ "${LIMIAR_CI_MODE}" = "cgo-disabled" ]; then
       echo "Job experimental CGO_ENABLED=0 concluído; upload de cobertura não se aplica."
+    elif [ "${LIMIAR_CI_MODE}" = "sqlite-native-arm64" ]; then
+      echo "Job experimental nativo Linux ARM64 do SQLite concluído; upload de cobertura não se aplica."
     else
       echo "Job experimental de cross-build do SQLite concluído; upload de cobertura não se aplica."
     fi
