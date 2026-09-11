@@ -31,7 +31,7 @@ arch: arm64
 CGO_ENABLED=0
 ```
 
-O job confirma o target efetivo do toolchain e o modo CGO antes de executar a suíte. Divergências falham com diagnóstico explícito.
+O harness conhecido como funcional confirma `GOOS=linux` e `GOARCH=arm64` com `go env` antes de executar a suíte. O próprio job declara `CGO_ENABLED=0` em seu ambiente.
 
 Em seguida executa:
 
@@ -49,27 +49,29 @@ O job `SQLite runtime / native Linux ARM64 experiment` foi provisionado com `arc
 
 Os jobs independentes Linux X64/race, Linux X64/CGO-disabled e cross-build também permaneceram verdes no mesmo build, reduzindo a chance de o resultado ARM64 esconder regressão independente no harness compartilhado.
 
-Essa execução constitui Evidence positiva para o boundary e ambiente efetivamente exercitados: `internal/storage/sqlite`, Linux ARM64 nativo, Noble, Go 1.26.2 e `CGO_ENABLED=0`. Porém o experimento permanece `In Progress` enquanto o harness endurecido não voltar a fechar verde no próprio HEAD final.
+Essa execução constitui Evidence positiva para o boundary e ambiente efetivamente exercitados: `internal/storage/sqlite`, Linux ARM64 nativo, Noble, Go 1.26.2 e `CGO_ENABLED=0`. Porém o experimento permanece `In Progress` enquanto o HEAD final da PR não reproduzir um resultado verde com o harness estabilizado.
 
 Um endurecimento posterior do harness adicionou diagnósticos de target, verificação explícita de `CGO_ENABLED=0` e `-timeout=5m`. O build Travis `278804127`, no HEAD `2b62e8615b6d89dcea904cc304143645ff70cf6c`, manteve verdes os três jobs independentes, mas falhou no job ARM64.
 
-O build seguinte `278804510`, no HEAD `44d8d24c3e46d59a99854a5421726ce325ffe43a`, removeu apenas o timeout artificial e voltou a falhar somente no job ARM64. Isso falsifica a hipótese de que `-timeout=5m` explicava a regressão. Como GOOS e GOARCH já eram validados por `test` no HEAD verde `4c4dab9831cdc5702e0969bbb92b44dcb26026ba`, a diferença restante introduzida pelo endurecimento é a validação explícita de CGO e a forma diagnóstica dos checks de target.
+O build seguinte `278804510`, no HEAD `44d8d24c3e46d59a99854a5421726ce325ffe43a`, removeu apenas o timeout artificial e voltou a falhar somente no job ARM64. Isso falsificou a hipótese de que `-timeout=5m` explicava a regressão.
 
-O próximo isolamento preserva os diagnósticos de GOOS/GOARCH e continua exigindo CGO desabilitado, mas valida o **modo efetivo do toolchain** com `go env CGO_ENABLED` em vez de depender diretamente da variável de shell do Travis. Essa distinção testa se a regressão pertence ao plumbing do harness sem relaxar a propriedade arquitetural observada.
+A tentativa seguinte substituiu a leitura direta da variável de shell pela verificação do modo efetivo do toolchain com `go env CGO_ENABLED`. O build Travis `278805201`, no HEAD `eddfb50b49daf74c400963ba7e0190555dde85aa`, ainda falhou exclusivamente no job ARM64, enquanto Linux X64/race, CGO-disabled e cross-build permaneceram verdes. Portanto essa alteração também não estabilizou o harness.
 
-Nenhuma dessas falhas posteriores é tratada como Evidence contra o storage enquanto não houver reprodução que vincule a falha ao comportamento do SQLite.
+Como o HEAD comprovadamente verde `4c4dab9831cdc5702e0969bbb92b44dcb26026ba` já validava `GOOS` e `GOARCH` e executava a mesma suíte no mesmo tipo de runner, a próxima ação de menor escopo é restaurar exatamente esse trecho conhecido como funcional. Isso remove endurecimentos do harness que não produziram Evidence adicional confiável e evita atribuir ao storage uma falha que não foi vinculada ao SQLite.
+
+Nenhuma das falhas posteriores é tratada como Evidence contra o storage enquanto não houver reprodução que associe a falha ao comportamento da suíte SQLite.
 
 ## Critério de promoção
 
-O experimento pode ser promovido para `Supported` quando o harness endurecido fechar verde no próprio HEAD final, preservando simultaneamente:
+O experimento pode ser promovido para `Supported` quando o HEAD final fechar verde preservando simultaneamente:
 
 1. runner Travis Linux ARM64 nativo;
 2. `go env GOOS=linux`;
 3. `go env GOARCH=arm64`;
-4. `go env CGO_ENABLED=0`;
+4. job configurado com `CGO_ENABLED=0`;
 5. execução verde de `go test -v -count=1 ./internal/storage/sqlite`.
 
-A execução verde anterior já demonstra que o storage pode operar nesse boundary; o gate pendente é estabilizar e validar o harness que documenta essas precondições antes do merge da PR.
+A execução verde anterior já demonstra que o storage pode operar nesse boundary; o gate pendente é obter novamente Evidence verde no HEAD que será integrado, sem ampliar o harness além do necessário para responder à pergunta do experimento.
 
 ## Limites
 
