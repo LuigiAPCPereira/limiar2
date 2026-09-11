@@ -1,7 +1,7 @@
 # EXP-LIMIAR-011 — Backup/restore consistente do novo SQLite
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Supported
 
 ## Hipótese
 
@@ -45,10 +45,10 @@ A hipótese pode ser considerada suportada neste boundary quando o teste demonst
 
 ## Resultado atual
 
-`In Progress`.
+`Supported` para o boundary exercitado no HEAD validado da PR #187.
 
-O harness foi materializado em `internal/storage/sqlite/backup_experiment_test.go`. O resultado só deve mudar para `Supported` depois que os gates reais executarem o teste no HEAD da PR.
+O harness materializado em `internal/storage/sqlite/backup_experiment_test.go` executou com sucesso no Travis CI em Linux Noble com Go 1.26.2, incluindo `go test -v -race -coverprofile=coverage.out -count=1 ./...`. CodeScene e Codecov também fecharam verdes para o mesmo HEAD. Isso suporta somente as oito propriedades listadas acima; não escolhe o mecanismo final de backup, não define permissões operacionais do artefato e não autoriza API de produção.
 
 ## Próximo gate
 
-Executar os gates Go/CI do projeto. Se o comportamento for suportado, usar a Evidence para decidir se o mecanismo de produção deve usar a Online Backup API do ncruces, `VACUUM INTO` ou outro boundary menor. A decisão de produção também precisa fechar explicitamente a política de permissões do artefato de backup; o experimento atual não transforma esse aspecto operacional em garantia implícita. Não transformar o mecanismo experimental em API permanente sem decisão proporcional ao risco operacional.
+Usar esta Evidence em uma decisão proporcional ao risco operacional para escolher entre a Online Backup API do ncruces, `VACUUM INTO` ou outro boundary menor. Essa decisão precisa fechar explicitamente a política de permissões do artefato de backup, retenção/rotação e comportamento de restore. Não transformar o mecanismo experimental em API permanente por inércia.
