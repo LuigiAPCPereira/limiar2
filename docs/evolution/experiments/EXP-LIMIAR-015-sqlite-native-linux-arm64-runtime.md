@@ -1,7 +1,7 @@
 # EXP-LIMIAR-015 — Runtime nativo do novo storage SQLite em Linux ARM64
 
 Authority: Experiment
-Status: In Progress
+Status: Supported
 
 ## Pergunta
 
@@ -49,29 +49,25 @@ O job `SQLite runtime / native Linux ARM64 experiment` foi provisionado com `arc
 
 Os jobs independentes Linux X64/race, Linux X64/CGO-disabled e cross-build também permaneceram verdes no mesmo build, reduzindo a chance de o resultado ARM64 esconder regressão independente no harness compartilhado.
 
-Essa execução constitui Evidence positiva para o boundary e ambiente efetivamente exercitados: `internal/storage/sqlite`, Linux ARM64 nativo, Noble, Go 1.26.2 e `CGO_ENABLED=0`. Porém o experimento permanece `In Progress` enquanto o HEAD final da PR não reproduzir um resultado verde com o harness estabilizado.
-
 Um endurecimento posterior do harness adicionou diagnósticos de target, verificação explícita de `CGO_ENABLED=0` e `-timeout=5m`. O build Travis `278804127`, no HEAD `2b62e8615b6d89dcea904cc304143645ff70cf6c`, manteve verdes os três jobs independentes, mas falhou no job ARM64.
 
 O build seguinte `278804510`, no HEAD `44d8d24c3e46d59a99854a5421726ce325ffe43a`, removeu apenas o timeout artificial e voltou a falhar somente no job ARM64. Isso falsificou a hipótese de que `-timeout=5m` explicava a regressão.
 
 A tentativa seguinte substituiu a leitura direta da variável de shell pela verificação do modo efetivo do toolchain com `go env CGO_ENABLED`. O build Travis `278805201`, no HEAD `eddfb50b49daf74c400963ba7e0190555dde85aa`, ainda falhou exclusivamente no job ARM64, enquanto Linux X64/race, CGO-disabled e cross-build permaneceram verdes. Portanto essa alteração também não estabilizou o harness.
 
-Como o HEAD comprovadamente verde `4c4dab9831cdc5702e0969bbb92b44dcb26026ba` já validava `GOOS` e `GOARCH` e executava a mesma suíte no mesmo tipo de runner, a próxima ação de menor escopo é restaurar exatamente esse trecho conhecido como funcional. Isso remove endurecimentos do harness que não produziram Evidence adicional confiável e evita atribuir ao storage uma falha que não foi vinculada ao SQLite.
+Como o HEAD comprovadamente verde `4c4dab9831cdc5702e0969bbb92b44dcb26026ba` já validava `GOOS` e `GOARCH` e executava a mesma suíte no mesmo tipo de runner, o harness foi restaurado exatamente para esse trecho conhecido como funcional. Nenhuma das falhas intermediárias é tratada como Evidence contra o storage porque não houve reprodução que as associasse ao comportamento da suíte SQLite.
 
-Nenhuma das falhas posteriores é tratada como Evidence contra o storage enquanto não houver reprodução que associe a falha ao comportamento da suíte SQLite.
+A restauração fechou o ciclo experimental: Travis CI build `278805532`, no HEAD `eeb3f78855daae92871b5ce69bebff168510a95c`, passou novamente com os quatro jobs. O job nativo Linux ARM64 foi provisionado com `arch: arm64`, Go 1.26.2, `LIMIAR_CI_MODE=sqlite-native-arm64` e `CGO_ENABLED=0`, confirmou `GOOS=linux` e `GOARCH=arm64` e executou verde `go test -v -count=1 ./internal/storage/sqlite`. Linux X64/race, Linux X64/CGO-disabled e cross-build também ficaram verdes no mesmo build.
 
-## Critério de promoção
+A repetição verde no HEAD estabilizado satisfaz o critério de promoção deste experimento e constitui Evidence positiva para o boundary efetivamente exercitado: `internal/storage/sqlite`, Linux ARM64 nativo, Ubuntu Noble, Go 1.26.2 e job configurado com `CGO_ENABLED=0`.
 
-O experimento pode ser promovido para `Supported` quando o HEAD final fechar verde preservando simultaneamente:
+## Conclusão
 
-1. runner Travis Linux ARM64 nativo;
-2. `go env GOOS=linux`;
-3. `go env GOARCH=arm64`;
-4. job configurado com `CGO_ENABLED=0`;
-5. execução verde de `go test -v -count=1 ./internal/storage/sqlite`.
+**Supported**, com escopo estrito ao experimento observado. O novo storage SQLite executou sua suíte real com sucesso em Linux ARM64 nativo e reproduziu o resultado depois que alterações instrumentais do harness foram removidas.
 
-A execução verde anterior já demonstra que o storage pode operar nesse boundary; o gate pendente é obter novamente Evidence verde no HEAD que será integrado, sem ampliar o harness além do necessário para responder à pergunta do experimento.
+O resultado demonstra viabilidade operacional do boundary SQLite nessa combinação de sistema operacional, arquitetura e toolchain. Não transforma Linux ARM64 em plataforma oficialmente suportada pelo produto e não amplia a Evidence para o binário completo do Limiar.
+
+A tentativa de verificar `CGO_ENABLED` novamente dentro do script não foi mantida: durante o isolamento ela esteve correlacionada a um harness vermelho sem falha atribuída ao storage. Para este experimento, a Evidence preserva a configuração `CGO_ENABLED=0` do job e a execução verde resultante; endurecer novamente essa instrumentação exige uma investigação própria em vez de reabrir a hipótese já respondida.
 
 ## Limites
 
