@@ -51,10 +51,20 @@ script:
         test -s "${output}"
       done
     elif [ "${LIMIAR_CI_MODE}" = "sqlite-native-arm64" ]; then
-      test "$(go env GOOS)" = "linux"
-      test "$(go env GOARCH)" = "arm64"
+      if [ "$(go env GOOS)" != "linux" ]; then
+        echo "Esperado GOOS=linux, obtido $(go env GOOS)" >&2
+        exit 1
+      fi
+      if [ "$(go env GOARCH)" != "arm64" ]; then
+        echo "Esperado GOARCH=arm64, obtido $(go env GOARCH)" >&2
+        exit 1
+      fi
+      if [ "${CGO_ENABLED:-unset}" != "0" ]; then
+        echo "Esperado CGO_ENABLED=0, obtido ${CGO_ENABLED:-unset}" >&2
+        exit 1
+      fi
       echo "Executando internal/storage/sqlite nativamente em Linux ARM64 com CGO_ENABLED=0"
-      go test -v -count=1 ./internal/storage/sqlite
+      go test -v -count=1 -timeout=5m ./internal/storage/sqlite
     else
       go vet ./...
       bash scripts/ci/check-storage-dependencies.sh
