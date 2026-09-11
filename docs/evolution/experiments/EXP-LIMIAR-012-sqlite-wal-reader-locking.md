@@ -1,7 +1,7 @@
 # EXP-LIMIAR-012 — WAL reader snapshot e locking do novo SQLite
 
 Authority: Experiment
-Status: In Progress
+Status: Supported
 
 ## Pergunta
 
@@ -38,11 +38,19 @@ Se o append bloquear até o timeout, falhar por locking inesperado, ou o snapsho
 
 O segundo handle existe somente no harness. Ele não muda a baseline de uma conexão lógica do writer e não autoriza aumentar o pool de produção.
 
+## Evidência executada
+
+No HEAD `6f9871942af65065f2a1a649e3053b62c33530a8`, o gate Travis CI passou em Linux Noble com Go 1.26.2. O pipeline executou, entre outros gates, `go vet ./...`, build completo e `go test -v -race -coverprofile=coverage.out -count=1 ./...` sem falha funcional ou race.
+
+Nesse ambiente, o teste demonstrou as quatro propriedades da hipótese: `journal_mode=wal` no observer; snapshot de leitura estável durante o append; append de Evidence concluído enquanto o reader mantinha o snapshot; e visibilidade da nova Evidence depois do `COMMIT` do reader.
+
+A evidência é deliberadamente limitada a Linux X64 no ambiente exercitado pelo Travis. Ela não autoriza generalizar locking/WAL para Windows, macOS, ARM64, Android/Termux ou PRoot.
+
 ## Critérios para `Supported`
 
 O experimento só pode ser promovido de `In Progress` para `Supported` quando o HEAD correspondente executar em gate real e demonstrar todas as propriedades acima sem race/falha funcional.
 
-A evidência vale somente para a plataforma efetivamente executada. Um passe em Linux X64 não autoriza declarar suporte Windows, macOS, ARM64, Android/Termux ou PRoot.
+Esse critério foi atendido pelo HEAD e ambiente registrados em **Evidência executada**.
 
 ## Fora de escopo
 
@@ -57,4 +65,4 @@ A evidência vale somente para a plataforma efetivamente executada. Um passe em 
 
 ## Próximo gate
 
-Executar os gates existentes, especialmente Travis/race, no HEAD do experimento. Se suportado, registrar exatamente o ambiente exercitado e usar a evidência para reduzir o gate 8 do ADR 019 apenas nessa plataforma; outras plataformas continuam pendentes.
+Usar esta evidência para reduzir o gate 8 do ADR 019 somente para Linux X64. Repetir o boundary em plataformas adicionais antes de qualquer declaração de suporte nelas; nenhuma mudança de pool, política de concorrência ou schema é autorizada por este experimento.
