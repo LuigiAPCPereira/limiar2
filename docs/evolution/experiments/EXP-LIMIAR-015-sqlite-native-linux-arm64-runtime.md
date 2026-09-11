@@ -51,18 +51,24 @@ Os jobs independentes Linux X64/race, Linux X64/CGO-disabled e cross-build tamb�
 
 A hipótese é, portanto, `Supported` para o boundary e ambiente efetivamente exercitados: `internal/storage/sqlite`, Linux ARM64 nativo, Noble, Go 1.26.2 e `CGO_ENABLED=0`.
 
-Um endurecimento posterior do harness adicionou diagnósticos de target, verificação explícita de `CGO_ENABLED=0` e `-timeout=5m`. O build Travis `278804127`, no HEAD `2b62e8615b6d89dcea904cc304143645ff70cf6c`, manteve verdes os três jobs independentes, mas falhou no job ARM64. Como o resultado disponível do check não atribui a falha a uma asserção específica, a correção seguinte isola a única mudança que altera o orçamento temporal da suíte: remove `-timeout=5m` e preserva os diagnósticos de GOOS/GOARCH/CGO. Essa falha não é tratada como Evidence contra o storage sem reprodução que a vincule ao comportamento do SQLite.
+Um endurecimento posterior do harness adicionou diagnósticos de target, verificação explícita de `CGO_ENABLED=0` e `-timeout=5m`. O build Travis `278804127`, no HEAD `2b62e8615b6d89dcea904cc304143645ff70cf6c`, manteve verdes os três jobs independentes, mas falhou no job ARM64.
+
+O build seguinte `278804510`, no HEAD `44d8d24c3e46d59a99854a5421726ce325ffe43a`, removeu apenas o timeout artificial e voltou a falhar somente no job ARM64. Isso falsifica a hipótese de que `-timeout=5m` explicava a regressão. Como GOOS e GOARCH já eram validados por `test` no HEAD verde `4c4dab9831cdc5702e0969bbb92b44dcb26026ba`, a diferença restante introduzida pelo endurecimento é a validação explícita de CGO e a forma diagnóstica dos checks de target.
+
+O próximo isolamento preserva os diagnósticos de GOOS/GOARCH e continua exigindo CGO desabilitado, mas valida o **modo efetivo do toolchain** com `go env CGO_ENABLED` em vez de depender diretamente da variável de shell do Travis. Essa distinção testa se a regressão pertence ao plumbing do harness sem relaxar a propriedade arquitetural observada.
+
+Nenhuma dessas falhas posteriores é tratada como Evidence contra o storage enquanto não houver reprodução que vincule a falha ao comportamento do SQLite.
 
 ## Critério de suporte
 
 A hipótese é marcada `Supported` porque:
 
 1. o job foi provisionado como runner Travis Linux ARM64 nativo;
-2. o harness exige `go env GOOS=linux` e `go env GOARCH=arm64` antes da suíte;
-3. o job é configurado com `CGO_ENABLED=0`, e o harness também o verifica explicitamente;
+2. o HEAD executável verde exigia `go env GOOS=linux` e `go env GOARCH=arm64` antes da suíte;
+3. o job foi configurado e executado com `CGO_ENABLED=0`;
 4. a suíte `internal/storage/sqlite` concluiu com sucesso no CI real do HEAD executável correspondente.
 
-Os diagnósticos de target e a verificação explícita de `CGO_ENABLED` foram endurecidos depois da coleta inicial de Evidence. O HEAD que preserva esses checks sem introduzir um timeout artificial deve fechar seus próprios gates antes do merge da PR.
+O endurecimento do harness posterior à coleta inicial de Evidence ainda está sendo estabilizado. O HEAD final precisa fechar seus próprios gates antes do merge da PR.
 
 ## Limites
 
