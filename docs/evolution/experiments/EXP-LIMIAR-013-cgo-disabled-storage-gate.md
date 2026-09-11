@@ -1,7 +1,7 @@
 # EXP-LIMIAR-013 — Compatibilidade do storage com CGO desabilitado
 
 Authority: Experiment
-Status: In Progress
+Status: Supported
 
 ## Pergunta
 
@@ -27,22 +27,32 @@ O race detector não faz parte deste job porque o gate experimental desabilita C
 
 ## Harness
 
-A branch experimental adiciona temporariamente ao Travis uma matriz de dois jobs:
+A branch experimental adiciona ao Travis uma matriz de dois jobs:
 
 - `Linux X64 / race`: preserva o pipeline atual com CGO habilitado;
 - `Linux X64 / CGO disabled experiment`: executa vet, gate de dependências, build e testes com `CGO_ENABLED=0`.
 
 Nenhum default de produção, schema, migration, pool, dependência ou comportamento de runtime é alterado por este experimento.
 
-## Critérios para `Supported`
+## Evidence
 
-O experimento só pode mudar para `Supported` quando o job `Linux X64 / CGO disabled experiment` executar em CI real no HEAD correspondente e concluir com sucesso todas as etapas listadas na hipótese.
+No HEAD `0e17613d287dd2cb6feebeac71128f733f38a2c3`, o build Travis `278801913` executou em Linux Noble com Go 1.26.2 e concluiu com sucesso os dois jobs da matriz.
 
-Falha deve ser tratada como Evidence. Não corrigir dependência, build tag ou boundary estrutural sem primeiro identificar a causa e verificar se a correção já é autorizada por ADR vigente.
+O job `Linux X64 / CGO disabled experiment` executou com `LIMIAR_CI_MODE=cgo-disabled CGO_ENABLED=0` e passou `go mod verify`, `go vet ./...`, `scripts/ci/check-storage-dependencies.sh`, `go build -v ./...` e `go test -v -count=1 ./...`.
+
+O job `Linux X64 / race` também passou no mesmo build, preservando o gate normal com CGO habilitado e race detector. Portanto, o experimento suporta a hipótese somente no ambiente e no conjunto de dependências exercitados por esse HEAD.
+
+## Resultado
+
+A hipótese é suportada para Linux X64/Noble, Go 1.26.2 e o conjunto de dependências do HEAD validado: o repositório, incluindo o novo storage SQLite e os boundaries legados ainda presentes, compila e passa os testes com `CGO_ENABLED=0`.
+
+Esse resultado fecha o gate experimental de compatibilidade CGO-disabled previsto na baseline para esse ambiente. Não transforma `CGO_ENABLED=0` em default de produção nem declara portabilidade para plataformas não exercitadas.
 
 ## Limites
 
-Mesmo se suportado, o resultado será limitado ao ambiente efetivamente exercitado: Linux X64, Go 1.26.2 e conjunto de dependências do HEAD testado. Não prova Android/Termux, ARM64, Windows, macOS ou PRoot.
+O resultado é limitado ao ambiente efetivamente exercitado: Linux X64, Go 1.26.2 e conjunto de dependências do HEAD testado. Não prova Android/Termux, ARM64, Windows, macOS ou PRoot.
+
+Mudanças futuras em dependências, build tags, toolchain ou boundaries de storage podem invalidar a Evidence e devem reexecutar o gate quando materialmente relevantes.
 
 ## Fora de escopo
 
