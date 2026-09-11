@@ -1,7 +1,7 @@
 # EXP-LIMIAR-014 — Portabilidade de compilação do novo storage SQLite
 
 Authority: Experiment
-Status: In Progress
+Status: Supported
 
 ## Pergunta
 
@@ -43,11 +43,27 @@ Em seguida verifica que o artefato foi materializado e não está vazio.
 
 O job normal Linux X64/race e o job do EXP-LIMIAR-013 permanecem inalterados semanticamente. O experimento não executa binários cross-compiled, não muda código de produção, schema, migrations, defaults, dependências ou platform policy.
 
+## Evidência
+
+No HEAD `3c321afd3263603acbb969f0bbff05e1f6812c66`, o build Travis CI `278803016` executou em Linux Noble com Go 1.26.2 e concluiu com sucesso os três jobs da matriz.
+
+O job `SQLite portability / cross-build experiment` usou `CGO_ENABLED=0` e compilou, via `go test -c`, o package `internal/storage/sqlite` e seus testes para os três targets definidos pelo experimento:
+
+- `linux/arm64`;
+- `windows/amd64`;
+- `darwin/arm64`.
+
+O pipeline normal Linux X64/race e o job Linux X64 com CGO desabilitado também permaneceram verdes no mesmo build, reduzindo a chance de o harness de cross-build ter mascarado regressão no caminho principal.
+
+Essa Evidence suporta exclusivamente a portabilidade de compilação exercitada acima. Não houve execução dos binários cross-compiled nos sistemas alvo.
+
 ## Critério de suporte
 
 A hipótese poderá ser marcada `Supported` somente se os três targets compilarem no CI real do HEAD correspondente.
 
-Falha de um target deve ser tratada como Evidence da limitação concreta e investigada antes de qualquer correção estrutural. O experimento não autoriza adicionar build tags, trocar driver ou alterar arquitetura apenas para tornar o job verde.
+Esse critério foi satisfeito pelo build Travis CI `278803016` para o HEAD `3c321afd3263603acbb969f0bbff05e1f6812c66`.
+
+Falha futura de um target deve ser tratada como Evidence da limitação concreta e investigada antes de qualquer correção estrutural. O experimento não autoriza adicionar build tags, trocar driver ou alterar arquitetura apenas para tornar o job verde.
 
 ## Limites
 
