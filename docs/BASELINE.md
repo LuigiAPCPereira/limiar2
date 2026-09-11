@@ -141,6 +141,7 @@ Os itens abaixo são resultados de pesquisa, experimentos e propostas da rebasel
 **Eles não devem ser tratados como decisões apenas por aparecerem aqui.**
 
 - **ADR 021 — Schema físico de SourceSyncState** está `Proposed`: common state completo por `user_id`, channel PTS por `(user_id, channel_id)`, ausência distinta de zero/erro e setters parciais restritos a state existente. A proposta não autoriza implementação até aceitação explícita do mantenedor;
+- **ADR 022 — Schema físico de BackfillProgress** está `Proposed`: progresso próprio por `subscription_id`, ausência distinta de posição zero, avanço monotônico/transacional, `completed` limitado ao lifecycle histórico e Evidence-before-progress. A proposta não autoriza implementação até aceitação explícita do mantenedor;
 - política e tooling concretos de importação side-by-side do banco legado;
 - Processing Generations para derivados reconstruíveis e reprocessamento seguro;
 - Source Message Projection separada da Evidence;
@@ -196,9 +197,9 @@ com documentação primária e testes proporcionais ao risco.
 ## 7. Questões abertas prioritárias
 
 1. aceitação ou revisão do ADR 021 antes de materializar o schema físico de `SourceSyncState`;
-2. contrato físico de `BackfillProgress` e sua integração com o ordering Evidence-before-progress;
+2. aceitação ou revisão do ADR 022 antes de materializar o schema físico de `BackfillProgress`;
 3. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007);
-4. backup/restore do novo storage e revalidação de locking/WAL nas plataformas suportadas;
+4. completar a validação operacional do novo SQLite fora de Linux X64: backup/restore já possui Evidence executável, locking/WAL foi suportado em Linux X64 pelo EXP-LIMIAR-012 e `CGO_ENABLED=0` foi suportado em Linux X64/Go 1.26.2 pelo EXP-LIMIAR-013, mas essas conclusões não generalizam automaticamente para outras plataformas;
 5. estratégia final de sessão/peer state;
 6. boundary de mídia entre evidência de fonte e cache/apresentação;
 7. materialização dos contratos de Processing Generations e Source Projection;
@@ -206,8 +207,8 @@ com documentação primária e testes proporcionais ao risco.
 
 Os gates de implementação dos ADRs 017 e 019 — inclusive crash/restart da integração
 real, `ChannelDifferenceTooLong`, edit/delete/update composto, coexistência backfill/live,
-`CGO_ENABLED=0 go test`, race detector e preservação do legado — continuam obrigatórios
-antes de colocar o novo ingress/storage em produção.
+race detector, preservação do legado e validação nas plataformas efetivamente suportadas — continuam obrigatórios
+antes de colocar o novo ingress/storage em produção. O gate `CGO_ENABLED=0 go test` já possui Evidence verde em Linux X64/Go 1.26.2, sem implicar suporte automático fora desse ambiente.
 
 ---
 
