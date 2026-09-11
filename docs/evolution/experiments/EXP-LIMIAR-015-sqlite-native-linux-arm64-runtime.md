@@ -1,7 +1,7 @@
 # EXP-LIMIAR-015 — Runtime nativo do novo storage SQLite em Linux ARM64
 
 Authority: Experiment
-Status: In Progress
+Status: Supported
 
 ## Pergunta
 
@@ -31,39 +31,40 @@ arch: arm64
 CGO_ENABLED=0
 ```
 
-O job primeiro confirma o target efetivo do toolchain:
-
-```sh
-test "$(go env GOOS)" = "linux"
-test "$(go env GOARCH)" = "arm64"
-```
+O job confirma o target efetivo do toolchain e o modo CGO antes de executar a suíte. Divergências falham com diagnóstico explícito.
 
 Em seguida executa:
 
 ```sh
-go test -v -count=1 ./internal/storage/sqlite
+go test -v -count=1 -timeout=5m ./internal/storage/sqlite
 ```
 
 Os jobs Linux X64/race, Linux X64/CGO-disabled e cross-build permanecem presentes para detectar regressões independentes do novo runner.
 
 ## Evidência
 
-Ainda não coletada. O experimento permanece `In Progress` até que o job execute em infraestrutura ARM64 real e haja resultado observável.
+Travis CI build `278803825`, associado ao HEAD executável `4c4dab9831cdc5702e0969bbb92b44dcb26026ba` da PR #192, executou quatro jobs em Linux Noble com Go 1.26.2 e concluiu com sucesso.
+
+O job `SQLite runtime / native Linux ARM64 experiment` foi provisionado com `arch: arm64`, `LIMIAR_CI_MODE=sqlite-native-arm64` e `CGO_ENABLED=0` e passou executando `go test -v -count=1 ./internal/storage/sqlite` em runtime nativo Linux ARM64.
+
+Os jobs independentes Linux X64/race, Linux X64/CGO-disabled e cross-build também permaneceram verdes no mesmo build, reduzindo a chance de o resultado ARM64 esconder regressão independente no harness compartilhado.
+
+A hipótese é, portanto, `Supported` para o boundary e ambiente efetivamente exercitados: `internal/storage/sqlite`, Linux ARM64 nativo, Noble, Go 1.26.2 e `CGO_ENABLED=0`.
 
 ## Critério de suporte
 
-A hipótese poderá ser marcada `Supported` somente se:
+A hipótese é marcada `Supported` porque:
 
-1. o job estiver realmente em um runner Linux ARM64;
-2. `go env GOARCH` retornar `arm64`;
-3. `CGO_ENABLED=0` permanecer efetivo;
-4. `go test -v -count=1 ./internal/storage/sqlite` concluir com sucesso no CI real do HEAD correspondente.
+1. o job foi provisionado como runner Travis Linux ARM64 nativo;
+2. o harness exige `go env GOOS=linux` e `go env GOARCH=arm64` antes da suíte;
+3. o job foi configurado com `CGO_ENABLED=0`, e o harness passa a verificá-lo explicitamente;
+4. a suíte `internal/storage/sqlite` concluiu com sucesso no CI real do HEAD executável correspondente.
 
-Falha de provisionamento do runner não é Evidence contra o SQLite. Falha de teste após o runner iniciar é Evidence e deve ser investigada antes de qualquer mudança estrutural.
+A verificação explícita de `CGO_ENABLED` e os diagnósticos de target foram endurecidos depois da coleta inicial de Evidence; essa mudança não amplia a conclusão e deve fechar seus próprios gates antes do merge da PR.
 
 ## Limites
 
-Mesmo com resultado verde, este experimento não prova:
+Este experimento não prova:
 
 - Windows ou macOS em runtime;
 - Android/Termux ou PRoot;
