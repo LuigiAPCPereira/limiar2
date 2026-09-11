@@ -1,7 +1,7 @@
 # EXP-LIMIAR-015 — Runtime nativo do novo storage SQLite em Linux ARM64
 
 Authority: Experiment
-Status: Supported
+Status: In Progress
 
 ## Pergunta
 
@@ -49,7 +49,7 @@ O job `SQLite runtime / native Linux ARM64 experiment` foi provisionado com `arc
 
 Os jobs independentes Linux X64/race, Linux X64/CGO-disabled e cross-build também permaneceram verdes no mesmo build, reduzindo a chance de o resultado ARM64 esconder regressão independente no harness compartilhado.
 
-A hipótese é, portanto, `Supported` para o boundary e ambiente efetivamente exercitados: `internal/storage/sqlite`, Linux ARM64 nativo, Noble, Go 1.26.2 e `CGO_ENABLED=0`.
+Essa execução constitui Evidence positiva para o boundary e ambiente efetivamente exercitados: `internal/storage/sqlite`, Linux ARM64 nativo, Noble, Go 1.26.2 e `CGO_ENABLED=0`. Porém o experimento permanece `In Progress` enquanto o harness endurecido não voltar a fechar verde no próprio HEAD final.
 
 Um endurecimento posterior do harness adicionou diagnósticos de target, verificação explícita de `CGO_ENABLED=0` e `-timeout=5m`. O build Travis `278804127`, no HEAD `2b62e8615b6d89dcea904cc304143645ff70cf6c`, manteve verdes os três jobs independentes, mas falhou no job ARM64.
 
@@ -59,16 +59,17 @@ O próximo isolamento preserva os diagnósticos de GOOS/GOARCH e continua exigin
 
 Nenhuma dessas falhas posteriores é tratada como Evidence contra o storage enquanto não houver reprodução que vincule a falha ao comportamento do SQLite.
 
-## Critério de suporte
+## Critério de promoção
 
-A hipótese é marcada `Supported` porque:
+O experimento pode ser promovido para `Supported` quando o harness endurecido fechar verde no próprio HEAD final, preservando simultaneamente:
 
-1. o job foi provisionado como runner Travis Linux ARM64 nativo;
-2. o HEAD executável verde exigia `go env GOOS=linux` e `go env GOARCH=arm64` antes da suíte;
-3. o job foi configurado e executado com `CGO_ENABLED=0`;
-4. a suíte `internal/storage/sqlite` concluiu com sucesso no CI real do HEAD executável correspondente.
+1. runner Travis Linux ARM64 nativo;
+2. `go env GOOS=linux`;
+3. `go env GOARCH=arm64`;
+4. `go env CGO_ENABLED=0`;
+5. execução verde de `go test -v -count=1 ./internal/storage/sqlite`.
 
-O endurecimento do harness posterior à coleta inicial de Evidence ainda está sendo estabilizado. O HEAD final precisa fechar seus próprios gates antes do merge da PR.
+A execução verde anterior já demonstra que o storage pode operar nesse boundary; o gate pendente é estabilizar e validar o harness que documenta essas precondições antes do merge da PR.
 
 ## Limites
 
