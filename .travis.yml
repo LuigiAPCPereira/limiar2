@@ -7,6 +7,13 @@ go:
 
 if: (type = push AND branch = main) OR (type = pull_request AND branch = main)
 
+jobs:
+  include:
+    - name: "Linux X64 / race"
+      env: LIMIAR_CI_MODE=default CGO_ENABLED=1
+    - name: "Linux X64 / CGO disabled experiment"
+      env: LIMIAR_CI_MODE=cgo-disabled CGO_ENABLED=0
+
 cache:
   directories:
     - $HOME/.cache/go-build
@@ -19,22 +26,35 @@ addons:
 
 install:
   - go mod download
-  - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
-  - go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+  - |
+    if [ "${LIMIAR_CI_MODE}" = "default" ]; then
+      go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+      go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+    fi
 
 script:
   - go mod verify
-  - "$(go env GOPATH)/bin/golangci-lint run --timeout=5m"
-  - "$(go env GOPATH)/bin/gosec -exclude-dir=.agents ./..."
-  - go vet ./...
-  - bash scripts/ci/check-storage-dependencies.sh
-  - go build -v ./...
-  - go test -v -race -coverprofile=coverage.out -count=1 ./...
-  - go tool cover -func=coverage.out
+  - |
+    if [ "${LIMIAR_CI_MODE}" = "default" ]; then
+      "$(go env GOPATH)/bin/golangci-lint" run --timeout=5m
+      "$(go env GOPATH)/bin/gosec" -exclude-dir=.agents ./...
+      go vet ./...
+      bash scripts/ci/check-storage-dependencies.sh
+      go build -v ./...
+      go test -v -race -coverprofile=coverage.out -count=1 ./...
+      go tool cover -func=coverage.out
+    else
+      go vet ./...
+      bash scripts/ci/check-storage-dependencies.sh
+      go build -v ./...
+      go test -v -count=1 ./...
+    fi
 
 after_success:
   - |
-    if [ -z "${CODECOV_TOKEN:-}" ]; then
+    if [ "${LIMIAR_CI_MODE}" != "default" ]; then
+      echo "Job experimental CGO_ENABLED=0 concluído; upload de cobertura não se aplica."
+    elif [ -z "${CODECOV_TOKEN:-}" ]; then
       echo "CODECOV_TOKEN não configurado no Travis; upload de cobertura ignorado."
     else
       curl -fsSLo codecov https://cli.codecov.io/latest/linux/codecov
