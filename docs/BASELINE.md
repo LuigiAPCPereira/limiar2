@@ -199,7 +199,7 @@ com documentação primária e testes proporcionais ao risco.
 1. aceitação ou revisão do ADR 021 antes de materializar o schema físico de `SourceSyncState`;
 2. aceitação ou revisão do ADR 022 antes de materializar o schema físico de `BackfillProgress`;
 3. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007);
-4. completar a validação operacional do novo SQLite fora de Linux X64: backup/restore já possui Evidence executável, locking/WAL foi suportado em Linux X64 pelo EXP-LIMIAR-012 e `CGO_ENABLED=0` foi suportado em Linux X64/Go 1.26.2 pelo EXP-LIMIAR-013, mas essas conclusões não generalizam automaticamente para outras plataformas;
+4. completar a validação operacional do novo SQLite fora de Linux X64: backup/restore já possui Evidence executável, locking/WAL foi suportado em Linux X64 pelo EXP-LIMIAR-012, `CGO_ENABLED=0` foi suportado em Linux X64/Go 1.26.2 pelo EXP-LIMIAR-013, cross-build foi suportado para `linux/arm64`, `windows/amd64` e `darwin/arm64` pelo EXP-LIMIAR-014 e a suíte `internal/storage/sqlite` executou verde em runner Linux ARM64 nativo pelo EXP-LIMIAR-015; runtime nativo de Windows/macOS e validação do produto completo nessas plataformas continuam sem Evidence equivalente;
 5. estratégia final de sessão/peer state;
 6. boundary de mídia entre evidência de fonte e cache/apresentação;
 7. materialização dos contratos de Processing Generations e Source Projection;
@@ -208,7 +208,7 @@ com documentação primária e testes proporcionais ao risco.
 Os gates de implementação dos ADRs 017 e 019 — inclusive crash/restart da integração
 real, `ChannelDifferenceTooLong`, edit/delete/update composto, coexistência backfill/live,
 race detector, preservação do legado e validação nas plataformas efetivamente suportadas — continuam obrigatórios
-antes de colocar o novo ingress/storage em produção. O gate `CGO_ENABLED=0 go test` já possui Evidence verde em Linux X64/Go 1.26.2, sem implicar suporte automático fora desse ambiente.
+antes de colocar o novo ingress/storage em produção. O gate `CGO_ENABLED=0 go test` já possui Evidence verde em Linux X64/Go 1.26.2, e `internal/storage/sqlite` já possui Evidence de execução nativa verde em Linux ARM64/Noble/Go 1.26.2 no escopo do EXP-LIMIAR-015; nenhum desses resultados implica suporte automático do produto completo nem generalização para Windows/macOS.
 
 ---
 
