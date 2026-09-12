@@ -1,7 +1,7 @@
 # EXP-LIMIAR-017 — Runtime nativo do SQLite em Windows AMD64
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Supported
 
 ## Hipótese
 
@@ -104,11 +104,32 @@ A correção mínima de serialização foi validada no runtime real:
 - `open baseline` falhou;
 - a suíte Windows completa falhou.
 
-Isso confirma que `databaseURI` deixou de ser o primeiro boundary incompatível. Como `open functional` atravessa `Open`, migrations e append real de Evidence sem comparar bits POSIX exatos, a falha restante de `open baseline` ficou concentrada em asserts posteriores à abertura.
+Isso confirmou que `databaseURI` deixou de ser o primeiro boundary incompatível. Como `open functional` atravessa `Open`, migrations e append real de Evidence sem comparar bits POSIX exatos, a falha restante de `open baseline` ficou concentrada em asserts posteriores à abertura.
 
 O teste `TestOpenAppliesADR019BaselineAndMigration` exigia `info.Mode().Perm() == 0600` também no Windows. O mesmo arquivo exigia `0644` ao verificar que um SQLite não pertencente ao novo storage não havia sido mutado. Esses asserts expressam uma garantia POSIX válida para Unix, mas não uma garantia equivalente de ACL Windows. A correção de teste em `ec992652ed4c09f8cf2c93c1ee8c6729979d6fd2` mantém os asserts exatos fora de Windows e não altera `Open`, schema, migrations, PRAGMAs nem permissões de produção.
 
-## Implementação em validação
+### Travis build 278808212 — HEAD `7dcd28add946d01bad67c110bc48a8952bd32577`
+
+Os 13 jobs passaram, incluindo os quatro gates Linux, `production URI`, `open functional`, `open baseline` e a suíte completa `internal/storage/sqlite` em Windows AMD64 com Go 1.26.2 e `CGO_ENABLED=0`.
+
+Esse resultado fechou o boundary principal de runtime após a correção de serialização e a remoção, somente no Windows, de asserts que interpretavam bits POSIX como se fossem equivalentes a ACLs Windows.
+
+### Travis build 278808271 — HEAD `bf4ce401de8e88a679524430c5e60ca716959935`
+
+O harness do probe de path especial foi corrigido para criar explicitamente o subdiretório antes do arquivo `evidência çã.db`. No mesmo HEAD, todos os 13 jobs passaram novamente:
+
+- quatro gates Linux: **passed**;
+- `preflight`, `modules`, `pure test`: **passed**;
+- `native filename`: **passed**;
+- `minimal file URI`: **passed**;
+- `production URI`, agora incluindo espaço e Unicode: **passed**;
+- `open functional`: **passed**;
+- `open baseline`: **passed**;
+- suíte completa `internal/storage/sqlite`: **passed**.
+
+Isso falsifica, para o boundary observado, a hipótese de que a forma `file:C:/...` precisaria de percent-encoding adicional para paths com espaços ou Unicode. Não há Evidence para introduzir `PathEscape` nessa serialização.
+
+## Implementação validada
 
 O commit `06a08759e0542c0a9ae2159e671b9e3e601c1f64` altera somente `databaseURI`:
 
@@ -119,30 +140,22 @@ O commit `06a08759e0542c0a9ae2159e671b9e3e601c1f64` altera somente `databaseURI`
 
 O commit `ec992652ed4c09f8cf2c93c1ee8c6729979d6fd2` corrige somente a portabilidade dos asserts de teste de permissões: `0600` e `0644` continuam obrigatórios e verificados fora de Windows; o experimento não declara equivalência com ACLs Windows.
 
+O patch final de estabilização extrai o predicado de drive letter para `isWindowsDriveLetter` e o cobre diretamente com casos positivos, inválidos e UNC. Isso melhora legibilidade sem ampliar o suporte observado nem inferir sem Evidence uma política para UNC.
+
 Nenhum schema, migration, PRAGMA, dependency, claim, WAL, baseline ou contrato de Evidence foi alterado.
 
 ## Limites
 
-Um resultado verde suporta somente o boundary observado: `internal/storage/sqlite`, Windows Server/ambiente efetivamente fornecido pelo Travis, AMD64, Go 1.26.2 e `CGO_ENABLED=0` efetivo.
+O resultado suporta somente o boundary observado: `internal/storage/sqlite`, Windows Server/ambiente efetivamente fornecido pelo Travis, AMD64, Go 1.26.2 e `CGO_ENABLED=0` efetivo.
 
 Não implica suporte oficial do produto completo a Windows, validação de CLI/collector/Telegram/dashboard, Windows ARM64, macOS, aceitação dos ADRs 021/022 ou mudança de default/arquitetura de produção.
 
 A semântica de `0600` usada como proteção Unix também não deve ser reinterpretada como uma garantia equivalente de ACL no Windows sem decisão e Evidence específicas.
 
-## Resultado atual
+UNC permanece fora do escopo: é reconhecido explicitamente pelo teste do predicado como não pertencente ao caminho de drive-letter, não como formato suportado.
 
-`In Progress`.
+## Resultado
 
-A serialização Windows de `databaseURI` já possui Evidence positiva em runtime real. A última falha conhecida da suíte está agora em validação após remover do caminho Windows somente asserts de bits POSIX que não representam uma garantia de ACL equivalente nessa plataforma.
+`Supported`.
 
-## Próximo gate
-
-No novo HEAD, exigir simultaneamente:
-
-1. `production URI` verde;
-2. `open functional` verde;
-3. `open baseline` verde;
-4. suíte completa `internal/storage/sqlite` verde;
-5. gates Linux existentes verdes.
-
-Somente se todos passarem no mesmo HEAD o EXP-LIMIAR-017 pode mudar para `Supported`. Se a suíte completa continuar vermelha, localizar o próximo teste falho antes de alterar produção.
+O runtime nativo de `internal/storage/sqlite` foi executado com sucesso em Windows AMD64 no boundary observado, com a correção mínima de URI, sem regressão nos gates Linux. Paths de drive letter contendo espaço e Unicode também foram exercitados com sucesso pela URI de produção. A Evidence não autoriza generalizar esse resultado para outras plataformas, UNC ou suporte oficial do produto completo.
