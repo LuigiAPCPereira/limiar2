@@ -25,6 +25,14 @@ jobs:
     - name: "SQLite runtime / native Windows AMD64 experiment"
       os: windows
       env: LIMIAR_CI_MODE=sqlite-native-windows CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - go mod download
+        - go mod verify
+        - go test -v -count=1 ./internal/storage/sqlite
 
 cache:
   directories:
@@ -56,11 +64,6 @@ script:
       test "$(go env GOOS)" = "linux"
       test "$(go env GOARCH)" = "arm64"
       echo "Executando internal/storage/sqlite nativamente em Linux ARM64 com CGO_ENABLED=0"
-      go test -v -count=1 ./internal/storage/sqlite
-    elif [ "${LIMIAR_CI_MODE}" = "sqlite-native-windows" ]; then
-      test "$(go env GOOS)" = "windows"
-      test "$(go env GOARCH)" = "amd64"
-      echo "Executando internal/storage/sqlite nativamente em Windows AMD64 com CGO_ENABLED=0"
       go test -v -count=1 ./internal/storage/sqlite
     else
       go vet ./...
