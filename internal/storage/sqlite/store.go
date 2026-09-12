@@ -218,6 +218,10 @@ func verifyExistingDatabase(ctx context.Context, path string) error {
 	return nil
 }
 
+func isWindowsDriveLetter(volume string) bool {
+	return len(volume) == 2 && volume[1] == ':'
+}
+
 func databaseURI(path string, readOnly bool) string {
 	q := url.Values{}
 	if readOnly {
@@ -236,7 +240,7 @@ func databaseURI(path string, readOnly bool) string {
 	// o VFS do ncruces/go-sqlite3 não abre neste boundary. Restringimos a adaptação
 	// a drive letters para não inferir sem Evidence a semântica de UNC paths.
 	volume := filepath.VolumeName(path)
-	if len(volume) == 2 && volume[1] == ':' {
+	if isWindowsDriveLetter(volume) {
 		uri := "file:" + filepath.ToSlash(path)
 		if rawQuery := q.Encode(); rawQuery != "" {
 			uri += "?" + rawQuery
