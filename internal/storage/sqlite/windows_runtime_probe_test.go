@@ -41,7 +41,11 @@ func TestSQLiteDriverOpensMinimalFileURI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	u := &url.URL{Scheme: "file", Path: path}
+	uriPath := filepath.ToSlash(path)
+	if filepath.VolumeName(path) != "" {
+		uriPath = "/" + uriPath
+	}
+	u := &url.URL{Scheme: "file", Path: uriPath}
 	probeSQLitePing(t, u.String())
 }
 
