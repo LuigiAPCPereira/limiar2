@@ -89,7 +89,7 @@ jobs:
         - test "$(go env CGO_ENABLED)" = "0"
         - go mod download
         - go mod verify
-        - go test -v -count=1 -run '^TestSQLiteDriverOpensProductionURI$' ./internal/storage/sqlite
+        - go test -v -count=1 -run '^TestSQLiteDriverOpensProductionURI' ./internal/storage/sqlite
     - name: "SQLite Windows AMD64 / open functional"
       os: windows
       env: LIMIAR_CI_MODE=sqlite-native-windows-open-functional CGO_ENABLED=0
