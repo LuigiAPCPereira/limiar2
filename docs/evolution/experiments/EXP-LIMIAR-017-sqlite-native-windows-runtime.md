@@ -93,6 +93,21 @@ O resultado foi decisivo:
 
 A diferença entre o probe verde e `databaseURI` ficou restrita à serialização do filename e aos parâmetros `_pragma`. Como o probe `file:C:/...` demonstra que o driver/VFS aceita o path absoluto Windows nessa forma, existe Evidence executável para alterar somente a serialização de drive-letter paths e então revalidar a URI de produção com os mesmos parâmetros.
 
+### Travis build 278808046 — HEAD `e512292ba85d78145f76d252a453112afad1ee9f`
+
+A correção mínima de serialização foi validada no runtime real:
+
+- os quatro jobs Linux passaram;
+- `preflight`, `modules`, `pure test`, `native filename` e `minimal file URI` passaram;
+- `production URI` **passou**;
+- `open functional` **passou**;
+- `open baseline` falhou;
+- a suíte Windows completa falhou.
+
+Isso confirma que `databaseURI` deixou de ser o primeiro boundary incompatível. Como `open functional` atravessa `Open`, migrations e append real de Evidence sem comparar bits POSIX exatos, a falha restante de `open baseline` ficou concentrada em asserts posteriores à abertura.
+
+O teste `TestOpenAppliesADR019BaselineAndMigration` exigia `info.Mode().Perm() == 0600` também no Windows. O mesmo arquivo exigia `0644` ao verificar que um SQLite não pertencente ao novo storage não havia sido mutado. Esses asserts expressam uma garantia POSIX válida para Unix, mas não uma garantia equivalente de ACL Windows. A correção de teste em `ec992652ed4c09f8cf2c93c1ee8c6729979d6fd2` mantém os asserts exatos fora de Windows e não altera `Open`, schema, migrations, PRAGMAs nem permissões de produção.
+
 ## Implementação em validação
 
 O commit `06a08759e0542c0a9ae2159e671b9e3e601c1f64` altera somente `databaseURI`:
@@ -101,6 +116,8 @@ O commit `06a08759e0542c0a9ae2159e671b9e3e601c1f64` altera somente `databaseURI`
 - para paths cujo volume é um drive letter (`C:` etc.), serializa `file:` + `filepath.ToSlash(path)`, produzindo `file:C:/...?...`;
 - preserva a serialização anterior por `url.URL` em Unix e demais paths;
 - não infere sem Evidence uma política para UNC paths.
+
+O commit `ec992652ed4c09f8cf2c93c1ee8c6729979d6fd2` corrige somente a portabilidade dos asserts de teste de permissões: `0600` e `0644` continuam obrigatórios e verificados fora de Windows; o experimento não declara equivalência com ACLs Windows.
 
 Nenhum schema, migration, PRAGMA, dependency, claim, WAL, baseline ou contrato de Evidence foi alterado.
 
@@ -116,7 +133,7 @@ A semântica de `0600` usada como proteção Unix também não deve ser reinterp
 
 `In Progress`.
 
-A incompatibilidade de URI foi isolada até uma diferença reproduzível: filename nativo e `file:C:/...` passam no mesmo worker em que a URI produzida anteriormente por `databaseURI` falha. Uma correção mínima da serialização Windows está agora em validação real.
+A serialização Windows de `databaseURI` já possui Evidence positiva em runtime real. A última falha conhecida da suíte está agora em validação após remover do caminho Windows somente asserts de bits POSIX que não representam uma garantia de ACL equivalente nessa plataforma.
 
 ## Próximo gate
 
@@ -124,7 +141,8 @@ No novo HEAD, exigir simultaneamente:
 
 1. `production URI` verde;
 2. `open functional` verde;
-3. suíte completa `internal/storage/sqlite` verde;
-4. gates Linux existentes verdes.
+3. `open baseline` verde;
+4. suíte completa `internal/storage/sqlite` verde;
+5. gates Linux existentes verdes.
 
-Se `production URI` continuar vermelho, decompor codificação/ordem dos parâmetros `_pragma` sem ampliar a mudança. Se `production URI` ficar verde mas a suíte continuar vermelha, continuar a decomposição a partir de claim/WAL/baseline/migrations. Somente promover o experimento quando a suíte completa passar no mesmo HEAD.
+Somente se todos passarem no mesmo HEAD o EXP-LIMIAR-017 pode mudar para `Supported`. Se a suíte completa continuar vermelha, localizar o próximo teste falho antes de alterar produção.
