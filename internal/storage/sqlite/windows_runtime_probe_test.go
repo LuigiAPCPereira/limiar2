@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"net/url"
 	"path/filepath"
 	"testing"
 )
@@ -41,12 +40,12 @@ func TestSQLiteDriverOpensMinimalFileURI(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The upstream driver's documented URI form is file:demo.db. Keep the
+	// Windows drive prefix but normalize separators, avoiding a hierarchical
+	// file:///C:/... URL until runtime evidence says that form is supported by
+	// the pure-Go VFS on Windows.
 	uriPath := filepath.ToSlash(path)
-	if filepath.VolumeName(path) != "" {
-		uriPath = "/" + uriPath
-	}
-	u := &url.URL{Scheme: "file", Path: uriPath}
-	probeSQLitePing(t, u.String())
+	probeSQLitePing(t, "file:"+uriPath)
 }
 
 func TestSQLiteDriverOpensProductionURI(t *testing.T) {
