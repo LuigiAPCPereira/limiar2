@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -63,7 +64,11 @@ func TestSQLiteDriverOpensProductionURIWithSpecialCharacters(t *testing.T) {
 		t.Skip("probe específico da serialização file:C:/... em Windows")
 	}
 
-	path := filepath.Join(t.TempDir(), "diretório com espaço", "evidência çã.db")
+	dir := filepath.Join(t.TempDir(), "diretório com espaço")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "evidência çã.db")
 	if err := createDatabaseFile(path); err != nil {
 		t.Fatal(err)
 	}
