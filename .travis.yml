@@ -54,6 +54,18 @@ jobs:
         - go mod download
         - go mod verify
         - go test -v -count=1 -run '^TestMigrationVersion$' ./internal/storage/sqlite
+    - name: "SQLite Windows AMD64 / open functional"
+      os: windows
+      env: LIMIAR_CI_MODE=sqlite-native-windows-open-functional CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
+        - go mod download
+        - go mod verify
+        - go test -v -count=1 -run '^TestEvidenceAppendRoundTripAndHashAuthority$' ./internal/storage/sqlite
     - name: "SQLite Windows AMD64 / open baseline"
       os: windows
       env: LIMIAR_CI_MODE=sqlite-native-windows-open CGO_ENABLED=0
