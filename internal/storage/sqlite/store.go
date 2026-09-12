@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
@@ -218,8 +219,7 @@ func verifyExistingDatabase(ctx context.Context, path string) error {
 }
 
 func databaseURI(path string, readOnly bool) string {
-	u := &url.URL{Scheme: "file", Path: path}
-	q := u.Query()
+	q := url.Values{}
 	if readOnly {
 		q.Set("mode", "ro")
 	} else {
@@ -230,7 +230,21 @@ func databaseURI(path string, readOnly bool) string {
 		q.Add("_pragma", "foreign_keys(ON)")
 		q.Add("_pragma", "synchronous(FULL)")
 	}
-	u.RawQuery = q.Encode()
+
+	// Em Windows, o driver aceita paths absolutos de drive na forma file:C:/... .
+	// Serializar C:\... por url.URL produz uma URI hierárquica file:///C:/..., que
+	// o VFS do ncruces/go-sqlite3 não abre neste boundary. Restringimos a adaptação
+	// a drive letters para não inferir sem Evidence a semântica de UNC paths.
+	volume := filepath.VolumeName(path)
+	if len(volume) == 2 && volume[1] == ':' {
+		uri := "file:" + filepath.ToSlash(path)
+		if rawQuery := q.Encode(); rawQuery != "" {
+			uri += "?" + rawQuery
+		}
+		return uri
+	}
+
+	u := &url.URL{Scheme: "file", Path: path, RawQuery: q.Encode()}
 	return u.String()
 }
 
