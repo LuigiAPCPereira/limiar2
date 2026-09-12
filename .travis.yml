@@ -42,6 +42,30 @@ jobs:
         - test "$(go env CGO_ENABLED)" = "0"
         - go mod download
         - go mod verify
+    - name: "SQLite Windows AMD64 / pure test"
+      os: windows
+      env: LIMIAR_CI_MODE=sqlite-native-windows-pure-test CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
+        - go mod download
+        - go mod verify
+        - go test -v -count=1 -run '^TestMigrationVersion$' ./internal/storage/sqlite
+    - name: "SQLite Windows AMD64 / open baseline"
+      os: windows
+      env: LIMIAR_CI_MODE=sqlite-native-windows-open CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
+        - go mod download
+        - go mod verify
+        - go test -v -count=1 -run '^TestOpenAppliesADR019BaselineAndMigration$' ./internal/storage/sqlite
     - name: "SQLite Windows AMD64 / runtime"
       os: windows
       env: LIMIAR_CI_MODE=sqlite-native-windows-runtime CGO_ENABLED=0
