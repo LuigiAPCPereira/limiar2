@@ -32,6 +32,14 @@ O harness foi então alinhado para criar o destino por `internal/storage/sqlite.
 
 Nenhuma migration, schema ou API de produção foi alterada para acomodar o experimento.
 
+## Boundary que permanece não provado
+
+O alinhamento acima valida compatibilidade física com o schema e as migrations atuais, mas **não** prova que a capability pública `EvidenceAppender` seja suficiente para uma ferramenta futura de importação.
+
+O reconciliador experimental continua usando SQL direto dentro de uma única transação porque precisa gravar Evidence e `legacy_import_ledger` atomicamente. Expor uma capability transacional nova, incorporar o ledger ao storage de produção ou escolher outra semântica de idempotência seria uma decisão separada e não é autorizada por este experimento.
+
+Portanto um resultado `Supported` do EXP-LIMIAR-007 significará somente que a cópia histórica é fisicamente reconciliável side-by-side com o storage atual sob este harness; não autoriza transformar o reconciliador experimental em API/default de produção.
+
 ## Boundary de segurança
 
 O gate é opt-in e só executa quando `LIMIAR_LEGACY_DB_COPY` aponta para uma cópia externa explicitamente preparada para auditoria.
@@ -86,6 +94,8 @@ A hipótese só pode mudar para `Supported` quando uma execução contra cópia 
 O harness para executar o gate foi materializado e agora usa o storage SQLite atual como destino, mas nenhuma cópia real está presente no repositório ou disponível neste boundary de execução. Portanto não existe Evidence válida para declarar compatibilidade operacional real.
 
 CI pode validar que o reconciliador continua funcionando contra a fixture e contra o schema atual do novo storage, além de validar que o gate real compila. Um `Skip` por ausência de `LIMIAR_LEGACY_DB_COPY` não fecha este experimento.
+
+O formato de `received_at` usado pelo reconciliador (`2006-01-02 15:04:05`, UTC) foi confrontado com o writer legado atual: `SaveRawMessage` persiste `ReceivedAt.UTC().Format(model.DBTimeLayout)` e `model.DBTimeLayout` possui exatamente esse layout. Isso sustenta a premissa para linhas produzidas por esse writer, sem substituir a auditoria da cópia histórica real.
 
 ## Próximo gate
 
