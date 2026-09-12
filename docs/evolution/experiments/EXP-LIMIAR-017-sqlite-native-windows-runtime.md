@@ -87,16 +87,38 @@ Esse resultado reduz o boundary, mas ainda não demonstra que `Open` em si falha
 
 Essa diferença de semântica é Evidence para investigar o teste antes de alterar o storage. Ela não autoriza enfraquecer a garantia Unix nem declarar equivalência de segurança de ACLs Windows.
 
+### Travis build 278807734 — HEAD `43707ee8e052412cb97a3c89717b13de41cf2a05`
+
+O teste funcional sem assert de permissões também falhou:
+
+- os quatro jobs Linux existentes passaram;
+- `SQLite Windows AMD64 / preflight` passou;
+- `SQLite Windows AMD64 / modules` passou;
+- `SQLite Windows AMD64 / pure test` passou;
+- `SQLite Windows AMD64 / open functional` falhou;
+- `SQLite Windows AMD64 / open baseline` falhou;
+- `SQLite Windows AMD64 / runtime` falhou.
+
+`open functional` executa `TestEvidenceAppendRoundTripAndHashAuthority`, que atravessa `Open`, bootstrap, WAL, migration e append real, mas não compara `FileMode.Perm()` com `0600`. Portanto a incompatibilidade do assert POSIX não explica a primeira falha funcional observada. Ela continua sendo uma preocupação de portabilidade do teste, mas não deve ser corrigida como causa-raiz desta etapa.
+
+A Evidence agora localiza a falha em algum ponto a partir da abertura real do SQLite. A documentação upstream de `github.com/ncruces/go-sqlite3/driver` afirma que o DSN aceita tanto um filename quanto uma URI `file:`. Isso permite subdividir o caminho sem mudar produção: comparar abertura do mesmo tipo de arquivo por filename nativo, por URI `file:` mínima e pela `databaseURI` de produção com `_pragma`.
+
 ## Isolamento atual
 
-No commit `ed14f2aa86f596c9a02d3e5a3c5cf1a427b8adea`, o harness acrescenta `SQLite Windows AMD64 / open functional`, executando `TestEvidenceAppendRoundTripAndHashAuthority` isoladamente.
+O harness acrescenta três probes executáveis e independentes, implementados em `windows_runtime_probe_test.go`:
 
-Esse teste também passa por `Open`, bootstrap, WAL, migration e append real de Evidence, mas não contém o assert `Mode().Perm() == 0600`. Ele fica lado a lado com `open baseline` e `runtime` no mesmo HEAD.
+1. `TestSQLiteDriverOpensNativeFilename`: cria o arquivo pela mesma helper de produção e executa `sql.Open` + `PingContext` passando o path nativo diretamente;
+2. `TestSQLiteDriverOpensMinimalFileURI`: repete a operação usando somente `file:` URI construída por `net/url`, sem `_pragma`;
+3. `TestSQLiteDriverOpensProductionURI`: usa `databaseURI(path, false)`, incluindo os `_pragma` connection-local usados por `openWritableDatabase`.
 
-A leitura do resultado é deliberadamente estreita:
+Cada probe possui um job Windows próprio no Travis. Os jobs históricos `open functional`, `open baseline` e `runtime` permanecem como controles.
 
-- se `open functional` passar enquanto `open baseline` falhar, o assert POSIX do teste passa a ser a causa mais forte e uma correção de portabilidade do teste é justificável, preservando a garantia `0600` em Unix;
-- se `open functional` também falhar, ainda existe uma falha funcional em `Open`/bootstrap/migration/append e nenhuma adaptação de teste deve mascará-la;
+A leitura do próximo resultado é deliberadamente estreita:
+
+- se o filename nativo falhar, o boundary fica abaixo da construção de URI e a investigação deve se concentrar no driver/VFS/path nativo no worker;
+- se filename passar e a URI mínima falhar, `file:`/normalização do path é o primeiro boundary incompatível demonstrado;
+- se URI mínima passar e URI de produção falhar, a investigação se concentra nos parâmetros `_pragma` ou em sua codificação;
+- se os três probes passarem enquanto `Open` falhar, o primeiro boundary está depois do `Ping`, em claim/WAL/baseline/migrations;
 - somente depois que a suíte completa ficar verde o experimento pode ser promovido a `Supported`.
 
 Nenhuma fase altera storage, schema, migrations, dependências ou comportamento de produção.
@@ -113,8 +135,8 @@ A semântica de `0600` usada como proteção Unix também não deve ser reinterp
 
 `In Progress`.
 
-Há Evidence de que provisionamento, toolchain/plataforma efetiva, resolução/verificação dos módulos e execução de lógica pura passam no worker Windows. O primeiro teste falho é `TestOpenAppliesADR019BaselineAndMigration`; ainda falta separar falha funcional de `Open` de incompatibilidade do assert POSIX de permissões.
+Há Evidence de que provisionamento, toolchain/plataforma efetiva, resolução/verificação dos módulos e execução de lógica pura passam no worker Windows. O teste funcional sem assert POSIX também falha, falsificando a hipótese de que a comparação exata de `0600` explica a falha principal. Ainda não há Evidence para alterar produção: o próximo boundary é distinguir filename, URI mínima e URI de produção antes de decompor claim/WAL/migration.
 
 ## Próximo gate
 
-Executar `open functional`, `open baseline` e `runtime` no mesmo HEAD. Se `open functional` passar e `open baseline` falhar, corrigir somente a expectativa de permissão do teste de forma específica por plataforma, mantendo `0600` como gate Unix. Se `open functional` falhar, subdividir o caminho funcional de `Open` antes de qualquer mudança de produção.
+Executar os três probes de abertura no mesmo HEAD junto aos controles existentes. Usar o primeiro probe vermelho para localizar a incompatibilidade. Não alterar `databaseURI`, PRAGMAs, permissões ou bootstrap até que um desses boundaries seja falsificado de forma executável.
