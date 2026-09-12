@@ -54,6 +54,42 @@ jobs:
         - go mod download
         - go mod verify
         - go test -v -count=1 -run '^TestMigrationVersion$' ./internal/storage/sqlite
+    - name: "SQLite Windows AMD64 / native filename"
+      os: windows
+      env: LIMIAR_CI_MODE=sqlite-native-windows-native-filename CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
+        - go mod download
+        - go mod verify
+        - go test -v -count=1 -run '^TestSQLiteDriverOpensNativeFilename$' ./internal/storage/sqlite
+    - name: "SQLite Windows AMD64 / minimal file URI"
+      os: windows
+      env: LIMIAR_CI_MODE=sqlite-native-windows-minimal-uri CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
+        - go mod download
+        - go mod verify
+        - go test -v -count=1 -run '^TestSQLiteDriverOpensMinimalFileURI$' ./internal/storage/sqlite
+    - name: "SQLite Windows AMD64 / production URI"
+      os: windows
+      env: LIMIAR_CI_MODE=sqlite-native-windows-production-uri CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
+        - go mod download
+        - go mod verify
+        - go test -v -count=1 -run '^TestSQLiteDriverOpensProductionURI$' ./internal/storage/sqlite
     - name: "SQLite Windows AMD64 / open functional"
       os: windows
       env: LIMIAR_CI_MODE=sqlite-native-windows-open-functional CGO_ENABLED=0
