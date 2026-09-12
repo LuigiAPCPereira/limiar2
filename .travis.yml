@@ -22,14 +22,35 @@ jobs:
     - name: "SQLite runtime / native Linux ARM64 experiment"
       arch: arm64
       env: LIMIAR_CI_MODE=sqlite-native-arm64 CGO_ENABLED=0
-    - name: "SQLite runtime / native Windows AMD64 experiment"
+    - name: "SQLite Windows AMD64 / preflight"
       os: windows
-      env: LIMIAR_CI_MODE=sqlite-native-windows CGO_ENABLED=0
+      env: LIMIAR_CI_MODE=sqlite-native-windows-preflight CGO_ENABLED=0
       install: skip
       script:
         - go version
         - test "$(go env GOOS)" = "windows"
         - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
+    - name: "SQLite Windows AMD64 / modules"
+      os: windows
+      env: LIMIAR_CI_MODE=sqlite-native-windows-modules CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
+        - go mod download
+        - go mod verify
+    - name: "SQLite Windows AMD64 / runtime"
+      os: windows
+      env: LIMIAR_CI_MODE=sqlite-native-windows-runtime CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - test "$(go env GOOS)" = "windows"
+        - test "$(go env GOARCH)" = "amd64"
+        - test "$(go env CGO_ENABLED)" = "0"
         - go mod download
         - go mod verify
         - go test -v -count=1 ./internal/storage/sqlite
@@ -101,8 +122,8 @@ after_success:
       echo "Job experimental CGO_ENABLED=0 concluído; upload de cobertura não se aplica."
     elif [ "${LIMIAR_CI_MODE}" = "sqlite-native-arm64" ]; then
       echo "Job experimental nativo Linux ARM64 do SQLite concluído; upload de cobertura não se aplica."
-    elif [ "${LIMIAR_CI_MODE}" = "sqlite-native-windows" ]; then
-      echo "Job experimental nativo Windows AMD64 do SQLite concluído; upload de cobertura não se aplica."
+    elif [[ "${LIMIAR_CI_MODE}" == sqlite-native-windows-* ]]; then
+      echo "Fase experimental nativa Windows AMD64 do SQLite concluída; upload de cobertura não se aplica."
     else
       echo "Job experimental de cross-build do SQLite concluído; upload de cobertura não se aplica."
     fi
