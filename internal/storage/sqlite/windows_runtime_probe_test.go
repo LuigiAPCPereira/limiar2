@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -50,6 +51,19 @@ func TestSQLiteDriverOpensMinimalFileURI(t *testing.T) {
 
 func TestSQLiteDriverOpensProductionURI(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "production-uri.db")
+	if err := createDatabaseFile(path); err != nil {
+		t.Fatal(err)
+	}
+
+	probeSQLitePing(t, databaseURI(path, false))
+}
+
+func TestSQLiteDriverOpensProductionURIWithSpecialCharacters(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("probe específico da serialização file:C:/... em Windows")
+	}
+
+	path := filepath.Join(t.TempDir(), "diretório com espaço", "evidência çã.db")
 	if err := createDatabaseFile(path); err != nil {
 		t.Fatal(err)
 	}
