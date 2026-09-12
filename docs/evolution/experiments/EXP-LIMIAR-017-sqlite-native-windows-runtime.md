@@ -43,85 +43,66 @@ O provider materializou cinco jobs. Os quatro jobs Linux existentes passaram, in
 
 O check agregado exposto ao GitHub não informa qual comando do job Windows falhou. Portanto esse resultado não sustenta atribuir a falha ao SQLite nem afirmar que a suíte chegou a executar.
 
-A configuração desse HEAD ainda aplicava globalmente `addons: apt` com `gnupg`, embora esse addon pertença somente ao job Linux default que valida o binário Codecov.
-
 ### Travis build 278807191 — HEAD `eff189b332506bfa15c965b2904ddd05f907f65f`
 
-O addon APT já estava isolado no job `Linux X64 / race`. Mesmo assim, os quatro jobs Linux passaram novamente e somente o job Windows falhou.
-
-Esse resultado falsifica a hipótese de que o `addons: apt` global era a causa da falha Windows. Como o check agregado continua sem expor a etapa exata, a falha permanece atribuível ao lifecycle/harness até que a suíte SQLite seja demonstravelmente alcançada.
+O addon APT já estava isolado no job `Linux X64 / race`. Mesmo assim, os quatro jobs Linux passaram novamente e somente o job Windows falhou. Isso falsificou a hipótese de que o `addons: apt` global era a causa da falha Windows.
 
 ### Travis build 278807471 — HEAD `f0702c77de1d76dcea09417b9b95bf67bedb3ad2`
 
-O job Windows já sobrescrevia o lifecycle genérico com `install: skip` e um `script` próprio contendo somente `go version`, validações de plataforma, download/verificação de módulos e a suíte SQLite.
-
-O resultado permaneceu idêntico: os quatro jobs Linux passaram e somente `SQLite runtime / native Windows AMD64 experiment` falhou. Isso falsifica a hipótese de que o `install` compartilhado ou os gates Linux herdados eram a causa. O check agregado ainda não informa qual comando dentro do job Windows falhou, portanto o resultado continua insuficiente para atribuir a falha ao SQLite.
+O job Windows já sobrescrevia o lifecycle genérico com `install: skip` e um `script` próprio. O resultado permaneceu idêntico, falsificando a hipótese de que o `install` compartilhado ou gates Linux herdados eram a causa.
 
 ### Travis build 278807576 — HEAD `7eafaadd6d4855170bbe5fd974fb977dc2b46c36`
 
-A estratificação tornou o boundary finalmente observável:
+A estratificação tornou o boundary observável:
 
-- os quatro jobs Linux existentes passaram;
-- `SQLite Windows AMD64 / preflight` passou;
-- `SQLite Windows AMD64 / modules` passou;
-- `SQLite Windows AMD64 / runtime` falhou.
+- quatro jobs Linux passaram;
+- `preflight` passou;
+- `modules` passou;
+- `runtime` falhou.
 
-Isso demonstra que o worker Windows real, Go 1.26.2, `GOOS=windows`, `GOARCH=amd64`, `CGO_ENABLED=0`, download e verificação de módulos não são o primeiro boundary falho. A falha está agora isolada na fase que acrescenta execução da suíte `internal/storage/sqlite`.
-
-O resultado ainda não identifica qual teste ou qual operação SQLite falhou, portanto não justifica alterar produção por hipótese. A inspeção do código revela pontos potencialmente sensíveis à plataforma — em particular abertura de paths temporários Windows por URI `file:` e asserts de permissões POSIX nos testes — mas nenhum deles é tratado como causa sem execução que o isole.
+Isso demonstrou que worker, Go, GOOS/GOARCH, CGO e módulos não eram o primeiro boundary falho.
 
 ### Travis build 278807630 — HEAD `352d25b1199819a19d7c3fe09ac4a7e9cd3e2571`
 
-A segunda estratificação isolou o primeiro teste falho:
-
-- os quatro jobs Linux existentes passaram;
-- `SQLite Windows AMD64 / preflight` passou;
-- `SQLite Windows AMD64 / modules` passou;
-- `SQLite Windows AMD64 / pure test` passou;
-- `SQLite Windows AMD64 / open baseline` falhou;
-- `SQLite Windows AMD64 / runtime` falhou.
-
-Logo, o test binary executa normalmente no worker e a primeira falha observável aparece no teste `TestOpenAppliesADR019BaselineAndMigration`, que chama `Open`, faz `os.Stat` no arquivo e então verifica permissões POSIX exatas (`0600`) antes dos demais asserts de baseline.
-
-Esse resultado reduz o boundary, mas ainda não demonstra que `Open` em si falha. A documentação de `os.Chmod` especifica que, no Windows, somente o bit `0200` é usado para controlar o atributo read-only e os demais bits de permissão são ignorados. Portanto comparar `FileMode.Perm()` com `0600` não é uma garantia portátil equivalente à usada em Unix.
-
-Essa diferença de semântica é Evidence para investigar o teste antes de alterar o storage. Ela não autoriza enfraquecer a garantia Unix nem declarar equivalência de segurança de ACLs Windows.
+`pure test` passou, enquanto `open baseline` e a suíte completa falharam. O test binary portanto executava e a primeira falha aparecia ao atravessar `Open` ou seus asserts subsequentes.
 
 ### Travis build 278807734 — HEAD `43707ee8e052412cb97a3c89717b13de41cf2a05`
 
-O teste funcional sem assert de permissões também falhou:
+`open functional` também falhou, mesmo sem comparar permissões POSIX exatas. Isso falsificou a hipótese de que o assert de `0600` explicava a falha principal.
+
+### Travis build 278807814
+
+Abertura por filename Windows nativo passou, enquanto a URI `file:` mínima construída por `net/url`, a URI de produção e os testes que atravessam `Open` falharam. O boundary passou a ser a serialização de filename em URI.
+
+### Travis build 278807939
+
+A URI mínima hierárquica com separadores normalizados e `/C:/...` ainda falhou. Isso falsificou a hipótese de que apenas backslashes ou ausência do slash antes do drive explicavam a incompatibilidade.
+
+### Travis build 278807989 — HEAD `a4d9a109e7c2b7e043c94a7c4001f19460574ec1`
+
+O probe mínimo foi reduzido à forma documentada pelo upstream, `file:` + path Windows absoluto com separadores `/`, isto é, `file:C:/...`.
+
+O resultado foi decisivo:
 
 - os quatro jobs Linux existentes passaram;
-- `SQLite Windows AMD64 / preflight` passou;
-- `SQLite Windows AMD64 / modules` passou;
-- `SQLite Windows AMD64 / pure test` passou;
-- `SQLite Windows AMD64 / open functional` falhou;
-- `SQLite Windows AMD64 / open baseline` falhou;
-- `SQLite Windows AMD64 / runtime` falhou.
+- `preflight`, `modules` e `pure test` passaram;
+- `native filename` passou;
+- `minimal file URI` **passou**;
+- `production URI` falhou;
+- `open functional`, `open baseline` e a suíte completa falharam.
 
-`open functional` executa `TestEvidenceAppendRoundTripAndHashAuthority`, que atravessa `Open`, bootstrap, WAL, migration e append real, mas não compara `FileMode.Perm()` com `0600`. Portanto a incompatibilidade do assert POSIX não explica a primeira falha funcional observada. Ela continua sendo uma preocupação de portabilidade do teste, mas não deve ser corrigida como causa-raiz desta etapa.
+A diferença entre o probe verde e `databaseURI` ficou restrita à serialização do filename e aos parâmetros `_pragma`. Como o probe `file:C:/...` demonstra que o driver/VFS aceita o path absoluto Windows nessa forma, existe Evidence executável para alterar somente a serialização de drive-letter paths e então revalidar a URI de produção com os mesmos parâmetros.
 
-A Evidence agora localiza a falha em algum ponto a partir da abertura real do SQLite. A documentação upstream de `github.com/ncruces/go-sqlite3/driver` afirma que o DSN aceita tanto um filename quanto uma URI `file:`. Isso permite subdividir o caminho sem mudar produção: comparar abertura do mesmo tipo de arquivo por filename nativo, por URI `file:` mínima e pela `databaseURI` de produção com `_pragma`.
+## Implementação em validação
 
-## Isolamento atual
+O commit `06a08759e0542c0a9ae2159e671b9e3e601c1f64` altera somente `databaseURI`:
 
-O harness acrescenta três probes executáveis e independentes, implementados em `windows_runtime_probe_test.go`:
+- preserva `url.Values` e exatamente os mesmos parâmetros `mode`/`_pragma`;
+- para paths cujo volume é um drive letter (`C:` etc.), serializa `file:` + `filepath.ToSlash(path)`, produzindo `file:C:/...?...`;
+- preserva a serialização anterior por `url.URL` em Unix e demais paths;
+- não infere sem Evidence uma política para UNC paths.
 
-1. `TestSQLiteDriverOpensNativeFilename`: cria o arquivo pela mesma helper de produção e executa `sql.Open` + `PingContext` passando o path nativo diretamente;
-2. `TestSQLiteDriverOpensMinimalFileURI`: repete a operação usando somente `file:` URI construída por `net/url`, sem `_pragma`;
-3. `TestSQLiteDriverOpensProductionURI`: usa `databaseURI(path, false)`, incluindo os `_pragma` connection-local usados por `openWritableDatabase`.
-
-Cada probe possui um job Windows próprio no Travis. Os jobs históricos `open functional`, `open baseline` e `runtime` permanecem como controles.
-
-A leitura do próximo resultado é deliberadamente estreita:
-
-- se o filename nativo falhar, o boundary fica abaixo da construção de URI e a investigação deve se concentrar no driver/VFS/path nativo no worker;
-- se filename passar e a URI mínima falhar, `file:`/normalização do path é o primeiro boundary incompatível demonstrado;
-- se URI mínima passar e URI de produção falhar, a investigação se concentra nos parâmetros `_pragma` ou em sua codificação;
-- se os três probes passarem enquanto `Open` falhar, o primeiro boundary está depois do `Ping`, em claim/WAL/baseline/migrations;
-- somente depois que a suíte completa ficar verde o experimento pode ser promovido a `Supported`.
-
-Nenhuma fase altera storage, schema, migrations, dependências ou comportamento de produção.
+Nenhum schema, migration, PRAGMA, dependency, claim, WAL, baseline ou contrato de Evidence foi alterado.
 
 ## Limites
 
@@ -135,8 +116,15 @@ A semântica de `0600` usada como proteção Unix também não deve ser reinterp
 
 `In Progress`.
 
-Há Evidence de que provisionamento, toolchain/plataforma efetiva, resolução/verificação dos módulos e execução de lógica pura passam no worker Windows. O teste funcional sem assert POSIX também falha, falsificando a hipótese de que a comparação exata de `0600` explica a falha principal. Ainda não há Evidence para alterar produção: o próximo boundary é distinguir filename, URI mínima e URI de produção antes de decompor claim/WAL/migration.
+A incompatibilidade de URI foi isolada até uma diferença reproduzível: filename nativo e `file:C:/...` passam no mesmo worker em que a URI produzida anteriormente por `databaseURI` falha. Uma correção mínima da serialização Windows está agora em validação real.
 
 ## Próximo gate
 
-Executar os três probes de abertura no mesmo HEAD junto aos controles existentes. Usar o primeiro probe vermelho para localizar a incompatibilidade. Não alterar `databaseURI`, PRAGMAs, permissões ou bootstrap até que um desses boundaries seja falsificado de forma executável.
+No novo HEAD, exigir simultaneamente:
+
+1. `production URI` verde;
+2. `open functional` verde;
+3. suíte completa `internal/storage/sqlite` verde;
+4. gates Linux existentes verdes.
+
+Se `production URI` continuar vermelho, decompor codificação/ordem dos parâmetros `_pragma` sem ampliar a mudança. Se `production URI` ficar verde mas a suíte continuar vermelha, continuar a decomposição a partir de claim/WAL/baseline/migrations. Somente promover o experimento quando a suíte completa passar no mesmo HEAD.
