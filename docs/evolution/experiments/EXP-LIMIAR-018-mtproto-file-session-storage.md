@@ -1,7 +1,7 @@
 # EXP-LIMIAR-018 — Boundary de sessão MTProto em arquivo
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Rejected
 
 ## Hipótese
 
@@ -18,10 +18,9 @@ O registry da rebaseline classifica o ADR 004 como `RETAIN-PRINCIPLE / REWRITE`:
 necessidade de sessão MTProto durável permanece, mas o mecanismo de persistência histórico
 não é automaticamente preservado.
 
-A investigação registrada por F-STO-006 (em revisão na PR #200 no início deste
-experimento) separa sessão e peer cache como autoridades distintas. Sessão é material de
-credencial sensível; peer cache é estado operacional reconstruível e possui outro ciclo de
-vida.
+F-STO-006, integrado pela PR #200, separa sessão e peer cache como autoridades distintas.
+Sessão é material de credencial sensível; peer cache é estado operacional reconstruível e
+possui outro ciclo de vida.
 
 `PROPOSAL-STO-001` já mantém sessão fora do escopo do banco SQLite de Evidence: o
 boundary de segredo precisa ser decidido separadamente.
@@ -113,21 +112,50 @@ Isso não rejeita uma estratégia **baseada em arquivo** com camada própria de 
 Rejeita somente equiparar `session.FileStorage` upstream, sem adaptação, ao boundary final
 do Limiar.
 
-## Resultado atual
+## Execução
 
-`In Progress`.
+A PR #201 foi revalidada sobre `main` já contendo F-STO-006. O HEAD executado foi
+`50dbe308e8b943bc5308d7f25480eed16435b46f`.
 
-O harness foi materializado, mas os gates do HEAD deste experimento ainda precisam ser
-executados. A Evidence de source acima já limita o que um resultado verde normal pode
-provar; a conclusão só será atualizada após o harness executar no ambiente registrado.
+Travis build `278809467`, concluído em 2026-09-13, executou a matriz de 13 jobs com sucesso.
+O job `Linux X64 / race` executou a suíte normal com Go 1.26.2, Linux Noble e
+`CGO_ENABLED=1`, incluindo o harness deste experimento.
 
-## Próximo gate
+No ambiente Unix observado, os asserts do harness confirmaram simultaneamente:
 
-Executar os gates normais do repositório, incluindo `go test -race ./...`, e registrar o
-ambiente real do job que exercitou o harness.
+- ausência como `session.ErrNotFound`;
+- round-trip, reopen e overwrite funcionais;
+- arquivo novo criado com modo `0600`;
+- arquivo preexistente explicitamente ajustado para `0644` permaneceu `0644` após
+  `StoreSession`.
 
-Se o comportamento observado confirmar que arquivo preexistente `0644` não é restringido,
-a hipótese de suficiência **as-is** deve ser marcada `Rejected`. O próximo experimento
-deverá então comparar a menor camada de arquivo hardened (permissões explícitas +
-publicação segura) com alternativas somente se a complexidade adicional for justificada;
-não adotar SQLite de sessão por default apenas porque SQLite já existe para Evidence.
+Os jobs Windows permaneceram verdes porque os asserts POSIX foram corretamente pulados;
+isso não produz Evidence sobre ACLs Windows.
+
+## Resultado
+
+`Rejected`.
+
+A Evidence executável confirma o comportamento que falsifica a hipótese: apesar do
+contrato funcional básico funcionar, `session.FileStorage` v0.161.0 **as-is** não corrige
+permissões de um arquivo preexistente no ambiente Unix observado. Além disso, seu
+`StoreSession` continua baseado em `os.WriteFile`, cujo contrato permite escrita parcial
+em falha intermediária.
+
+Para uma credencial MTProto, round-trip funcional não é suficiente para considerar esse
+candidato o boundary final sem adaptação.
+
+## Limitações e consequência
+
+A rejeição é estritamente do `session.FileStorage` upstream usado **as-is**. Ela não:
+
+- rejeita uma estratégia baseada em arquivo com camada própria de hardening;
+- escolhe SQLite para sessão;
+- demonstra corrupção entre duas instâncias concorrentes;
+- estabelece ACL adequada para Windows;
+- autoriza mudança de produção.
+
+A próxima hipótese útil, se mantida a estratégia de arquivo, é falsificar a menor camada
+hardened capaz de garantir permissões privadas quando aplicável, publicação/recovery segura
+e coordenação coerente entre clients. Essa hipótese deve permanecer experimental até haver
+Evidence suficiente para uma Proposal/Decision de session storage.
