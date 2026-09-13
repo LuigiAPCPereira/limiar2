@@ -6,8 +6,8 @@ Status: In Progress
 ## Hipótese
 
 `github.com/gotd/td/session.FileStorage` v0.161.0, usado **as-is**, é suficiente como
-candidato de persistência da sessão MTProto do Limiar sem transportar o mecanismo
-Tursogo legado.
+candidato de persistência da sessão MTProto do Limiar sem transportar o mecanismo de
+persistência legado.
 
 O experimento não decide a estratégia final. Ele tenta falsificar o candidato mais
 simples antes de justificar uma implementação própria ou um storage dedicado.
@@ -15,13 +15,13 @@ simples antes de justificar uma implementação própria ou um storage dedicado.
 ## Origem
 
 O registry da rebaseline classifica o ADR 004 como `RETAIN-PRINCIPLE / REWRITE`: a
-necessidade de sessão MTProto durável permanece, mas o mecanismo Tursogo histórico não é
-automaticamente preservado.
+necessidade de sessão MTProto durável permanece, mas o mecanismo de persistência histórico
+não é automaticamente preservado.
 
 A investigação registrada por F-STO-006 (em revisão na PR #200 no início deste
 experimento) separa sessão e peer cache como autoridades distintas. Sessão é material de
-credencial sensível; peer cache é estado operacional reconstruível e possui outro
-lifecycle.
+credencial sensível; peer cache é estado operacional reconstruível e possui outro ciclo de
+vida.
 
 `PROPOSAL-STO-001` já mantém sessão fora do escopo do banco SQLite de Evidence: o
 boundary de segredo precisa ser decidido separadamente.
@@ -73,8 +73,9 @@ Ele verifica no ambiente em execução:
    que `0600` no call site não funciona como permission hardening de arquivo existente.
 
 Os testes de modo POSIX fazem `Skip` no Windows porque bits `0600` não equivalem a uma
-garantia de ACL Windows; EXP-LIMIAR-017 já mostrou que essa equivalência não pode ser
-presumida.
+garantia de ACL Windows. EXP-LIMIAR-017 validou execução de `internal/storage/sqlite` em
+worker Travis Windows AMD64 com Go 1.26.2 e `CGO_ENABLED=0`, mas não testou ACLs de arquivo
+nem estabeleceu equivalência com permissões POSIX.
 
 ## O que este experimento não tenta provar
 
