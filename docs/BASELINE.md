@@ -198,8 +198,8 @@ com documentação primária e testes proporcionais ao risco.
 
 1. aceitação ou revisão do ADR 021 antes de materializar o schema físico de `SourceSyncState`;
 2. aceitação ou revisão do ADR 022 antes de materializar o schema físico de `BackfillProgress`;
-3. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007);
-4. completar a validação operacional do novo SQLite fora de Linux X64: backup/restore já possui Evidence executável, locking/WAL foi suportado em Linux X64 pelo EXP-LIMIAR-012, `CGO_ENABLED=0` foi suportado em Linux X64/Go 1.26.2 pelo EXP-LIMIAR-013, cross-build foi suportado para `linux/arm64`, `windows/amd64` e `darwin/arm64` pelo EXP-LIMIAR-014 e a suíte `internal/storage/sqlite` executou verde em runner Linux ARM64 nativo pelo EXP-LIMIAR-015; runtime nativo de Windows/macOS e validação do produto completo nessas plataformas continuam sem Evidence equivalente;
+3. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007): o harness já cria o destino pelas migrations e baseline atuais do novo SQLite, mas o gate continua aberto até uma execução contra cópia histórica descartável real;
+4. completar a validação operacional do novo SQLite fora de Linux X64: backup/restore já possui Evidence executável, locking/WAL foi suportado em Linux X64 pelo EXP-LIMIAR-012, `CGO_ENABLED=0` foi suportado em Linux X64/Go 1.26.2 pelo EXP-LIMIAR-013, cross-build foi suportado para `linux/arm64`, `windows/amd64` e `darwin/arm64` pelo EXP-LIMIAR-014, a suíte `internal/storage/sqlite` executou verde em runner Linux ARM64 nativo pelo EXP-LIMIAR-015 e o runtime nativo de `internal/storage/sqlite` em Windows AMD64/Go 1.26.2/`CGO_ENABLED=0` foi suportado pelo EXP-LIMIAR-017; runtime nativo macOS e validação do produto completo fora de Linux X64 continuam sem Evidence equivalente;
 5. estratégia final de sessão/peer state;
 6. boundary de mídia entre evidência de fonte e cache/apresentação;
 7. materialização dos contratos de Processing Generations e Source Projection;
@@ -208,7 +208,7 @@ com documentação primária e testes proporcionais ao risco.
 Os gates de implementação dos ADRs 017 e 019 — inclusive crash/restart da integração
 real, `ChannelDifferenceTooLong`, edit/delete/update composto, coexistência backfill/live,
 race detector, preservação do legado e validação nas plataformas efetivamente suportadas — continuam obrigatórios
-antes de colocar o novo ingress/storage em produção. O gate `CGO_ENABLED=0 go test` já possui Evidence verde em Linux X64/Go 1.26.2, e `internal/storage/sqlite` já possui Evidence de execução nativa verde em Linux ARM64/Noble/Go 1.26.2 no escopo do EXP-LIMIAR-015; nenhum desses resultados implica suporte automático do produto completo nem generalização para Windows/macOS.
+antes de colocar o novo ingress/storage em produção. O gate `CGO_ENABLED=0 go test` já possui Evidence verde em Linux X64/Go 1.26.2; `internal/storage/sqlite` possui Evidence de execução nativa verde em Linux ARM64/Noble/Go 1.26.2 no escopo do EXP-LIMIAR-015 e em Windows AMD64/Go 1.26.2/`CGO_ENABLED=0` no escopo do EXP-LIMIAR-017. Esses resultados são restritos aos boundaries observados e não implicam suporte automático do produto completo nem generalização para Windows ARM64, UNC ou macOS.
 
 ---
 
