@@ -90,8 +90,11 @@ func writeSyncedTemp(dir string, data []byte) (string, error) {
 	}
 	name := tmp.Name()
 	cleanup := true
+	closed := false
 	defer func() {
-		_ = tmp.Close()
+		if !closed {
+			_ = tmp.Close()
+		}
 		if cleanup {
 			_ = os.Remove(name)
 		}
@@ -109,6 +112,7 @@ func writeSyncedTemp(dir string, data []byte) (string, error) {
 	if err := tmp.Close(); err != nil {
 		return "", err
 	}
+	closed = true
 	cleanup = false
 	return name, nil
 }
