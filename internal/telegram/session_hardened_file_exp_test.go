@@ -15,14 +15,28 @@ import (
 // O objetivo é testar a menor camada de arquivo que endereça as falhas observadas no
 // EXP-LIMIAR-018 sem escolher ainda um storage definitivo.
 type hardenedFileStorageExp struct {
-	path string
+	path  string
+	locks *pathLockRegistry
 }
 
-var hardenedFileLocks sync.Map // map[string]*sync.Mutex
+type pathLockRegistry struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
 
-func lockForPath(path string) *sync.Mutex {
-	value, _ := hardenedFileLocks.LoadOrStore(path, &sync.Mutex{})
-	return value.(*sync.Mutex)
+func newPathLockRegistry() *pathLockRegistry {
+	return &pathLockRegistry{locks: make(map[string]*sync.Mutex)}
+}
+
+func (r *pathLockRegistry) lockFor(path string) *sync.Mutex {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if mu, ok := r.locks[path]; ok {
+		return mu
+	}
+	mu := &sync.Mutex{}
+	r.locks[path] = mu
+	return mu
 }
 
 func (s hardenedFileStorageExp) load(ctx context.Context) ([]byte, error) {
@@ -40,8 +54,7 @@ func (s hardenedFileStorageExp) store(ctx context.Context, data []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-
-	mu := lockForPath(s.path)
+	mu := s.locks.lockFor(s.path)
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -49,61 +62,77 @@ func (s hardenedFileStorageExp) store(ctx context.Context, data []byte) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-
-	tmp, err := os.CreateTemp(dir, ".limiar-session-*")
+	tmpName, err := writeSyncedTemp(dir, data)
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
 	committed := false
 	defer func() {
-		_ = tmp.Close()
 		if !committed {
 			_ = os.Remove(tmpName)
 		}
 	}()
 
-	if err := tmp.Chmod(0o600); err != nil {
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-
 	if err := os.Rename(tmpName, s.path); err != nil {
 		return err
 	}
 	committed = true
+	return hardenAndSyncPublishedFile(s.path, dir)
+}
 
-	// A permissão do temporário deve sobreviver ao rename. O chmod pós-publicação
-	// também repara explicitamente targets herdados em ambientes POSIX observados.
-	if runtime.GOOS != "windows" {
-		if err := os.Chmod(s.path, 0o600); err != nil {
-			return err
-		}
-		d, err := os.Open(dir)
-		if err != nil {
-			return err
-		}
-		err = d.Sync()
-		closeErr := d.Close()
-		if err != nil {
-			return err
-		}
-		if closeErr != nil {
-			return closeErr
-		}
+func writeSyncedTemp(dir string, data []byte) (string, error) {
+	tmp, err := os.CreateTemp(dir, ".limiar-session-*")
+	if err != nil {
+		return "", err
 	}
-	return nil
+	name := tmp.Name()
+	cleanup := true
+	defer func() {
+		_ = tmp.Close()
+		if cleanup {
+			_ = os.Remove(name)
+		}
+	}()
+
+	if err := tmp.Chmod(0o600); err != nil {
+		return "", err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return "", err
+	}
+	if err := tmp.Sync(); err != nil {
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", err
+	}
+	cleanup = false
+	return name, nil
+}
+
+func hardenAndSyncPublishedFile(path, dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return err
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	if err := d.Sync(); err != nil {
+		_ = d.Close()
+		return err
+	}
+	return d.Close()
+}
+
+func newExperimentalStorage(path string, locks *pathLockRegistry) hardenedFileStorageExp {
+	return hardenedFileStorageExp{path: path, locks: locks}
 }
 
 func TestHardenedSessionFileRepairsPreexistingUnixPermissions(t *testing.T) {
@@ -119,11 +148,16 @@ func TestHardenedSessionFileRepairsPreexistingUnixPermissions(t *testing.T) {
 		t.Fatalf("chmod seeded session file: %v", err)
 	}
 
-	storage := hardenedFileStorageExp{path: path}
+	storage := newExperimentalStorage(path, newPathLockRegistry())
 	if err := storage.store(context.Background(), []byte("replacement")); err != nil {
 		t.Fatalf("store: %v", err)
 	}
+	assertPrivateMode(t, path)
+	assertPayload(t, storage, []byte("replacement"))
+}
 
+func assertPrivateMode(t *testing.T, path string) {
+	t.Helper()
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("stat: %v", err)
@@ -131,12 +165,16 @@ func TestHardenedSessionFileRepairsPreexistingUnixPermissions(t *testing.T) {
 	if got := info.Mode().Perm(); got != 0o600 {
 		t.Fatalf("permissions=%#o, want 0600", got)
 	}
+}
+
+func assertPayload(t *testing.T, storage hardenedFileStorageExp, want []byte) {
+	t.Helper()
 	got, err := storage.load(context.Background())
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if !bytes.Equal(got, []byte("replacement")) {
-		t.Fatalf("payload=%q, want replacement", got)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("payload=%q, want %q", got, want)
 	}
 }
 
@@ -146,8 +184,9 @@ func TestHardenedSessionFileSerializesIndependentInstances(t *testing.T) {
 	}
 
 	path := filepath.Join(t.TempDir(), "session.bin")
-	first := hardenedFileStorageExp{path: path}
-	second := hardenedFileStorageExp{path: path}
+	locks := newPathLockRegistry()
+	first := newExperimentalStorage(path, locks)
+	second := newExperimentalStorage(path, locks)
 
 	payloadA := bytes.Repeat([]byte("A"), 64*1024)
 	payloadB := bytes.Repeat([]byte("B"), 64*1024)
@@ -186,7 +225,7 @@ func TestHardenedSessionFileLeavesNoTemporaryFileAfterSuccessfulPublish(t *testi
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session.bin")
-	storage := hardenedFileStorageExp{path: path}
+	storage := newExperimentalStorage(path, newPathLockRegistry())
 	if err := storage.store(context.Background(), []byte("secret")); err != nil {
 		t.Fatalf("store: %v", err)
 	}
