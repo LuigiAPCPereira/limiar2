@@ -2,6 +2,7 @@ package evidenceenvelope
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
@@ -10,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	sqlitestore "github.com/limiar/collector/internal/storage/sqlite"
 )
 
 const legacyRawSchema = `
@@ -67,6 +70,25 @@ func openReadOnly(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+func openCurrentStorageAuditTarget(t *testing.T, path string) *sql.DB {
+	t.Helper()
+
+	store, err := sqlitestore.Open(context.Background(), path)
+	if err != nil {
+		t.Fatalf("open current sqlite storage: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close current sqlite storage: %v", err)
+	}
+
+	db := openDB(t, path)
+	if _, err := db.Exec(legacyImportLedgerSchema); err != nil {
+		_ = db.Close()
+		t.Fatalf("create experimental import ledger: %v", err)
+	}
+	return db
 }
 
 func importLegacyRawMessages(source, target *sql.DB, sourceSHA [32]byte) (int, error) {
@@ -167,11 +189,8 @@ func TestLegacyImportIsSideBySideAuditableAndIdempotent(t *testing.T) {
 	}
 	defer source.Close()
 
-	target := openDB(t, targetPath)
+	target := openCurrentStorageAuditTarget(t, targetPath)
 	defer target.Close()
-	if _, err := target.Exec(evidenceSchema + legacyImportLedgerSchema + evidenceAppendOnlyGuards); err != nil {
-		t.Fatal(err)
-	}
 
 	imported, err := importLegacyRawMessages(source, target, before)
 	if err != nil {
