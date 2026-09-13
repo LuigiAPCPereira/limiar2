@@ -53,11 +53,8 @@ func TestRealLegacyCopyAudit(t *testing.T) {
 	}
 
 	targetPath := filepath.Join(t.TempDir(), "audit-target.db")
-	target := openDB(t, targetPath)
+	target := openCurrentStorageAuditTarget(t, targetPath)
 	defer target.Close()
-	if _, err := target.Exec(evidenceSchema + legacyImportLedgerSchema + evidenceAppendOnlyGuards); err != nil {
-		t.Fatalf("create audit target schema: %v", err)
-	}
 
 	imported, err := importLegacyRawMessages(source, target, before)
 	if err != nil {
