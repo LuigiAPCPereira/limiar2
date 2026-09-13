@@ -1,7 +1,7 @@
 # EXP-LIMIAR-019 — Boundary hardened de sessão MTProto em arquivo
 
 Authority: Non-authoritative
-Status: In Progress
+Status: Supported
 
 ## Hipótese
 
@@ -63,20 +63,29 @@ Depois de uma publicação bem-sucedida, nenhum temporário `.limiar-session-*` 
 
 ## Critério
 
-A hipótese será `Supported` somente se os gates executáveis no ambiente Unix observado confirmarem simultaneamente:
+A hipótese é `Supported` somente se os gates executáveis no ambiente Unix observado confirmarem simultaneamente:
 
 - hardening de arquivo preexistente para `0600`;
 - payload final completo sob writers independentes no mesmo processo;
 - ausência de temporários após publicação bem-sucedida;
 - race detector verde para o harness.
 
-Será `Rejected` se qualquer uma dessas propriedades falhar no ambiente testado.
+## Evidence observada
 
-Será `Inconclusive` se o ambiente não conseguir executar os testes relevantes.
+No HEAD `6004bb24dc6b295e28196f5b615731e77ea0c1db`, o Travis CI build `278809798` executou a matriz de 13 jobs e concluiu com sucesso.
+
+O job `Linux X64 / race`, em Linux Noble com Go 1.26.2 e `CGO_ENABLED=1`, passou com o race detector habilitado e exerceu os asserts Unix do harness. Nesse ambiente observado, os testes confirmaram simultaneamente:
+
+- substituição de arquivo preexistente `0644` com modo final `0600`;
+- payload final íntegro sob writers independentes no mesmo processo usando o registry compartilhado por path;
+- ausência de temporários `.limiar-session-*` após publicação bem-sucedida;
+- ausência de race detectada pelo gate executado.
+
+A matriz completa também permaneceu verde nos demais jobs configurados pelo repositório. Isso não amplia a hipótese para Windows: os asserts POSIX/rename relevantes continuam fazendo `Skip` nessa plataforma.
 
 ## Limitações explícitas
 
-Mesmo um resultado `Supported` **não** prova:
+O resultado `Supported` **não** prova:
 
 - ACL Windows equivalente a `0600`;
 - replace/rename seguro no Windows;
@@ -97,10 +106,10 @@ Uma eventual implementação de produção continua exigindo Proposal/Decision p
 
 ## Resultado atual
 
-`In Progress`.
+`Supported` no escopo Unix observado e intra-processo descrito acima.
 
-O harness foi materializado, mas ainda não há resultado de CI deste HEAD. Um build verde anterior do EXP-LIMIAR-018 não conta como Evidence deste experimento.
+A Evidence demonstra que a menor camada experimental testada corrige as insuficiências diretamente observadas no EXP-LIMIAR-018 dentro desse escopo. Ela não autoriza ainda uma implementação de produção nem resolve as limitações explícitas.
 
 ## Próximo gate
 
-Executar os gates normais do repositório, em especial `go test -race ./...`, e registrar exatamente o ambiente que exercitou os asserts Unix.
+Usar esta Evidence, junto de F-STO-006 e EXP-LIMIAR-018, para formular a menor Proposal/Decision necessária para a estratégia de sessão antes de materializar qualquer implementação de produção. Questões de coordenação multiprocesso, Windows e política de backup de segredo permanecem fora do que foi demonstrado e devem ser tratadas explicitamente se entrarem no escopo suportado.
