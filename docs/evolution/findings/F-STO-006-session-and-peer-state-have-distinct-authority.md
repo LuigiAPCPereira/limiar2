@@ -5,17 +5,19 @@ Status: Open
 
 ## Descoberta
 
-A implementação legada co-localiza `sessions` e `peers` no mesmo banco de dados Tursogo,
-mas o comportamento observado mostra que esses estados possuem finalidade, criticidade e
-ciclo de vida diferentes. Portanto, a coexistência física atual não sustenta tratá-los como
-uma única autoridade futura nem copiar mecanicamente as duas tabelas para o novo storage.
+A implementação legada co-localiza `sessions` e `peers` na mesma persistência implementada
+via Tursogo, mas o comportamento observado mostra que esses estados possuem finalidade,
+criticidade e ciclo de vida diferentes. Portanto, a coexistência física atual não sustenta
+tratá-los como uma única autoridade futura nem copiar mecanicamente as duas tabelas para o
+novo storage.
 
 ### Sessão MTProto
 
-O registry de transição preserva do ADR 004 somente o princípio de **sessão MTProto
-durável**: `RETAIN-PRINCIPLE / REWRITE` significa preservar o princípio arquitetural,
-mas reescrever o mecanismo legado durante a rebaseline, conforme `docs/adr/README.md`.
-O mecanismo Tursogo do ADR histórico não é baseline para a rebaseline.
+O registry de transição em `docs/adr/README.md`, seção
+**Registry de transição — Rebaseline 2026**, preserva do ADR 004 somente o princípio de
+**sessão MTProto durável**. A disposição `RETAIN-PRINCIPLE / REWRITE` mantém a necessidade
+de durabilidade e exige que o mecanismo de armazenamento seja redecidido; o mecanismo
+Tursogo do ADR histórico não é baseline para a rebaseline.
 
 Na versão efetivamente usada, `github.com/gotd/td v0.161.0`, `session.Storage` expõe
 somente `LoadSession` e `StoreSession` sobre bytes opacos. O próprio upstream registra
@@ -62,52 +64,41 @@ também injeta `p.NewMediaClient(collectorRepo)`. Em `cmd/limiar/provider.go`,
 operações de mídia. Portanto, a implementação atual pode manter clients independentes que
 compartilham a mesma persistência de sessão.
 
-Isso torna coordenação de escrita parte da futura estratégia de sessão. Em particular,
-adotar diretamente `gotd/session.FileStorage` por instância não é uma substituição
-mecânica do storage atual: em `v0.161.0`, cada `FileStorage` possui seu próprio mutex e
-`StoreSession` usa `os.WriteFile(path, data, 0600)` diretamente; o próprio upstream
-mantém um TODO sobre escrita robusta/rename. Instâncias distintas apontando para o mesmo
-path não compartilham esse mutex.
+Isso torna coordenação de escrita uma questão material para qualquer estratégia futura de
+sessão. Em `gotd/td v0.161.0`, cada `session.FileStorage` possui seu próprio mutex e
+`StoreSession` usa `os.WriteFile(path, data, 0600)` diretamente; o próprio upstream mantém
+um TODO sobre escrita robusta/rename. Instâncias distintas apontando para o mesmo path não
+compartilham esse mutex.
 
 Também não é neutro colocar a sessão no novo arquivo SQLite de Evidence. A partir desse
 momento, snapshots/backup daquele banco passariam a carregar credencial MTProto. Além
-disso, EXP-LIMIAR-017 validou execução de `internal/storage/sqlite` em Windows AMD64 no
-ambiente observado, mas não testou nem estabeleceu equivalência entre bits POSIX `0600` e
-ACLs do Windows.
+disso, EXP-LIMIAR-017 validou execução de `internal/storage/sqlite` em worker Travis
+Windows AMD64, Go 1.26.2 e `CGO_ENABLED=0`; o experimento não testou nem estabeleceu
+equivalência entre bits POSIX `0600` e ACLs do Windows.
 
 Essas observações não demonstram que `FileStorage` é inadequado nem que SQLite é
 inadequado. Demonstram que a escolha envolve segurança, atomicidade/coordenação,
-backup/recovery e suporte de plataforma e, portanto, precisa de decisão explícita.
+backup/recovery e suporte de plataforma e, portanto, não pode ser inferida apenas da
+co-localização legada.
 
 ## Impacto arquitetural
 
-A próxima estratégia não deve usar "session/peer state" como um único problema apenas
-porque o legado os guarda no mesmo banco.
+A Evidence separa dois problemas que a topologia legada colocava no mesmo storage:
 
-Devem permanecer perguntas independentes:
-
-1. **Sessão:** onde e como persistir o blob sensível do gotd com ausência explícita,
+1. **Sessão:** credencial durável cujo contrato precisa considerar ausência explícita,
    overwrite seguro, coordenação entre clients, recovery/backup consciente de segredo e
-   proteção adequada nas plataformas suportadas?
-2. **Peers:** quais peers realmente precisam sobreviver a restart, de onde podem ser
-   reconstruídos, qual relação possuem com subscriptions e quando um cache stale pode ser
-   descartado ou renovado?
+   proteção adequada nas plataformas suportadas.
+2. **Peers:** cache operacional cujo contrato ainda precisa esclarecer quais entradas
+   sobrevivem a restart, de onde podem ser reconstruídas, sua relação com subscriptions e
+   quando estado stale pode ser descartado ou renovado.
 
-A tabela `sessions` legada não deve ser migrada para o novo SQLite por inércia. A tabela
-`peers` também não deve ser promovida a source of truth nem receber ciclo de vida de
-subscription apenas por existir.
+A Evidence disponível não sustenta migrar a tabela `sessions` legada para o novo SQLite
+apenas por inércia, nem promover a tabela `peers` a source of truth ou atribuir a ela o
+ciclo de vida de uma subscription apenas porque já existe fisicamente.
 
-## Próximo passo
+## Questões ainda abertas
 
-Investigar a estratégia de **sessão** primeiro, por ser credencial necessária para a
-integração Telegram e possuir o maior impacto de segurança. O experimento correspondente
-deve possuir critérios mensuráveis para ausência vs. erro, round-trip/overwrite,
-reopen/restart, falha de escrita, coordenação entre clients, permissões/ACL e implicações
-de backup/restore.
-
-EXP-LIMIAR-018 materializa o primeiro teste desse boundary contra o candidato mais simples,
-`gotd/session.FileStorage` usado as-is. O Finding não antecipa seu resultado nem transforma
-esses critérios em Decision.
-
-A estratégia de peer cache deve ser investigada separadamente depois que seu contrato de
-reconstrução e ownership estiver explícito.
+Este Finding não escolhe storage de sessão e não define o contrato final do peer cache.
+Permanecem em aberto as garantias concretas de escrita/recovery/coordenação da sessão e o
+contrato de reconstrução/ownership dos peers. Essas questões exigem Evidence experimental
+separada antes de qualquer Proposal ou Decision.
