@@ -19,6 +19,8 @@ type hardenedFileStorageExp struct {
 	locks *pathLockRegistry
 }
 
+// pathLockRegistry é test-only e deliberadamente curto: cada teste cria sua própria
+// instância, exceto quando duas instâncias experimentais precisam compartilhar locks.
 type pathLockRegistry struct {
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
@@ -66,20 +68,13 @@ func (s hardenedFileStorageExp) store(ctx context.Context, data []byte) error {
 	if err != nil {
 		return err
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = os.Remove(tmpName)
-		}
-	}()
 
 	if err := ctx.Err(); err != nil {
-		return err
+		return errors.Join(err, os.Remove(tmpName))
 	}
 	if err := os.Rename(tmpName, s.path); err != nil {
-		return err
+		return errors.Join(err, os.Remove(tmpName))
 	}
-	committed = true
 	return hardenAndSyncPublishedFile(s.path, dir)
 }
 
@@ -89,31 +84,22 @@ func writeSyncedTemp(dir string, data []byte) (string, error) {
 		return "", err
 	}
 	name := tmp.Name()
-	cleanup := true
-	closed := false
-	defer func() {
-		if !closed {
-			_ = tmp.Close()
-		}
-		if cleanup {
-			_ = os.Remove(name)
-		}
-	}()
+	fail := func(cause error) (string, error) {
+		return "", errors.Join(cause, tmp.Close(), os.Remove(name))
+	}
 
 	if err := tmp.Chmod(0o600); err != nil {
-		return "", err
+		return fail(err)
 	}
 	if _, err := tmp.Write(data); err != nil {
-		return "", err
+		return fail(err)
 	}
 	if err := tmp.Sync(); err != nil {
-		return "", err
+		return fail(err)
 	}
 	if err := tmp.Close(); err != nil {
-		return "", err
+		return "", errors.Join(err, os.Remove(name))
 	}
-	closed = true
-	cleanup = false
 	return name, nil
 }
 
@@ -129,8 +115,7 @@ func hardenAndSyncPublishedFile(path, dir string) error {
 		return err
 	}
 	if err := d.Sync(); err != nil {
-		_ = d.Close()
-		return err
+		return errors.Join(err, d.Close())
 	}
 	return d.Close()
 }
