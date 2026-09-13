@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -76,6 +77,18 @@ func requireEqual[T comparable](t *testing.T, name string, got, want T) {
 	if got != want {
 		t.Fatalf("%s=%v, want %v", name, got, want)
 	}
+}
+
+func requirePOSIXPermissions(t *testing.T, name, path string, want os.FileMode) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireEqual(t, name, info.Mode().Perm(), want)
 }
 
 func requireBytesEqual(t *testing.T, name string, got, want []byte) {
@@ -189,11 +202,7 @@ func TestOpenAppliesADR019BaselineAndMigration(t *testing.T) {
 	path, store := openTestStore(t)
 	defer closeTestStore(t, store)
 
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	requireEqual(t, "database permissions", info.Mode().Perm(), os.FileMode(0o600))
+	requirePOSIXPermissions(t, "database permissions", path, 0o600)
 	requireEqual(t, "MaxOpenConnections", store.db.Stats().MaxOpenConnections, 1)
 	requireEqual(t, "journal_mode", mustQueryString(t, store.db, `PRAGMA journal_mode`), "wal")
 	requireEqual(t, "synchronous", mustQueryInt64(t, store.db, `PRAGMA synchronous`), int64(2))
@@ -217,11 +226,7 @@ func TestOpenRejectsUnownedExistingSQLiteWithoutMutation(t *testing.T) {
 	}
 
 	requireBytesEqual(t, "arquivo SQLite recusado", mustReadFile(t, path), before)
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	requireEqual(t, "permissões do SQLite recusado", info.Mode().Perm(), os.FileMode(0o644))
+	requirePOSIXPermissions(t, "permissões do SQLite recusado", path, 0o644)
 
 	readOnly := mustOpenSQL(t, path, true)
 	defer func() { _ = readOnly.Close() }()
