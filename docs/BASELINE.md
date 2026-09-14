@@ -140,6 +140,7 @@ sem criar authority sobre o novo banco.
 Os itens abaixo são resultados de pesquisa, experimentos e propostas da rebaseline.
 **Eles não devem ser tratados como decisões apenas por aparecerem aqui.**
 
+- **ADR 018 — Source Admission antes do `updates.Manager`** está `Proposed`: preserva o envelope live antes do manager, exige admission equivalente para recovery que carrega Evidence ou altera continuidade e impede que o handler pós-Manager seja tratado como autoridade única da Source Evidence bruta. A proposta não autoriza mudança de produção até aceitação explícita do mantenedor;
 - **ADR 021 — Schema físico de SourceSyncState** está `Proposed`: common state completo por `user_id`, channel PTS por `(user_id, channel_id)`, ausência distinta de zero/erro e setters parciais restritos a state existente. A proposta não autoriza implementação até aceitação explícita do mantenedor;
 - **ADR 022 — Schema físico de BackfillProgress** está `Proposed`: progresso próprio por `subscription_id`, ausência distinta de posição zero, avanço monotônico/transacional, `completed` limitado ao lifecycle histórico e Evidence-before-progress. A proposta não autoriza implementação até aceitação explícita do mantenedor;
 - **ADR 023 — Boundary hardened de sessão MTProto em arquivo** está `Proposed`: mantém a sessão separada do SQLite de Evidence e propõe, no escopo Unix/Linux sustentado pela Evidence disponível, publicação por temporário no mesmo diretório, sincronização, replace/rename, proteção privada, coordenação intra-processo por path e falha fechada quando a proteção exigida não puder ser estabelecida. Windows, coordenação multiprocesso, criptografia adicional e backup/restore de segredo continuam fora do contrato até Evidence própria. A proposta não autoriza implementação até aceitação explícita do mantenedor;
@@ -197,14 +198,15 @@ com documentação primária e testes proporcionais ao risco.
 
 ## 7. Questões abertas prioritárias
 
-1. aceitação ou revisão do ADR 021 antes de materializar o schema físico de `SourceSyncState`;
-2. aceitação ou revisão do ADR 022 antes de materializar o schema físico de `BackfillProgress`;
-3. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007): o harness já cria o destino temporário através de `internal/storage/sqlite.Open`, portanto usa migrations e baseline operacionais atuais; o gate continua aberto porque nenhuma cópia histórica descartável real foi exercitada, e o SQL transacional do reconciliador experimental não autoriza uma capability equivalente em produção;
-4. completar a validação operacional do novo SQLite fora de Linux X64: backup/restore já possui Evidence executável, locking/WAL foi suportado em Linux X64 pelo EXP-LIMIAR-012, `CGO_ENABLED=0` foi suportado em Linux X64/Go 1.26.2 pelo EXP-LIMIAR-013, cross-build foi suportado para `linux/arm64`, `windows/amd64` e `darwin/arm64` pelo EXP-LIMIAR-014, a suíte `internal/storage/sqlite` executou verde em runner Linux ARM64 nativo pelo EXP-LIMIAR-015 e em worker Windows AMD64 nativo com Go 1.26.2/`CGO_ENABLED=0` pelo EXP-LIMIAR-017; o EXP-LIMIAR-016 permaneceu `Inconclusive` em macOS por ausência de worker executável, e validação do produto completo nessas plataformas continua sem Evidence equivalente;
-5. aceitação ou revisão do ADR 023 antes de implementar o novo boundary de sessão MTProto; suporte Windows permanece dependente de Evidence específica para ACL/replace, e peer state continua uma questão separada a ser delimitada antes de implementação estrutural;
-6. boundary de mídia entre evidência de fonte e cache/apresentação;
-7. materialização dos contratos de Processing Generations e Source Projection;
-8. escolha de provider/modelo de IA somente quando houver corpus e credenciais para bake-off real.
+1. aceitação ou revisão do ADR 018 antes de materializar o Source Admission real em torno do `updates.Manager` e do recovery gotd;
+2. aceitação ou revisão do ADR 021 antes de materializar o schema físico de `SourceSyncState`;
+3. aceitação ou revisão do ADR 022 antes de materializar o schema físico de `BackfillProgress`;
+4. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007): o harness já cria o destino temporário através de `internal/storage/sqlite.Open`, portanto usa migrations e baseline operacionais atuais; o gate continua aberto porque nenhuma cópia histórica descartável real foi exercitada, e o SQL transacional do reconciliador experimental não autoriza uma capability equivalente em produção;
+5. completar a validação operacional do novo SQLite fora de Linux X64: backup/restore já possui Evidence executável, locking/WAL foi suportado em Linux X64 pelo EXP-LIMIAR-012, `CGO_ENABLED=0` foi suportado em Linux X64/Go 1.26.2 pelo EXP-LIMIAR-013, cross-build foi suportado para `linux/arm64`, `windows/amd64` e `darwin/arm64` pelo EXP-LIMIAR-014, a suíte `internal/storage/sqlite` executou verde em runner Linux ARM64 nativo pelo EXP-LIMIAR-015 e em worker Windows AMD64 nativo com Go 1.26.2/`CGO_ENABLED=0` pelo EXP-LIMIAR-017; o EXP-LIMIAR-016 permaneceu `Inconclusive` em macOS por ausência de worker executável, e validação do produto completo nessas plataformas continua sem Evidence equivalente;
+6. aceitação ou revisão do ADR 023 antes de implementar o novo boundary de sessão MTProto; suporte Windows permanece dependente de Evidence específica para ACL/replace, e peer state continua uma questão separada a ser delimitada antes de implementação estrutural;
+7. boundary de mídia entre evidência de fonte e cache/apresentação;
+8. materialização dos contratos de Processing Generations e Source Projection;
+9. escolha de provider/modelo de IA somente quando houver corpus e credenciais para bake-off real.
 
 Os gates de implementação dos ADRs 017 e 019 — inclusive crash/restart da integração
 real, `ChannelDifferenceTooLong`, edit/delete/update composto, coexistência backfill/live,
