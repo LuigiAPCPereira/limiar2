@@ -135,4 +135,4 @@ Desejável apenas se houver modelo de ameaça e key management que façam a crip
 
 Redigir um ADR **Proposed** estreito que escolha um arquivo hardened como boundary inicial de sessão MTProto para o ambiente Unix/Linux suportado, mantendo Windows, coordenação multiprocesso, criptografia adicional e política de backup fora do contrato até Evidence específica.
 
-O ADR não deve aceitar implementação automaticamente. Pela constituição do projeto, `Proposed -> Accepted` exige aceitação explícita e verificável do mantenedor antes de qualquer mudança arquitetural permanente no runtime.
+O ADR não deve autorizar implementação automaticamente. Pela constituição do projeto, `Proposed -> Accepted` exige aceitação explícita e verificável do mantenedor antes de qualquer mudança arquitetural permanente no runtime.
