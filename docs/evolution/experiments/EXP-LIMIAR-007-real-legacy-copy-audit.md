@@ -93,14 +93,12 @@ A hipótese só pode mudar para `Supported` quando uma execução contra cópia 
 
 O harness para executar o gate foi materializado e agora usa o storage SQLite atual como destino, mas nenhuma cópia real está presente no repositório ou disponível neste boundary de execução. Portanto não existe Evidence válida para declarar compatibilidade operacional real.
 
-CI pode validar que o reconciliador continua funcionando contra a fixture e contra o schema atual do novo storage, além de validar que o gate real compila. Um `Skip` por ausência de `LIMIAR_LEGACY_DB_COPY` não fecha este experimento.
+A revalidação da fixture contra o storage atual já foi concluída na PR #196: o Travis `278808848` ficou verde nos quatro jobs registrados pela PR, incluindo Linux X64/race, `CGO_ENABLED=0`, cross-build SQLite e runtime nativo Linux ARM64. Isso sustenta que o reconciliador experimental continua funcionando contra a fixture e o schema/migrations atuais; o gate `TestRealLegacyCopyAudit` continua fazendo `Skip` sem `LIMIAR_LEGACY_DB_COPY`, portanto esse CI não suporta a hipótese principal deste EXP.
 
 O formato de `received_at` usado pelo reconciliador (`2006-01-02 15:04:05`, UTC) foi confrontado com o writer legado atual: `SaveRawMessage` persiste `ReceivedAt.UTC().Format(model.DBTimeLayout)` e `model.DBTimeLayout` possui exatamente esse layout. Isso sustenta a premissa para linhas produzidas por esse writer, sem substituir a auditoria da cópia histórica real.
 
 ## Próximo gate
 
-Primeiro, validar em CI que a fixture de importação continua verde usando o storage atual como destino.
-
-Depois, executar o comando acima contra uma **cópia descartável** do banco histórico e registrar somente a linha de métricas não sensíveis produzida pelo teste, junto com ambiente/toolchain e resultado dos gates do módulo.
+Executar o comando acima contra uma **cópia descartável** do banco histórico e registrar somente a linha de métricas não sensíveis produzida pelo teste, junto com ambiente/toolchain e resultado dos gates do módulo.
 
 Se o gate falhar por incompatibilidade de schema ou dado histórico, registrar a divergência como Finding antes de adaptar o importador. Não modificar o legado para fazer o experimento passar.
