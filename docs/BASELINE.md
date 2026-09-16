@@ -184,7 +184,7 @@ A implementação atual usa, entre outras dependências:
 - Go 1.26.2 no `go.mod`;
 - `github.com/gotd/td` v0.161.0 para Telegram/MTProto;
 - `turso.tech/database/tursogo` v0.7.2 para o storage legado atualmente em produção;
-- `github.com/ncruces/go-sqlite3 v0.35.3` para o novo storage SQLite side-by-side;
+- `github.com/ncruces/go-sqlite3 v0.35.4` para o novo storage SQLite side-by-side;
 - Cobra/Viper para CLI/config;
 - `net/http` para o dashboard atual.
 
