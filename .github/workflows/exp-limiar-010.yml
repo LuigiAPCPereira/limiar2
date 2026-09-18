@@ -1,0 +1,46 @@
+name: EXP-LIMIAR-010
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "internal/telegram/gotd_ncruces_ordering_exp_test.go"
+      - "internal/telegram/gotd_physical_ordering_exp_test.go"
+      - "internal/telegram/gotd_recovery_contract_test.go"
+      - "docs/evolution/experiments/EXP-LIMIAR-010-manager-ncruces-physical-ordering.md"
+      - ".github/workflows/exp-limiar-010.yml"
+
+jobs:
+  manager-ncruces-ordering:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.2'
+          check-latest: true
+
+      - name: Install pinned experimental driver in ephemeral checkout
+        run: go get github.com/ncruces/go-sqlite3/driver@v0.35.3
+
+      - name: Vet EXP-LIMIAR-010 composition
+        run: go vet -tags exp010_ncruces ./internal/telegram
+
+      - name: EXP-LIMIAR-010 without CGO
+        env:
+          CGO_ENABLED: 0
+        run: go test -tags exp010_ncruces ./internal/telegram -run '^TestEXP010_' -count=1 -v
+
+      - name: EXP-LIMIAR-010 race detector
+        run: go test -race -tags exp010_ncruces ./internal/telegram -run '^TestEXP010_' -count=1 -v
+
+      - name: Normal suite remains independent of experimental dependency
+        env:
+          CGO_ENABLED: 0
+        run: |
+          git checkout -- go.mod go.sum
+          go mod verify
+          go test ./... -count=1
