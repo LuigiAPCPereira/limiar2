@@ -22,7 +22,10 @@ jobs:
         - go version
         - go mod download
         - go mod verify
-        - go test ./internal/logger -run '^$' -bench '^BenchmarkDottedKey$' -benchmem -count=5
+        - go test ./internal/logger -run '^$' -bench '^BenchmarkDottedKey$' -benchmem -count=5 | tee dotted-key-benchmark.txt
+        - echo "=== DOTTED_KEY_BENCHMARK_EVIDENCE_BEGIN ==="
+        - cat dotted-key-benchmark.txt
+        - echo "=== DOTTED_KEY_BENCHMARK_EVIDENCE_END ==="
     - name: "Linux X64 / CGO disabled experiment"
       env: LIMIAR_CI_MODE=cgo-disabled CGO_ENABLED=0
     - name: "SQLite portability / cross-build experiment"
