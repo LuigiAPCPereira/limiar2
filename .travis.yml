@@ -15,6 +15,14 @@ jobs:
         apt:
           packages:
             - gnupg
+    - name: "Logger dottedKey / benchmark"
+      env: LIMIAR_CI_MODE=logger-dotted-key-benchmark CGO_ENABLED=0
+      install: skip
+      script:
+        - go version
+        - go mod download
+        - go mod verify
+        - go test ./internal/logger -run '^$' -bench '^BenchmarkDottedKey$' -benchmem -count=5
     - name: "Linux X64 / CGO disabled experiment"
       env: LIMIAR_CI_MODE=cgo-disabled CGO_ENABLED=0
     - name: "SQLite portability / cross-build experiment"
@@ -197,5 +205,5 @@ after_success:
     elif [[ "${LIMIAR_CI_MODE}" == sqlite-native-windows-* ]]; then
       echo "Fase experimental nativa Windows AMD64 do SQLite concluída; upload de cobertura não se aplica."
     else
-      echo "Job experimental de cross-build do SQLite concluído; upload de cobertura não se aplica."
+      echo "Job experimental sem cobertura concluído; upload de cobertura não se aplica."
     fi
