@@ -126,6 +126,8 @@ camada só se tornam autoridade quando cobertos por ADR Accepted.
 
 O primeiro slice autorizado pelos ADRs 019 e 020 já está materializado em `internal/storage/sqlite`: o novo banco é aberto side-by-side, reivindicado por `application_id`, aplica a baseline operacional, executa migrations versionadas e expõe `EvidenceAppender` sem colocar o storage legado sob migração in-place.
 
+Na abertura, o storage recusa versões de schema mais novas que as migrations disponíveis e verifica a presença, o tipo e a tabela associada dos objetos `evidence`, `evidence_no_update` e `evidence_no_delete` antes de entregar a capability. Objetos ausentes ou incompatíveis causam erro, sem reparo automático. Essa verificação reduz o gate de integridade do schema na reabertura; não audita integralmente o SQL dos objetos, o conteúdo histórico ou alterações por outro processo depois da abertura.
+
 Com o ADR 016 aceito, o ADR 005 fica superseded no escopo do contrato raw por mensagem e
 o ADR 006 fica retired/superseded no escopo de `LastMessageID` como autoridade de sync
 live. O princípio de gotd do ADR 002 é mantido com boundary de sincronização reescrito

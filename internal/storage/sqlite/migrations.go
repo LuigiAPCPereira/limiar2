@@ -29,6 +29,13 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+	if len(specs) == 0 {
+		return fmt.Errorf("nenhuma migration disponível")
+	}
+	latest := specs[len(specs)-1].version
+	if current > latest {
+		return fmt.Errorf("user_version=%d maior que a última migration disponível=%d", current, latest)
+	}
 
 	for _, spec := range specs {
 		if spec.version <= current {

@@ -137,6 +137,9 @@ func initializeDatabase(ctx context.Context, db *sql.DB, needsClaim bool) error 
 	if err := migrate(ctx, db); err != nil {
 		return fmt.Errorf("sqlite storage: migrations: %w", err)
 	}
+	if err := validateEvidenceSchema(ctx, db); err != nil {
+		return fmt.Errorf("sqlite storage: %w", err)
+	}
 	return nil
 }
 
