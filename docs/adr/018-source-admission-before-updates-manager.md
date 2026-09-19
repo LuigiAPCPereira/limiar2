@@ -1,9 +1,12 @@
 # ADR 018 — Source Admission antes do updates.Manager
 
 Authority: Decision Record
-Status: Proposed
+Status: Accepted
+Accepted-by: LuigiAPCPereira
+Accepted-at: 2026-09-19T17:08:00-03:00
+Acceptance-reference: https://github.com/LuigiAPCPereira/limiar2/issues/212
 
-> Enquanto este ADR estiver `Proposed`, ele não altera a arquitetura aceita nem autoriza mudança de produção.
+> Este ADR foi aceito por autorização explícita do mantenedor, registrada na issue #212. A aceitação autoriza os contratos desta Decision, mas não dispensa os gates antes de produção.
 
 ## Contexto
 
@@ -25,9 +28,9 @@ Ambos      -> Evidence append-only
 
 A Proposal de origem é `PROPOSAL-ING-003-source-admission-before-manager.md`.
 
-## Decision proposta
+## Decision
 
-Se este ADR for aceito, passam a valer os contratos abaixo.
+Com a aceitação deste ADR, passam a valer os contratos abaixo.
 
 ### 1. Source Evidence live é admitida antes do updates.Manager
 
@@ -151,7 +154,7 @@ Esses itens devem preservar os contracts deste ADR e dos ADRs 016/017 quando for
 
 ## Relação com ADR 017
 
-Se aceito, este ADR **complementa o ADR 017 e prevalece sobre a cláusula conflitante referente à posição da Source Evidence bruta**.
+Este ADR **complementa o ADR 017 e prevalece sobre a cláusula conflitante referente à posição da Source Evidence bruta**.
 
 Em particular, deixa de valer a interpretação de:
 
@@ -180,7 +183,7 @@ O ADR 017 não deve ser editado retroativamente para esconder a evolução da de
 
 ## Gates antes de produção
 
-Mesmo se este ADR vier a ser aceito, produção continua condicionada a:
+Mesmo com este ADR aceito, produção continua condicionada a:
 
 1. storage real capaz de preservar o ordering Evidence -> state exigido pelos boundaries;
 2. definição versionada do envelope físico de Evidence sem perder a observação da fonte;
@@ -189,10 +192,8 @@ Mesmo se este ADR vier a ser aceito, produção continua condicionada a:
 5. testes de crash/restart na integração real, não apenas no harness;
 6. política explícita e testada para classes de recovery sem Evidence de domínio.
 
-## Escopo da proposta
+## Escopo da aceitação
 
-`Status: Proposed` significa que a evidência é suficiente para avaliação arquitetural.
+`Status: Accepted` significa que o mantenedor autorizou expressamente os contratos desta Decision, conforme issue #212.
 
-Não significa aceitação. Merging deste documento com `Status: Proposed`, um comentário genérico ou uma instrução como "continue" não promovem o ADR.
-
-Uma eventual aceitação exige ação explícita do maintainer e os metadados definidos em `AGENTS.md`.
+A aceitação não dispensa os gates de produção acima e não promove automaticamente os ADRs 021/022/023, migração do legado, política de backup/restore ou outras decisões independentes.
