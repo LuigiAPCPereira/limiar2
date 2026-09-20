@@ -40,7 +40,7 @@ A camada que materializa a configuração de aquisição deve fornecer um `subsc
 
 O `telegram.Client`/Source Admission recebe essa identidade por injeção explícita. O callback de update não a deriva do envelope recebido.
 
-A forma concreta de configuração (arquivo, tabela, CLI ou outra superfície) permanece detalhe de implementação enquanto preservar identidade estável e validação fail-closed.
+A forma concreta de configuração (arquivo, tabela, CLI ou outra superfície) permanece detalhe de implementação enquanto preservar identidade estável e validação com falha fechada.
 
 ### 3. Identidade estável é separada do conteúdo mutável da subscription
 
@@ -63,6 +63,15 @@ Live sync, backfill e Evidence continuam com lifecycle e semântica próprios co
 ### 6. Falta ou ambiguidade de subscription falha fechada
 
 O boundary de produção não deve inventar `subscription_id` a partir de metadata do update. Configuração ausente, vazia ou ambígua deve impedir a inicialização/admissão correspondente com erro explícito.
+
+## Evidência e limites
+
+- ADR 020, seção «Envelope mínimo»: define `subscription_id` como escopo configurado de aquisição e campo obrigatório da Evidence; não define ownership da configuração.
+- `docs/evolution/experiments/EXP-LIMIAR-002-storage-durability.md` e `experiments/storage-contract/storage_contract_test.go` / `failure_contract_test.go`: exercitam fisicamente `subscription_id` com o valor de fixture `telegram:test`; não demonstram um identificador configurado de produção.
+- `cmd/limiar/provider.go` e o boundary atual de `internal/telegram`: a construção do cliente e o callback live não transportam uma identidade de subscription explicitamente configurada. O filtro legado de canais ocorre posteriormente no collector; este comportamento existente é evidência da lacuna, não autoridade para a solução.
+- F-ING-009 e EXP-LIMIAR-001, Fase E: estabelecem o motivo para Source Admission antes do `updates.Manager`, não o formato nem a origem da identidade de subscription.
+
+A origem/configuração real da identidade e a política de admissão dos canais ainda precisam ser implementadas e testadas sob decisão aceita. Nenhuma fixture experimental equivale a uma convenção de ID para produção.
 
 ## Consequências
 
@@ -98,7 +107,7 @@ O boundary de produção não deve inventar `subscription_id` a partir de metada
 5. configuração ausente/ambígua falha antes de admitir Evidence;
 6. nenhum caminho converte automaticamente `channel_id` em `subscription_id`;
 7. comportamento de canais monitorados legados é coberto por teste durante a transição;
-8. os gates de crash/restart e recovery dos ADRs 017–019 permanecem obrigatórios.
+8. os gates de recovery/fail-stop dos ADRs 017/018 e de crash/restart da integração real dos ADRs 018/019 permanecem obrigatórios.
 
 ## Fora do escopo
 
