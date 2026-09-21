@@ -398,7 +398,7 @@ Preserve a verdade observável e torne a evolução auditável.
 
 ## 18. Entrada operacional — Agent Development Protocol v2.0
 
-Para desenvolvimento multissessão, ler primeiro este `AGENTS.md` e a fonte do protocolo [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md), na **mesma ref Git** do trabalho. O protocolo v2.0 governa recuperação, adoção, inventário, checkpoint, validação e handoff, sem mudar a ordem de autoridade da seção 2, aceitar ADRs ou conceder permissões. A cópia anexada ao ChatGPT Project tem SHA-256 `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`; **a equivalência byte a byte da cópia na branch ainda está pendente**, conforme o relatório de adoção. Não afirmar sincronização automática com Project, Codex ou tarefas agendadas.
+Para desenvolvimento multissessão, ler primeiro este `AGENTS.md` e a fonte do protocolo [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md), na **mesma ref Git** do trabalho. O protocolo v2.0 governa recuperação, adoção, inventário, checkpoint, validação e handoff, sem mudar a ordem de autoridade da seção 2, aceitar ADRs ou conceder permissões. A cópia anexada ao ChatGPT Project tem SHA-256 `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`; a identidade byte a byte com a cópia na branch foi **confirmada** pelo Git blob `78b2e86564fb287886f9df065fdb727b20c52727` reaberto no commit `b8a820748fde73d9cdc4088c5fc51d9b99bbee2d`. Não afirmar sincronização automática com Project, Codex ou tarefas agendadas.
 
 ### Mapa documental das nove funções
 
@@ -409,9 +409,9 @@ Para desenvolvimento multissessão, ler primeiro este `AGENTS.md` e a fonte do p
 | Arquitetura e contratos | `docs/BASELINE.md`, `docs/ARCHITECTURE.md`, ADRs Accepted | parcial; divergência ADR 018/BASELINE documentada |
 | Decisões duráveis | `docs/adr/README.md`, ADRs Accepted; proposals não são decisões | verificada quanto ao registro |
 | Inventário de tarefas | [`docs/TASKLIST.md`](docs/TASKLIST.md) | inventário de adoção, escopo do produto ainda incompleto |
-| Planejamento e marcos | `docs/CONTEXT.md`, `docs/BASELINE.md` | plano vigente de rebaseline a conferir |
+| Planejamento e marcos | [`docs/ROADMAP.md`](docs/ROADMAP.md), `docs/CONTEXT.md`, `docs/BASELINE.md` | roadmap de adoção verificado; planejamento global a conferir |
 | Histórico recuperável | `docs/evolution/`, ADRs, PRs e commits | equivalência completa a conferir |
 | Checkpoint/ação | [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) | checkpoint de adoção criado; reconciliar HEAD |
-| Instruções/versão | Este arquivo e [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md) | fonte presente, integridade ainda pendente |
+| Instruções/versão | Este arquivo e [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md) | fonte acessível na branch, integridade comprovada; outros ambientes não verificados |
 
 O relatório com evidências e lacunas é [`docs/ADOPTION_REPORT.md`](docs/ADOPTION_REPORT.md). Nenhum desses links confirma leitura de Codex ou agendamentos; verificar disponibilidade real em cada execução. `docs/TASKLIST.md` não substitui um inventário de todo o escopo ativo enquanto os itens de produto estiverem incompletos. Manter as permissões reais e os gates constitucionais desta Constituição.
