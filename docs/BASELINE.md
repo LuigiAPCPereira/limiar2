@@ -107,6 +107,15 @@ camada só se tornam autoridade quando cobertos por ADR Accepted.
   - `Forget=true` não é um reset operacional silencioso;
   - updates stateless não definem autoridade de sync;
   - replay após restart é esperado e não implica exactly-once;
+- **ADR 018 — Source Admission antes do `updates.Manager`**, Accepted por referência
+  explícita à [issue #212](https://github.com/LuigiAPCPereira/limiar2/issues/212):
+  - o envelope live atravessa Source Admission durável antes de `updates.Manager`;
+  - recovery com Evidence ou mudança de continuidade é preservado antes da adoção pelo manager;
+  - o handler pós-Manager não é a única autoridade da Source Evidence bruta;
+  - falha de trabalho derivado reconstruível não bloqueia automaticamente sync state se
+    a Evidence exigida já estiver durável;
+  - fail-stop e recovery do ADR 017 continuam vigentes e backfill mantém progresso independente;
+  - aceitação do contrato **não comprova implementação produtiva nem dispensa seus gates**;
 - **ADR 019 — Baseline local SQLite para o novo storage**, que estabelece:
   - `github.com/ncruces/go-sqlite3 v0.35.3` como baseline do novo banco através de `database/sql`;
   - uma conexão lógica inicialmente, com `WAL`, `synchronous=FULL`, foreign keys e busy timeout;
@@ -142,7 +151,6 @@ sem criar authority sobre o novo banco.
 Os itens abaixo são resultados de pesquisa, experimentos e propostas da rebaseline.
 **Eles não devem ser tratados como decisões apenas por aparecerem aqui.**
 
-- **ADR 018 — Source Admission antes do `updates.Manager`** está `Proposed`: preserva o envelope live antes do manager, exige admission equivalente para recovery que carrega Evidence ou altera continuidade e impede que o handler pós-Manager seja tratado como autoridade única da Source Evidence bruta. A proposta não autoriza mudança de produção até aceitação explícita do mantenedor;
 - **ADR 021 — Schema físico de SourceSyncState** está `Proposed`: common state completo por `user_id`, channel PTS por `(user_id, channel_id)`, ausência distinta de zero/erro e setters parciais restritos a state existente. A proposta não autoriza implementação até aceitação explícita do mantenedor;
 - **ADR 022 — Schema físico de BackfillProgress** está `Proposed`: progresso próprio por `subscription_id`, ausência distinta de posição zero, avanço monotônico/transacional, `completed` limitado ao lifecycle histórico e Evidence-before-progress. A proposta não autoriza implementação até aceitação explícita do mantenedor;
 - **ADR 023 — Boundary hardened de sessão MTProto em arquivo** está `Proposed`: mantém a sessão separada do SQLite de Evidence e propõe, no escopo Unix/Linux sustentado pela Evidence disponível, publicação por temporário no mesmo diretório, sincronização, replace/rename, proteção privada, coordenação intra-processo por path e falha fechada quando a proteção exigida não puder ser estabelecida. Windows, coordenação multiprocesso, criptografia adicional e backup/restore de segredo continuam fora do contrato até Evidence própria. A proposta não autoriza implementação até aceitação explícita do mantenedor;
@@ -200,7 +208,7 @@ com documentação primária e testes proporcionais ao risco.
 
 ## 7. Questões abertas prioritárias
 
-1. aceitação ou revisão do ADR 018 antes de materializar o Source Admission real em torno do `updates.Manager` e do recovery gotd;
+1. materializar e validar o Source Admission real em torno do `updates.Manager` e recovery gotd conforme ADR 018 Accepted e seus gates, após reconciliar dependências de identidade ainda em aberto; aceitação da Decision não equivale a implementação;
 2. aceitação ou revisão do ADR 021 antes de materializar o schema físico de `SourceSyncState`;
 3. aceitação ou revisão do ADR 022 antes de materializar o schema físico de `BackfillProgress`;
 4. auditoria/importação side-by-side contra cópia real do banco legado (EXP-LIMIAR-007): o harness já cria o destino temporário através de `internal/storage/sqlite.Open`, portanto usa migrations e baseline operacionais atuais; o gate continua aberto porque nenhuma cópia histórica descartável real foi exercitada, e o SQL transacional do reconciliador experimental não autoriza uma capability equivalente em produção;
