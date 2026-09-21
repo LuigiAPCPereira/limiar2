@@ -406,7 +406,7 @@ Para desenvolvimento multissessão, ler primeiro este `AGENTS.md` e a fonte do p
 | --- | --- | --- |
 | Identidade, público e limites | `README.md`, `docs/PRODUCT_BRIEF.md`, `docs/BASELINE.md` | parcial; reconciliar fonte vigente |
 | Requisitos e aceites | `docs/PRODUCT_BRIEF.md`, `docs/CONTEXT.md`, `docs/specs/` e ADRs aplicáveis | parcial; cobertura do escopo ativo a conferir |
-| Arquitetura e contratos | `docs/BASELINE.md`, `docs/ARCHITECTURE.md`, ADRs Accepted | parcial; divergência ADR 018/BASELINE documentada |
+| Arquitetura e contratos | `docs/BASELINE.md`, `docs/ARCHITECTURE.md`, ADRs Accepted | parcial; ADR 018/BASELINE reconciliados, demais contratos por conferir |
 | Decisões duráveis | `docs/adr/README.md`, ADRs Accepted; proposals não são decisões | verificada quanto ao registro |
 | Inventário de tarefas | [`docs/TASKLIST.md`](docs/TASKLIST.md) | inventário de adoção, escopo do produto ainda incompleto |
 | Planejamento e marcos | [`docs/ROADMAP.md`](docs/ROADMAP.md), `docs/CONTEXT.md`, `docs/BASELINE.md` | roadmap de adoção verificado; planejamento global a conferir |
