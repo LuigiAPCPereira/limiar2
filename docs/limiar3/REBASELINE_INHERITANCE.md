@@ -185,3 +185,10 @@ invariantes/config/segredos
 ```
 
 O plano operacional detalhado está em [`BOTTOM_UP_REBUILD_PLAN.md`](BOTTOM_UP_REBUILD_PLAN.md).
+
+
+## 10. Desacoplamento coerente com a rebaseline
+
+A direção do Limiar 3 acrescenta uma consequência explícita dos invariantes C-08/C-09: integração Telegram/MTProto e MCP devem ser **desacopláveis por contrato antes de qualquer decisão de distribuição**. `gotd/td` fica contido no adapter Telegram; sessão é uma authority do boundary Telegram; collector e MCP são consumidores com lifecycles diferentes.
+
+O MCP realtime consulta Telegram sob demanda através da capability Telegram e não usa o Evidence DB como proxy obrigatório. Uma observação obtida dessa forma não se torna Source Evidence automaticamente; se precisar entrar no corpus durável, deve atravessar Source Admission. O detalhamento está em [`DETACHABLE_BOUNDARIES.md`](DETACHABLE_BOUNDARIES.md).
