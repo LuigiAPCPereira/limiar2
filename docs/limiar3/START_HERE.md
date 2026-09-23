@@ -12,12 +12,13 @@
 6. `docs/limiar3/DETACHABLE_BOUNDARIES.md` — princípio de desacoplamento de sessão/Telegram/MTProto/MCP; desacoplável por contrato não significa distribuído.
 7. `docs/limiar3/BOTTOM_UP_REBUILD_PLAN.md` — construção de baixo para cima por authorities separadas, com MCP realtime antes da modelagem comercial.
 8. `docs/limiar3/ARCHITECTURE_PROPOSAL.md` — alternativas, responsabilidades, riscos, reutilização e decisões pendentes; proposta, não ADR Accepted.
-9. `docs/limiar3/L3_001_SESSION_BOUNDARY_INVESTIGATION.md` — resultado internalizado da investigação L3-001; Proposal técnica, não Decision.
-10. `docs/limiar3/MTPROTO_GOTD_RESEARCH_BRIEF.md` — brief da investigação L3-001A, próximo gate antes de L3-002.
-11. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0, sem alterar nem suplantar o tracker da rebaseline anterior `docs/TASKLIST.md`.
-12. `docs/limiar3/PROJECT_STATE.md` — checkpoint com ID de tarefa e próximo passo.
-13. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
-14. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
+9. `docs/limiar3/L3_001_SESSION_BOUNDARY_INVESTIGATION.md` — Proposal inicial de L3-001; foi refinada por L3-001A.
+10. `docs/limiar3/L3_001A_MTPROTO_GOTD_INVESTIGATION.md` — investigação concluída de MTProto + `gotd/td v0.161.0`; fonte técnica posterior para o boundary Telegram, ainda não Decision.
+11. `docs/limiar3/MTPROTO_GOTD_RESEARCH_BRIEF.md` — brief histórico de L3-001A, marcado como concluído.
+12. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0.
+13. `docs/limiar3/PROJECT_STATE.md` — checkpoint e próxima ação.
+14. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
+15. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
 
 ## Regra de herança da rebaseline
 
@@ -27,15 +28,15 @@
 
 **Pedido já respondido pelo mantenedor:** reconstruir integralmente o Limiar 3.0 bottom-up com boundaries corretos. Sessão e integração Telegram/MTProto devem ser desacopláveis do core por contrato; MCP também deve ser detachable. O MCP possui um ramo **Telegram realtime** que consulta a fonte diretamente, sob demanda, antes do modelo de promoções, para ajudar a descobrir quais dados devem ser coletados/modelados; depois pode ganhar tools de **Limiar data** sobre Query Service. Collector/Evidence continuam um ramo independente e durável. Desacoplamento não exige microserviços. **Não existe um segundo aplicativo Limiar.**
 
-**Estado de L3-001:** a investigação de fundação/sessão/boundary foi fornecida pelo mantenedor e internalizada em `L3_001_SESSION_BOUNDARY_INVESTIGATION.md` como **Proposal/recomendação**, sem aceitar ADR 023 nem autorizar implementação. **Próxima tarefa ativa: `L3-001A`** — produzir relatório técnico profundo de MTProto + gotd, usando a versão real do repositório e fontes upstream, para validar ou corrigir a Proposal antes de L3-002. O brief está em `MTPROTO_GOTD_RESEARCH_BRIEF.md`. Não codificar, conectar Telegram/MCP, criar credenciais, promover ADRs, migrar dados, fazer merge ou deploy por consequência deste handoff.
+**Estado de L3-001/L3-001A:** ambas as investigações estão internalizadas. L3-001A refinou a Proposal: owner por `TelegramAuthorizationIdentity` (não MTProto `session_id`), main gotd client único por autorização, private session storage, bootstrap explícito/fail-closed, peer state authorization-scoped, restore/reuse real antes da primeira capability e guards externos ao `updates.Manager`. Fonte: `L3_001A_MTPROTO_GOTD_INVESTIGATION.md`. **Próxima ação não é implementação automática:** decidir apenas os bloqueios reais de L3-002 e passar pelo Implementation Gate.
 
-**Distinção de autenticações:** (a) sessão MTProto sensível usada pelo coletor para conectar-se ao Telegram; (b) eventual identidade/autorização para consumidores do Limiar e acesso pelo ChatGPT/MCP. Não pressupor que (b) já existe no legado, nem reutilizar diretamente arquivo de sessão Telegram como token MCP. Investigar autenticação de consumidor somente na medida em que for dependência real do primeiro slice, sem inventar sistema de contas.
+**Distinção de autenticações:** (a) `TelegramAuthorizationIdentity` + credencial persistida do boundary Telegram; (b) MTProto `session_id`, efêmero e interno ao gotd; (c) eventual identidade/autorização para consumidores do Limiar e acesso pelo ChatGPT/MCP. Não pressupor que (b) já existe no legado, nem reutilizar diretamente arquivo de sessão Telegram como token MCP. Investigar autenticação de consumidor somente na medida em que for dependência real do primeiro slice, sem inventar sistema de contas.
 
 **Autorização desta entrega:** criar esta branch e documentação. Nada de código, novos serviços, custos, operações com dados reais ou merge. Um futuro pedido explícito pode alterar esse limite. Não exigir repetição das respostas do mantenedor contidas nestes documentos; perguntar só decisão material ainda não respondida.
 
 ## Próximas leituras técnicas focadas
 
-- Sessão: ADR 004 sob registry de transição; ADR 023 **Proposed**; F-STO-006; EXP-LIMIAR-018 Rejected e EXP-LIMIAR-019 Supported no escopo declarado; recomendação L3-001 internalizada, mas detalhes externos de MTProto/gotd precisam ser revalidados em L3-001A antes da implementação.
+- Autorização/session storage: L3-001A concluiu a investigação upstream em `gotd/td v0.161.0`; ADR 023 continua **Proposed**; EXP-018/019 mantêm seus limites. Backend de credential storage, plataforma inicial e bootstrap operacional ainda exigem decisão explícita antes de L3-002.
 - Coleta/Evidence: ADRs 016–020 Accepted; ADR 018 Accepted mas Source Admission ainda não integrada em produção; ADR 024 **Proposed** para `subscription_id` (não inventar ID de produção).
 - Persistência: `internal/storage/sqlite`, migrations; PR #211 integrada (guard de schema), não equivale a substituição completa Tursogo. ADRs 021/022 ainda Proposed; importação real EXP-007 não demonstrada.
 - Imagens: falha funcional relatada pelo mantenedor, causa não demonstrada neste trabalho; ADR 011 `DEFER / REVALIDATE`, ADR 012 `RETIRE`.
