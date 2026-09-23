@@ -34,3 +34,12 @@ A pedido explícito do mantenedor, o conhecimento arquitetural da Rebaseline 202
 A regra registrada é: Limiar 3 herda invariantes, contratos aceitos, Evidence e limites; não herda automaticamente mecanismos experimentais, schemas Proposed, topologia física ou packages do legado. O plano bottom-up separa sessão, Evidence, subscription/admission, live recovery, backfill, peer cache, mídia, projections, processing, modelo comercial, query e superfícies MCP/API/frontend, deixando migração/cutover por último.
 
 A escrita foi exclusivamente documental. ADRs 021–024 permanecem Proposed e `L3-001` continua sendo a próxima investigação funcional.
+
+
+## Refinamento de boundaries e ordem do MCP — L3-DOC-003
+
+O mantenedor definiu que o MCP deve existir antes da modelagem dos dados de promoções para permitir investigação do corpus real; esclareceu que o MCP consulta Telegram em tempo real diretamente, e não mensagens via storage do Limiar; e confirmou que MCP e MTProto devem ser desacopláveis de forma coerente com a separação do Engineering DNA.
+
+A direção registrada distingue `Session Credential` como authority do boundary Telegram; `Telegram/MTProto Adapter` contendo gotd e expondo capabilities estreitas; `MCP Telegram realtime` como consumidor exploratório detachable; collector/Source Admission como consumidor durável separado; e, futuramente, `MCP Limiar data` sobre Query Service. Desacoplamento lógico vem antes de topologia física e não implica microserviços.
+
+Como nenhuma das tarefas L3-002+ havia sido implementada, os escopos L3-003–L3-007 foram reorganizados no tracker antes de código, preservando esta entrada histórica.
