@@ -1,7 +1,7 @@
 # L3-001A — brief de investigação MTProto + gotd
 
-**Estado:** pendente de investigação.  
-**Tipo:** pesquisa técnica / Evidence para validar ou corrigir a Proposal de L3-001.  
+**Estado:** investigação concluída; resultado em [L3_001A_MTPROTO_GOTD_INVESTIGATION.md](L3_001A_MTPROTO_GOTD_INVESTIGATION.md). Continua Evidence/Proposal, não Decision.  
+**Tipo:** pesquisa técnica / Evidence usada para validar e corrigir a Proposal de L3-001.  
 **Não autoriza implementação.**
 
 ## Objetivo
@@ -117,3 +117,8 @@ O relatório deve responder:
 > Qual é o menor boundary Telegram correto para L3-002, considerando o comportamento real de MTProto e gotd, e quais partes da Proposal de L3-001 precisam ser preservadas, ajustadas ou descartadas?
 
 Ao final, não implementar código nem promover ADRs. Atualizar tracker/checkpoint somente se a execução tiver autorização de escrita.
+
+
+## Fechamento
+
+A investigação concluiu que a direção central de L3-001 é sustentada com ajustes: owner por `TelegramAuthorizationIdentity` (não MTProto `session_id`), bootstrap explícito/fail-closed, peer state separado porém authorization-scoped, e Source Admission/recovery/state guards externos ao `updates.Manager`. O smoke real gotd restart/reuse passa a preceder a primeira capability estável. Nenhum ADR foi promovido e L3-002 continua dependente de decisões/gates próprios.
