@@ -63,3 +63,14 @@ A recomendação foi internalizada em [L3_001_SESSION_BOUNDARY_INVESTIGATION.md]
 ADRs 021–024 não foram promovidos. ADR 023 permanece Proposed. As referências externas citadas pelo relatório original não foram reconsultadas durante esta internalização.
 
 O mantenedor decidiu que, antes de qualquer avanço para L3-002, é necessário um relatório específico sobre MTProto e gotd. Foi criado [MTPROTO_GOTD_RESEARCH_BRIEF.md](MTPROTO_GOTD_RESEARCH_BRIEF.md) e a tarefa L3-001A passou a ser o próximo gate de investigação. Nenhum código, login Telegram, MCP real, segredo, PR novo, merge ou deploy foi criado por esta atualização.
+
+
+## Investigação MTProto + gotd — L3-001A
+
+Em 2026-09-23, o mantenedor forneceu o relatório final da investigação L3-001A, ancorado no HEAD `01d2a5a67fa13bdf1c15f0dbe60424e2af6b41ff` e na versão `github.com/gotd/td v0.161.0` fixada pelo repositório. O relatório confrontou a Proposal L3-001 com MTProto oficial e código/documentação upstream da versão usada.
+
+Resultado: a direção central foi sustentada com ajustes. O owner passa a ser uma `TelegramAuthorizationIdentity`, não MTProto `session_id`; o main `gotd.Client` deve ter owner único por autorização; `session.ErrNotFound` upstream não autoriza auto-login; peer/access-hash state é separado mas authorization-scoped; history/backfill e update recovery são authorities distintas; e `updates.Manager` precisa de Source Admission/GuardedRecoveryAPI/GuardedStateStorage + supervisor externo para satisfazer Evidence-before-progress.
+
+A sequência bottom-up foi refinada para provar gotd real restore/reuse antes de estabilizar `TelegramQuery`. O primeiro contract proposto é coeso e read-only (`ResolvePeer` + `History`), com `PeerKey`/message identity source-aware e sem `tg.*`, `InputPeer`, access hash ou session bytes.
+
+O relatório está em [L3_001A_MTPROTO_GOTD_INVESTIGATION.md](L3_001A_MTPROTO_GOTD_INVESTIGATION.md). `MTPROTO_GOTD_RESEARCH_BRIEF.md` foi marcado como concluído. ADR 023 e demais Proposed não foram promovidos. Nenhum experimento real, login, OTP, código de produto, branch de implementação, PR, merge ou deploy foi executado nesta internalização.
