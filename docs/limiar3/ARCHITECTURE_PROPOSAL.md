@@ -2,7 +2,7 @@
 
 **Estado:** PROPOSTA PARA INVESTIGAÇÃO, não desenho final, ADR Accepted, autorização de código ou promessa de arquitetura pronta. Fonte de produto: [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md). Regras: `AGENTS.md`, protocolo v2, `docs/adr/README.md` e Accepted. Escopo expandido em conversa pelo mantenedor: reconstrução integral do agrupador de promoções com MCP. O legado não define estrutura obrigatória.
 
-A herança comprovada da Rebaseline 2026 está consolidada em [`REBASELINE_INHERITANCE.md`](REBASELINE_INHERITANCE.md). O princípio de desacoplamento de MTProto/MCP está em [`DETACHABLE_BOUNDARIES.md`](DETACHABLE_BOUNDARIES.md). A construção bottom-up está em [`BOTTOM_UP_REBUILD_PLAN.md`](BOTTOM_UP_REBUILD_PLAN.md).
+A herança comprovada da Rebaseline 2026 está consolidada em [`REBASELINE_INHERITANCE.md`](REBASELINE_INHERITANCE.md). O princípio de desacoplamento de MTProto/MCP está em [`DETACHABLE_BOUNDARIES.md`](DETACHABLE_BOUNDARIES.md). A construção bottom-up está em [`BOTTOM_UP_REBUILD_PLAN.md`](BOTTOM_UP_REBUILD_PLAN.md). A investigação técnica MTProto/gotd v0.161.0 está em [`L3_001A_MTPROTO_GOTD_INVESTIGATION.md`](L3_001A_MTPROTO_GOTD_INVESTIGATION.md) e refina esta Proposal.
 
 ## Alternativas de isolamento — decisão ainda investigável em L3-001
 
@@ -20,12 +20,12 @@ Esta branch `docs/limiar-3-foundation-20260922` é **somente preparação docume
 | Capacidade | Owner de estado/comportamento | Entrada → saída e limites | Falha que precisa ser prevista |
 | --- | --- | --- | --- |
 | Configuração/composição | Entrypoint/composition root pequeno, validando config | Parâmetros explícitos → dependências construídas | Config ausente/ambígua falha antes de admissão; nenhum segredo em log. |
-| Autenticação e sessão MTProto | Boundary de sessão/credencial, separado de peer cache | Credencial persistente ↔ adapter Telegram; collector/MCP não recebem bytes da sessão | Arquivo ausente, permissivo, corrupto, writers, restart, shutdown; ADR 023 Proposed. |
-| Telegram/MTProto | Adapter/capability boundary que encapsula gotd | Telegram ↔ capabilities de realtime query, updates/recovery, history, peer e media | Vazamento de tipos gotd, lifecycle de clients, FloodWait, cancelamento, concorrência; desacoplável não implica serviço separado. |
-| Peer cache | Adapter Telegram/cache com autoridade operacional própria | Peer info ↔ cache; não fonte de sessão | Cache perdido reconstruível conforme contrato a definir; não mesclar secret e cache por conveniência. |
+| Autorização Telegram + credential storage | `TelegramRuntime` proposto por `TelegramAuthorizationIdentity`; storage privado, separado de peer cache | Credencial persistente ↔ gotd; collector/MCP não recebem bytes nem fazem bootstrap | `AUTH_KEY_DUPLICATED`, blob incompatível/revogado, restart/reuse, shutdown; ADR 023 continua Proposed. |
+| Telegram/MTProto | Owner único do main `gotd/telegram.Client`; gotd possui mecânica MTProto/DC/reconnect | Telegram ↔ `TelegramQuery` read-only primeiro; updates/recovery/media entram em slices próprios | Vazamento de `tg.*`/access hash, retry duplicado, logging sensível, concorrência/fairness; desacoplável não implica serviço separado. |
+| Peer cache | Adapter Telegram/cache com authority operacional própria, authorization-scoped quando persistida | `PeerKey` ↔ access-hash/internal resolution; access hash não cruza o contract | Cache reconstruível; hashes não universais entre autorizações; não mesclar secret e cache. |
 | Admissão de fonte | Boundary de aquisição configurada | Envelope Telegram + subscription configurada → Evidence admitida durável | Append falha → não forward; identity não inferida do canal; ADR 024 Proposed. |
 | Evidence | Storage capability SQLite | Payload opaco byte-preserving → Evidence append-only/proveniência | Não sobrescrever, não perder admitidos; integrity e crash; ADRs 019/020 Accepted. |
-| Sync/recovery | Gotd updates.Manager com guards/capabilities | Estado de protocolo ↔ sync; durabilidade Evidence antes de progresso | Restart, bootstrap, difference too long, fail-stop, replay; ADRs 016–018 Accepted; schema 021 Proposed. |
+| Sync/recovery | gotd `updates.Manager` envolvido por Source Admission, GuardedRecoveryAPI, GuardedStateStorage/barrier e supervisor | pts/qts/seq/date/channel pts ↔ sync interno; Evidence durável antes de progress certification | Manager pode logar erros e avançar state em memória; `differenceTooLong`, fail-stop, replay; ADRs 016–018 Accepted; 021 Proposed. |
 | Backfill | Worker com estado/progresso distinto | Intervalos históricos → Evidence, avanço seguro | Cancelamento, rate limit, retomar; ADR 022 Proposed. |
 | Mídia | Downloader/armazenamento de referências e conteúdo conforme contrato futuro | Mensagem/media IDs → imagem verificável e rastreável | Imagem ausente, download parcial, referência expirada, album, retry idempotente; bug legado relatado sem causa identificada. |
 | Processamento/agrupamento | Serviços de domínio/aplicação independentes de Telegram | Evidence/projeções → findings, interpretação, produtos/listings/offers/relations | Duplicidade, preço desconhecido, contradição e reprocessamento; `UNKNOWN` legítimo. |
@@ -39,7 +39,7 @@ Esses owners são **proposta de fronteiras**, não nomes obrigatórios de packag
 ## Fluxo e dependências propostas
 
 ```text
-                    Session Credential
+             Telegram Authorization Credential
                            |
                            v
                 Telegram / MTProto Adapter
@@ -65,7 +65,7 @@ Esses owners são **proposta de fronteiras**, não nomes obrigatórios de packag
 
 O MCP realtime é construído cedo para explorar o Telegram e ajudar a descobrir quais dados de promoção realmente existem e precisam ser modelados. Ele não consulta o storage do Limiar como caminho obrigatório e não transforma sua resposta em Evidence automaticamente. O MCP posterior de dados do Limiar usa Query Service. Ambos são adapters desacopláveis; gotd/MTProto também fica atrás de um boundary. Nenhuma dessas separações exige microserviços no início.
 
-**Autenticação — três conceitos separados:** credencial/sessão MTProto do coletor; `subscription_id` de escopo de aquisição (ADR 020 exige campo, ADR 024 Proposed discute ownership); autenticação/autorização eventual para usuário que consulta o Limiar e concede MCP. O legado documenta `limiar-collector auth` para userbot, não comprova identidade de consumidor. Não assumir que um token MCP pode ser sessão Telegram; mecanismo de OAuth, planos, hospedagem e conexão ChatGPT precisam de pesquisa/documentação atuais na fatia própria.
+**Autenticação — conceitos separados:** (1) `TelegramAuthorizationIdentity` + credencial persistida do boundary Telegram; (2) MTProto `session_id`, efêmero e interno ao gotd; (3) `subscription_id` de escopo de aquisição; (4) autenticação/autorização eventual para usuário/MCP. O legado documenta `limiar-collector auth` para userbot, não comprova identidade de consumidor. Não assumir que um token MCP pode ser sessão Telegram; mecanismo de OAuth, planos, hospedagem e conexão ChatGPT precisam de pesquisa/documentação atuais na fatia própria.
 
 ## Reuso sem carregar legado
 
@@ -79,9 +79,9 @@ O MCP realtime é construído cedo para explorar o Telegram e ajudar a descobrir
 
 **M0 — investigação da fundação, `L3-001`:** recuperar HEAD/código/autoridades; confirmar isolamento mínimo e ownership; comparar sessão atual, ADR 004 transição e ADR 023 Proposed; separar login Telegram de consumidor MCP; definir escopo da primeira fatia, config/segredos/risco/testes e decisões indispensáveis. Produto observável: proposta de primeiro código, testes e gates, não código criado por este handoff.
 
-**M1 — projeto inicial + autenticação/sessão (futura implementação autorizada, `L3-002`):** compor entrypoint isolado sem tocar legacy, autenticar em ambiente autorizado, persistir/reabrir credencial, tratar erros de sessão e shutdown; teste sintético + integração real apropriada. Não fixar armazenamento nem plataforma antes do contrato aceito.
+**M1 — runtime + authorization lifecycle + restore/reuse (`L3-002`):** compor entrypoint isolado, storage privado do boundary Telegram, owner único do main `gotd/telegram.Client`, bootstrap explícito e steady-state fail-closed. Provar gotd real: login controlado -> persistência -> shutdown -> restart -> autorizado sem novo OTP. Só depois estabilizar `TelegramQuery` read-only (`ResolvePeer` + `History`) com types source-aware e erros semânticos.
 
-**M2 — Telegram capability + MCP realtime (`L3-003`):** encapsular gotd/MTProto e implementar primeira consulta MCP read-only diretamente ao Telegram, sem depender do Evidence DB; usar esse ramo para explorar o corpus.
+**M2 — MCP realtime (`L3-003`):** expor a `TelegramQuery` via MCP read-only diretamente ao Telegram, sem depender do Evidence DB; usar esse ramo para explorar o corpus. Não criar segundo main client.
 
 **M3 — admissão, Evidence e recovery (`L3-004`):** collector separado do MCP; source configured identity, append-before-forward, replay, fail-stop, state e backfill separados.
 
@@ -95,6 +95,10 @@ Nenhuma data, PR, schema, estrutura de diretórios ou arquitetura de contas é p
 
 ## Primeiro bloco futuro — critérios a confirmar na investigação
 
-Resultado proposto: entrypoint isolado com autenticação MTProto e sessão persistente que possa ser reaberta após restart sem novo login indevido; config validada, erros falham fechados, bytes de sessão não logados, permissões e escrita íntegra conforme plataforma suportada; testes novo/preexistente/permissivo/corrompido/concorrente/cancelamento/restart e smoke com gotd real em ambiente autorizado. **Não considerar esses testes já executados.** Consultar a documentação versionada do gotd e fontes primárias atuais se APIs/semânticas forem determinantes. Testar preservação da sessão antiga apenas se migração for requisito concreto e houver insumo autorizado.
+Resultado proposto: entrypoint isolado com `TelegramAuthorizationIdentity`, owner único do main gotd client e credential storage privado; bootstrap explícito; restore/reuse real após restart sem novo OTP; runtime unauthorized/revoked/incompatível falha fechado; primeira `TelegramQuery` bounded; access hashes e `tg.*` não vazam; config validada, segredos não logados e shutdown/cancelamento definidos. **Não considerar esses testes já executados.** Consultar a documentação versionada do gotd e fontes primárias atuais se APIs/semânticas forem determinantes. Testar preservação da sessão antiga apenas se migração for requisito concreto e houver insumo autorizado.
 
 **Implementation Gate:** fatia identificada, dependências essenciais e ownership compreendidos, risco de segredo/platform definido, verificação disponível, ADR necessário aceito e autorização de implementação vigente. Se completo em próxima execução, implementar sem ficar em loop documental; se não, limitar investigação à lacuna impeditiva. Este documento não implementa esse Gate automaticamente.
+
+## Refinamento técnico L3-001A
+
+A investigação da versão real `gotd/td v0.161.0` sustenta a direção desta Proposal com ajustes. `MTProto session_id` não é a unidade de ownership; `session.ErrNotFound` upstream não pode ser interpretado automaticamente como arquivo ausente; peer cache é separado, porém authorization-scoped; history/backfill e update recovery são authorities distintas; e `updates.Manager` precisa de guards externos para satisfazer Evidence-before-progress. O relatório completo é a fonte de detalhe; nenhuma dessas conclusões promove ADR 023 ou autoriza código por si só.
