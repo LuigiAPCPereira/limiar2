@@ -26,3 +26,11 @@
 - Nenhuma decisão de mecanismo de sessão, arquivo de configuração, estrutura de pacotes, OAuth/MCP ou schema foi aceita nesta escrita.
 
 **Próximo capítulo:** outro chat deve recuperar START_HERE e executar somente a investigação `L3-001` (projeto inicial + autenticação/sessão) até receber autorização de engenharia específica. Registrar novas decisões e experimentos no futuro, sem retroagir status de fontes.
+
+## Consolidação da rebaseline para Limiar 3 — L3-DOC-002
+
+A pedido explícito do mantenedor, o conhecimento arquitetural da Rebaseline 2026 foi consolidado em contexto recuperável do Limiar 3, sem criar nova Decision. Foram criados `REBASELINE_INHERITANCE.md` e `BOTTOM_UP_REBUILD_PLAN.md`.
+
+A regra registrada é: Limiar 3 herda invariantes, contratos aceitos, Evidence e limites; não herda automaticamente mecanismos experimentais, schemas Proposed, topologia física ou packages do legado. O plano bottom-up separa sessão, Evidence, subscription/admission, live recovery, backfill, peer cache, mídia, projections, processing, modelo comercial, query e superfícies MCP/API/frontend, deixando migração/cutover por último.
+
+A escrita foi exclusivamente documental. ADRs 021–024 permanecem Proposed e `L3-001` continua sendo a próxima investigação funcional.

@@ -2,6 +2,8 @@
 
 **Estado:** PROPOSTA PARA INVESTIGAÇÃO, não desenho final, ADR Accepted, autorização de código ou promessa de arquitetura pronta. Fonte de produto: [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md). Regras: `AGENTS.md`, protocolo v2, `docs/adr/README.md` e Accepted. Escopo expandido em conversa pelo mantenedor: reconstrução integral do agrupador de promoções com MCP. O legado não define estrutura obrigatória.
 
+A herança comprovada da Rebaseline 2026 está consolidada em [`REBASELINE_INHERITANCE.md`](REBASELINE_INHERITANCE.md). A construção bottom-up por authorities, gates e slices está em [`BOTTOM_UP_REBUILD_PLAN.md`](BOTTOM_UP_REBUILD_PLAN.md). Este arquivo permanece como proposta arquitetural de alto nível e não substitui esses registros nem ADRs.
+
 ## Alternativas de isolamento — decisão ainda investigável em L3-001
 
 | Alternativa | Benefício | Risco/trade-off | Condição de uso |
