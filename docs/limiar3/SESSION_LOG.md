@@ -43,3 +43,23 @@ O mantenedor definiu que o MCP deve existir antes da modelagem dos dados de prom
 A direção registrada distingue `Session Credential` como authority do boundary Telegram; `Telegram/MTProto Adapter` contendo gotd e expondo capabilities estreitas; `MCP Telegram realtime` como consumidor exploratório detachable; collector/Source Admission como consumidor durável separado; e, futuramente, `MCP Limiar data` sobre Query Service. Desacoplamento lógico vem antes de topologia física e não implica microserviços.
 
 Como nenhuma das tarefas L3-002+ havia sido implementada, os escopos L3-003–L3-007 foram reorganizados no tracker antes de código, preservando esta entrada histórica.
+
+
+## Investigação de sessão/Telegram boundary — L3-001
+
+Em 2026-09-23, o mantenedor forneceu o relatório completo da investigação L3-001 produzido em outro chat. A investigação partiu do HEAD documental 8c059f10245a5ca248862becfbb00033300200a8 e analisou sessão MTProto, gotd, alternativas de session storage, separação de authorities, capabilities de MCP realtime/collector, lifecycle, segurança, testes, chaos e performance.
+
+A recomendação foi internalizada em [L3_001_SESSION_BOUNDARY_INVESTIGATION.md](L3_001_SESSION_BOUNDARY_INVESTIGATION.md) como **Proposal**, não Decision. Síntese:
+
+- uma autoridade TelegramRuntime por session identity;
+- gotd.Client e SessionStore privados ao Telegram boundary;
+- session credential separada de peer cache, update/recovery state, Evidence e MCP auth;
+- hardened file local Unix/Linux como candidato inicial, sustentado apenas dentro do escopo de Evidence do EXP-LIMIAR-019;
+- SQLite de Evidence não deve armazenar a sessão;
+- primeira capability read-only/bounded para MCP realtime;
+- live updates/recovery do collector somente quando Source Admission/Evidence puder preservar os invariantes dos ADRs 016–018;
+- critérios G-A–G-L e experimentos de gotd real/restart, faults, revogação, backup isolation e concorrência.
+
+ADRs 021–024 não foram promovidos. ADR 023 permanece Proposed. As referências externas citadas pelo relatório original não foram reconsultadas durante esta internalização.
+
+O mantenedor decidiu que, antes de qualquer avanço para L3-002, é necessário um relatório específico sobre MTProto e gotd. Foi criado [MTPROTO_GOTD_RESEARCH_BRIEF.md](MTPROTO_GOTD_RESEARCH_BRIEF.md) e a tarefa L3-001A passou a ser o próximo gate de investigação. Nenhum código, login Telegram, MCP real, segredo, PR novo, merge ou deploy foi criado por esta atualização.
