@@ -15,7 +15,7 @@ Esse princípio concretiza C-08 (topologia não define autoridade) e C-09 (compl
 `gotd/td` e detalhes MTProto pertencem ao adapter Telegram, não ao core comercial do Limiar. O restante do sistema não deve depender diretamente, por conveniência, de `gotd.Client`, `tg.*`, `updates.Manager`, sessão serializada ou access hashes.
 
 ```text
-Session Credential
+Telegram Authorization Credential
        |
        v
 Telegram / MTProto Adapter
@@ -29,9 +29,17 @@ Telegram / MTProto Adapter
 
 Os nomes são ilustrativos. Não criar uma interface para cada método sem necessidade demonstrada.
 
-### Sessão
+### Autorização Telegram, sessão de protocolo e storage
 
-A sessão pertence ao boundary Telegram/MTProto. Collector e MCP não são donos da credencial. Eles recebem capabilities já compostas. Se futuramente houver mais de um client/processo usando a mesma identidade, coordenação e política de segredo precisam ser explícitas; a topologia não é decidida aqui.
+A investigação L3-001A corrigiu uma ambiguidade: **MTProto `session_id` não é a identidade arquitetural do Limiar**. A unidade de ownership proposta é uma `TelegramAuthorizationIdentity`: a credencial/autorização Telegram persistida que o runtime possui.
+
+O `TelegramRuntime` proposto possui o `gotd/telegram.Client` principal e o `session.Storage` privado daquela authorization identity. Collector e MCP não são donos da credencial e recebem capabilities já compostas.
+
+Não criar main clients independentes por consumidor usando a mesma autorização. A investigação upstream identificou risco de `AUTH_KEY_DUPLICATED`; compartilhamento do owner principal é o default proposto. Conexões auxiliares/DC/media internas do gotd continuam responsabilidade do SDK.
+
+Peer/access-hash state continua authority separada do session storage, porém deve ser tratada como **authorization-scoped** quando persistida. Access hashes não cruzam o consumer contract.
+
+Bootstrap/login/OTP/2FA é operação explícita. O runtime normal restaura e verifica autorização; estado incompatível, revogado ou não autorizado falha fechado em vez de iniciar login silenciosamente.
 
 ## 3. MCP desacoplável
 
@@ -115,3 +123,8 @@ Observações obtidas pelo MCP são material de investigação. Elas podem suste
 A implementação inicial pode continuar single-process se essa for a menor solução suficiente. A arquitetura deve permitir separação futura, mas não deve pagar antecipadamente por RPC, service discovery, filas ou deployment distribuído sem requisito demonstrado.
 
 **Desacoplável por contrato agora; separável fisicamente quando houver motivo.**
+
+
+## 7. Refinamento L3-001A
+
+O boundary não tenta esconder semântica Telegram inevitável. Contracts podem preservar `PeerKey`, Telegram message ID, grouped media e erros semânticos, mas não expõem `tg.*`, `InputPeer`, access hashes, bytes de sessão, MTProto `msg_id/seq_no/salt/session_id` ou detalhes de DC. O primeiro contract proposto é uma capability coesa de consulta (`ResolvePeer` + `History`), não um wrapper genérico do SDK.
