@@ -8,13 +8,13 @@ Limiar é um agrupador de promoções: monitora fontes como canais do Telegram, 
 
 **Direção do Limiar 3.0:** reconstruir **100% da implementação do produto**, não apenas a ingestão nem uma sucessão de remendos no código legado. Preservar comportamentos e dados necessários, ADRs Accepted, experimentos e testes comprovados, sem traduzir cada componente antigo literalmente ou transplantar seus acoplamentos. O legado é referência e fonte de aprendizado, não arquitetura imutável. O novo código convive de forma isolada até cumprir gates de migração e substituição; não alterar dados históricos in-place.
 
-**MCP é parte do produto desde o planejamento**, desenvolvida em conjunto com as capacidades que a sustentam. O usuário quer perguntar **aqui no ChatGPT** por promoções diretamente (produto, preço, loja, canal, horário, link, imagens, comparação), bem como, com autorização apropriada, consultar mensagens originais e casos reais para diagnóstico da coleta. Não é só ferramenta de desenvolvimento. O MCP não substitui a coleta nem executa o processamento obrigatório, e sua indisponibilidade não bloqueia o pipeline principal. Pode ser uma superfície de acesso a mensagens admitidas e ofertas processadas sem replicar regras de negócio.
+**MCP é parte do produto desde a fundação** e possui duas funções distintas. Primeiro, um **MCP Telegram realtime** consulta o Telegram diretamente, sob demanda e com autorização, sem depender de a mensagem já existir no storage do Limiar; ele serve também para investigar o corpus real e ajudar a decidir quais dados de promoções precisam ser coletados/modelados. Depois, o mesmo MCP pode ganhar **Limiar data tools** sobre as capacidades processadas do produto. O MCP não substitui o collector, não torna uma consulta realtime em Evidence durável automaticamente e sua indisponibilidade não bloqueia coleta/processing. Ele deve ser desacoplável por construção.
 
 ## Fluxo conceitual, não topologia definitiva
 
-`Telegram/fontes → autenticação MTProto + coleta/admissão → Evidence durável → interpretação e processamento → dados de promoções limpos/agrupados → API → frontend`.
+`Session Credential → Telegram/MTProto capability` forma o boundary de integração com Telegram. A partir dele existem dois ramos: (a) `MCP Telegram realtime → consulta sob demanda ao Telegram`; (b) `collector → Source Admission → Evidence → recovery/backfill → processing → dados limpos → API → frontend`.
 
-`MCP ↔ capacidades autorizadas de consulta do Limiar` é uma fronteira transversal, podendo consultar mensagens/Evidence e ofertas estruturadas através de contratos estreitos, conforme disponibilidade e autorização. A posição visual proposta pelo mantenedor ('coleta, MCP, processamento, dados limpos, API, frontend') indica inclusão **desde a coleta** e paralelismo, não exige que cada mensagem atravesse MCP antes de ser processada. Validar essa interpretação no desenho técnico, não torná-la um barramento obrigatório.
+O MCP realtime entra **antes da modelagem comercial** para exploração do domínio. Mais tarde, `MCP Limiar data → Query Service` consulta mensagens admitidas e ofertas estruturadas. As duas famílias de tools podem coexistir no mesmo servidor MCP, mas não compartilham authority por conveniência.
 
 **Não existe 'segundo aplicativo Limiar'**; esse termo foi introduzido indevidamente pelo assistente e corrigido pelo mantenedor. As superfícies desejadas são API/frontend próprios e integração ChatGPT/MCP. Não assumir app mobile, plataforma SaaS multiusuário ou sistema de contas completo como requisito implícito.
 
@@ -25,7 +25,7 @@ Limiar é um agrupador de promoções: monitora fontes como canais do Telegram, 
 3. Longo prazo: código Go idiomático, legível, nomes expressivos, modularidade por ownership/motivo de mudança, contratos estreitos, pouca complexidade gratuita, extensão guiada por requisitos reais.
 4. Resiliência: integridade, durabilidade, restart/crash, duplicação, idempotência quando necessária, tratamento de falhas parciais, timeout/cancelamento/backpressure/retry, observabilidade, segurança de segredos e isolamento de dados.
 5. Testabilidade: testes unitários/contrato/integração e end-to-end nas fatias pertinentes; invariantes, imagens e cenários de falha; critérios de aceite e evidência da revisão exata para afirmar conclusão.
-6. Execução incremental **de baixo para cima**, começando pela fundação/projeto inicial + autenticação e sessão, depois recebimento/admissão de mensagens/Evidence, sincronização/backfill/recovery, mídia, processamento/agrupamento, consultas MCP/API e frontend conforme dependências reais. Trabalhar MCP em paralelo a partir de capabilities úteis; não esperá-lo ficar por último por convenção nem bloquear coleta por ele.
+6. Execução incremental **de baixo para cima**: runtime + sessão; boundary Telegram/MTProto desacoplável; MCP realtime cedo para explorar mensagens reais; em paralelo collector/Evidence/recovery/backfill/mídia; somente depois congelar Findings/modelo de promoções com base no corpus observado; então Query Service, MCP de dados, API e frontend. Não transformar desacoplamento em microserviços sem necessidade.
 7. Evitar investigação infinita: investigar só incerteza impeditiva; assim que Implementation Gate e autorização da etapa passarem, implementar fatia funcional completa e validar. A preparação documental de hoje não é autorização para código.
 
 ## Reaproveitamento classificado por autoridade
@@ -36,9 +36,13 @@ Limiar é um agrupador de promoções: monitora fontes como canais do Telegram, 
 - **Proposto, não decidido:** ADR 021 schema SourceSyncState; ADR 022 BackfillProgress; ADR 023 armazenamento hardened da sessão; ADR 024 identidade `subscription_id`. Não colocar proposta em produção sem aceite formal; não converter fixture `telegram:test` em identidade de produção.
 - **Histórico e falha relatada:** resolver de imagens antigo ADR 011 `DEFER / REVALIDATE`, ADR 012 `RETIRE`; causa/solução precisam de reprodução e testes. Tursogo original permanece referência histórica/read-only para migração quando autorizado, não datastore único do futuro.
 
-## Identidades e segurança MCP
+## Identidades, MTProto e segurança MCP
 
-Sessão MTProto Telegram = credencial operacional sensível do coletor. `subscription_id` = escopo configurado de aquisição conforme contrato de Evidence, não canal nem usuário automaticamente. Eventual identidade de consumidor Limiar e autorização MCP = outra responsabilidade, ainda **não comprovada como implementada**. Investigar possibilidade real de reaproveitamento de autenticação do Limiar; nunca passar arquivo de sessão, OTP ou senha MTProto ao ChatGPT, nem conceder acesso global só por conectar MCP. Definir scopes de leitura, canais/dados autorizados, revogação e tratamento de mensagens como dados não confiáveis. Não há MCP instalado/conectado nesta entrega; compatibilidade concreta de protocolo e método de integração deverão ser verificados no início da respectiva fatia.
+Sessão MTProto Telegram = credencial operacional sensível pertencente ao boundary Telegram/MTProto, não ao collector nem ao MCP. `subscription_id` = escopo configurado de aquisição conforme contrato de Evidence. Eventual identidade/autorização do consumidor MCP é outra responsibility. O adapter MCP recebe capabilities; não recebe bytes da sessão, OTP ou senha como dado de aplicação.
+
+A integração gotd/MTProto também deve ser desacoplável do core: detalhes como `gotd.Client`, `tg.*`, `updates.Manager`, sessão e access hashes ficam contidos no adapter Telegram tanto quanto praticável. Desacoplável não implica processo separado; single-process permanece válido até existir Evidence para outra topologia.
+
+Definir scopes de leitura, canais/dados autorizados, revogação e tratamento de mensagens como dados não confiáveis. Uma consulta MCP realtime não é automaticamente Source Evidence. Não há MCP instalado/conectado nesta entrega.
 
 ## Requisitos e aceites por momento
 
@@ -46,7 +50,7 @@ Sessão MTProto Telegram = credencial operacional sensível do coletor. `subscri
 
 **Próximo chat (L3-001 investigação):** conferir HEAD e fontes, propor isolamento (branch + diretório ou opção justificada) com trade-offs e ponto de entrada mínimo; identificar owners e contratos para autenticação MTProto e credenciais; revisar ADR 023 contra alternativas e plataformas, investigar a identidade de consumidor apenas se necessária; definir critérios/testes do primeiro slice sem implementá-lo automaticamente. Questões não respondidas devem aparecer como abertas, não como falhas atribuídas ao usuário.
 
-**Primeira implementação futura, mediante autorização:** projeto inicial executável isolado + autenticação/sessão reutilizável após restart; segredo protegido, falha explícita, sem logs sensíveis, testes sob revisão exata. A integração MCP só pode consumir capacidades reais e permissões definidas; primeira consulta ponta a ponta será mensagem autorizada coletada/persistida e encontrada pelo frontend/API e/ou ChatGPT conforme ordem de integração e disponibilidade.
+**Primeiras implementações futuras, mediante autorização:** projeto inicial + sessão reutilizável; depois boundary Telegram/MTProto estreito; em seguida uma primeira tool MCP realtime read-only pode consultar Telegram diretamente antes de existir modelo comercial. O collector/Evidence é outro ramo e mantém seus próprios gates de durabilidade. Dados de promoções só devem ser congelados depois que a exploração do corpus produzir Findings suficientes. Posteriormente o MCP ganha tools sobre a Query Service processada.
 
 **Operação futura:** comparação funcional e benchmark antes/depois; importação apenas contra cópia histórica descartável autorizada; estratégia de rollback e corte; jamais declarar legado substituído por build verde ou adicionar data de Black Friday como prazo garantido. Objetivo do usuário: Limiar confiável para Black Friday 2026; escopo e aceites temporais detalhados seguem abertos.
 
