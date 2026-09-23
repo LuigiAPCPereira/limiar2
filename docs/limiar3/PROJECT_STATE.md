@@ -1,6 +1,6 @@
 # PROJECT_STATE — Limiar 3.0 (checkpoint documental)
 
-**Data de preparação:** 2026-09-22 (America/Bahia). **Repositório:** `LuigiAPCPereira/limiar2`. **Branch:** `docs/limiar-3-foundation-20260922`. **Base de criação:** `7177d929839512b8005ae379d96e3d224feac1f8` (PR #214 draft), descendente de `main@796b7769449b72320b27c2557c2ccb8c8eb183e1`. **Revalidar HEAD atual, branch e main no início do próximo chat**; este checkpoint não pode registrar o SHA do próprio commit. A branch é documentação, não PR/merge/deploy. Conector GitHub remoto não prova working tree local.
+**Data de preparação:** 2026-09-22 (America/Bahia). **Última reconciliação documental:** 2026-09-23. **Repositório:** `LuigiAPCPereira/limiar2`. **Branch:** `docs/limiar-3-foundation-20260922`. **Base de criação:** `7177d929839512b8005ae379d96e3d224feac1f8` (PR #214 draft), descendente de `main@796b7769449b72320b27c2557c2ccb8c8eb183e1`. **Revalidar HEAD atual, branch e main no início do próximo chat**; este checkpoint não pode registrar o SHA do próprio commit. A branch é documentação, não PR/merge/deploy. Conector GitHub remoto não prova working tree local.
 
 ## Objetivo confirmado pelo mantenedor
 
