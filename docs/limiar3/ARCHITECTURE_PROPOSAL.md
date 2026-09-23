@@ -4,7 +4,7 @@
 
 A herança comprovada da Rebaseline 2026 está consolidada em [`REBASELINE_INHERITANCE.md`](REBASELINE_INHERITANCE.md). O princípio de desacoplamento de MTProto/MCP está em [`DETACHABLE_BOUNDARIES.md`](DETACHABLE_BOUNDARIES.md). A construção bottom-up está em [`BOTTOM_UP_REBUILD_PLAN.md`](BOTTOM_UP_REBUILD_PLAN.md). A investigação técnica MTProto/gotd v0.161.0 está em [`L3_001A_MTPROTO_GOTD_INVESTIGATION.md`](L3_001A_MTPROTO_GOTD_INVESTIGATION.md) e refina esta Proposal.
 
-## Alternativas de isolamento — decisão ainda investigável em L3-001
+## Alternativas de isolamento — direção documental; revalidar antes da branch de implementação
 
 | Alternativa | Benefício | Risco/trade-off | Condição de uso |
 | --- | --- | --- | --- |
@@ -77,7 +77,7 @@ O MCP realtime é construído cedo para explorar o Telegram e ajudar a descobrir
 
 ## Plano incremental, de baixo para cima (sequência revisável)
 
-**M0 — investigação da fundação, `L3-001`:** recuperar HEAD/código/autoridades; confirmar isolamento mínimo e ownership; comparar sessão atual, ADR 004 transição e ADR 023 Proposed; separar login Telegram de consumidor MCP; definir escopo da primeira fatia, config/segredos/risco/testes e decisões indispensáveis. Produto observável: proposta de primeiro código, testes e gates, não código criado por este handoff.
+**M0 — investigações da fundação, `L3-001` + `L3-001A` — concluídas documentalmente:** ownership, sessão/autorização, MTProto e gotd foram investigados; o resultado permanece Proposal/Evidence. Antes de código, resolver apenas decisões que realmente bloqueiam L3-002 e confirmar a ref real.
 
 **M1 — runtime + authorization lifecycle + restore/reuse (`L3-002`):** compor entrypoint isolado, storage privado do boundary Telegram, owner único do main `gotd/telegram.Client`, bootstrap explícito e steady-state fail-closed. Provar gotd real: login controlado -> persistência -> shutdown -> restart -> autorizado sem novo OTP. Só depois estabilizar `TelegramQuery` read-only (`ResolvePeer` + `History`) com types source-aware e erros semânticos.
 
