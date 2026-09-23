@@ -12,10 +12,12 @@
 6. `docs/limiar3/DETACHABLE_BOUNDARIES.md` — princípio de desacoplamento de sessão/Telegram/MTProto/MCP; desacoplável por contrato não significa distribuído.
 7. `docs/limiar3/BOTTOM_UP_REBUILD_PLAN.md` — construção de baixo para cima por authorities separadas, com MCP realtime antes da modelagem comercial.
 8. `docs/limiar3/ARCHITECTURE_PROPOSAL.md` — alternativas, responsabilidades, riscos, reutilização e decisões pendentes; proposta, não ADR Accepted.
-9. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0, sem alterar nem suplantar o tracker da rebaseline anterior `docs/TASKLIST.md`.
-10. `docs/limiar3/PROJECT_STATE.md` — checkpoint com ID de tarefa e próximo passo.
-11. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
-12. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
+9. `docs/limiar3/L3_001_SESSION_BOUNDARY_INVESTIGATION.md` — resultado internalizado da investigação L3-001; Proposal técnica, não Decision.
+10. `docs/limiar3/MTPROTO_GOTD_RESEARCH_BRIEF.md` — brief da investigação L3-001A, próximo gate antes de L3-002.
+11. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0, sem alterar nem suplantar o tracker da rebaseline anterior `docs/TASKLIST.md`.
+12. `docs/limiar3/PROJECT_STATE.md` — checkpoint com ID de tarefa e próximo passo.
+13. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
+14. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
 
 ## Regra de herança da rebaseline
 
@@ -25,7 +27,7 @@
 
 **Pedido já respondido pelo mantenedor:** reconstruir integralmente o Limiar 3.0 bottom-up com boundaries corretos. Sessão e integração Telegram/MTProto devem ser desacopláveis do core por contrato; MCP também deve ser detachable. O MCP possui um ramo **Telegram realtime** que consulta a fonte diretamente, sob demanda, antes do modelo de promoções, para ajudar a descobrir quais dados devem ser coletados/modelados; depois pode ganhar tools de **Limiar data** sobre Query Service. Collector/Evidence continuam um ramo independente e durável. Desacoplamento não exige microserviços. **Não existe um segundo aplicativo Limiar.**
 
-**Tarefa ativa de continuidade:** `L3-001` — investigar projeto inicial, sessão e o boundary Telegram/MTProto desacoplável que sustentará tanto collector quanto MCP realtime, recuperando a revisão real e confrontando ADR 023 Proposed. O usuário disse que abrirá outro chat para esta **investigação**. Não codificar, criar novos ambientes, aceitar ADRs, conectar Telegram/MCP, criar credenciais, migrar dados, fazer merge ou deploy automaticamente por causa deste handoff. Ao fim da investigação, entregar recomendação técnica, dependências, decisões que exigem aceite, primeiro slice verificável e atualizar tracker/checkpoint apenas se o novo pedido conceder escrita.
+**Estado de L3-001:** a investigação de fundação/sessão/boundary foi fornecida pelo mantenedor e internalizada em `L3_001_SESSION_BOUNDARY_INVESTIGATION.md` como **Proposal/recomendação**, sem aceitar ADR 023 nem autorizar implementação. **Próxima tarefa ativa: `L3-001A`** — produzir relatório técnico profundo de MTProto + gotd, usando a versão real do repositório e fontes upstream, para validar ou corrigir a Proposal antes de L3-002. O brief está em `MTPROTO_GOTD_RESEARCH_BRIEF.md`. Não codificar, conectar Telegram/MCP, criar credenciais, promover ADRs, migrar dados, fazer merge ou deploy por consequência deste handoff.
 
 **Distinção de autenticações:** (a) sessão MTProto sensível usada pelo coletor para conectar-se ao Telegram; (b) eventual identidade/autorização para consumidores do Limiar e acesso pelo ChatGPT/MCP. Não pressupor que (b) já existe no legado, nem reutilizar diretamente arquivo de sessão Telegram como token MCP. Investigar autenticação de consumidor somente na medida em que for dependência real do primeiro slice, sem inventar sistema de contas.
 
@@ -33,7 +35,7 @@
 
 ## Próximas leituras técnicas focadas
 
-- Sessão: ADR 004 sob registry de transição; ADR 023 **Proposed**; F-STO-006; EXP-LIMIAR-018 Rejected para FileStorage as-is e EXP-LIMIAR-019 Supported apenas Unix/Linux intra-processo, integrado pelo PR #202, **sem runtime de produção**.
+- Sessão: ADR 004 sob registry de transição; ADR 023 **Proposed**; F-STO-006; EXP-LIMIAR-018 Rejected e EXP-LIMIAR-019 Supported no escopo declarado; recomendação L3-001 internalizada, mas detalhes externos de MTProto/gotd precisam ser revalidados em L3-001A antes da implementação.
 - Coleta/Evidence: ADRs 016–020 Accepted; ADR 018 Accepted mas Source Admission ainda não integrada em produção; ADR 024 **Proposed** para `subscription_id` (não inventar ID de produção).
 - Persistência: `internal/storage/sqlite`, migrations; PR #211 integrada (guard de schema), não equivale a substituição completa Tursogo. ADRs 021/022 ainda Proposed; importação real EXP-007 não demonstrada.
 - Imagens: falha funcional relatada pelo mantenedor, causa não demonstrada neste trabalho; ADR 011 `DEFER / REVALIDATE`, ADR 012 `RETIRE`.
