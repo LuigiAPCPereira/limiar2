@@ -1,6 +1,6 @@
 # L3-001 — investigação de sessão MTProto e boundary Telegram
 
-**Estado epistemológico:** investigação concluída como recomendação técnica / Proposal, não como Decision.
+**Estado epistemológico:** investigação concluída como recomendação técnica / Proposal, não como Decision. **Refinada por L3-001A:** [`L3_001A_MTPROTO_GOTD_INVESTIGATION.md`](L3_001A_MTPROTO_GOTD_INVESTIGATION.md) é a fonte posterior para MTProto/gotd e corrige pontos desta Proposal.
 
 **Origem:** relatório produzido em outro chat e fornecido pelo mantenedor nesta conversa, ancorado em docs/limiar-3-foundation-20260922@8c059f10245a5ca248862becfbb00033300200a8.
 
@@ -10,7 +10,7 @@
 
 A recomendação de L3-001 para o primeiro slice implementável é:
 
-- um único TelegramRuntime autoritativo por identidade lógica de sessão;
+- um único TelegramRuntime autoritativo por identidade lógica de sessão — **termo refinado por L3-001A para `TelegramAuthorizationIdentity`, não MTProto `session_id`**;
 - o runtime possui o gotd.Client e o lifecycle da integração Telegram;
 - o SessionStore é privado ao boundary Telegram;
 - MCP realtime e collector recebem capabilities estreitas, sem receber gotd.Client, tg.*, bytes de sessão, storage da sessão ou acesso direto ao SQLite;
@@ -259,3 +259,8 @@ Pergunta de gate:
 > O comportamento real de MTProto e da versão de gotd usada pelo repositório sustenta a Proposal de L3-001 — um runtime autoritativo por session identity, capabilities estreitas, sessão privada ao boundary Telegram e compartilhamento in-process entre MCP/collector — ou exige alterações no boundary, lifecycle, recovery, peers, retries, concorrência ou sequência bottom-up?
 
 Até esse relatório ser concluído, a recomendação acima é uma base de investigação consolidada, não um contrato de implementação autorizado.
+
+
+## 13. Refinamentos posteriores de L3-001A
+
+Ao usar este documento, aplicar as correções posteriores: (1) ownership por `TelegramAuthorizationIdentity`; (2) `session.ErrNotFound` upstream pode incluir incompatibilidade de versão e não autoriza auto-login; (3) peer/access-hash state é separado porém authorization-scoped; (4) `updates.Manager` exige live admission + guarded recovery/state + supervisor para o invariante Evidence-before-progress; (5) smoke gotd restore/reuse precede a estabilização da primeira capability. Em caso de conflito técnico entre este documento e L3-001A, L3-001A é a investigação mais recente, sem se tornar Decision por isso.
