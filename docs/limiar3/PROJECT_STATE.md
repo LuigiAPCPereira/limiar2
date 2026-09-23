@@ -4,7 +4,7 @@
 
 ## Objetivo confirmado pelo mantenedor
 
-Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e de baixo para cima, separando ownership de autenticação/sessão Telegram, aquisição/mensagens, Evidence, recovery/sync/backfill, imagens, processamento/agrupamento, dados limpos, API/frontend. MCP integrado em paralelo desde a concepção para que ChatGPT consulte mensagens/ofertas autorizadas; não é segundo app, não substitui coletor nem deve interromper pipeline se indisponível. Qualidade requerida: segurança, desempenho medido, simplicidade, legibilidade e manutenção de longo prazo. Black Friday 2026 é objetivo, não prazo validado.
+Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e bottom-up. Sessão e integração Telegram/MTProto ficam atrás de boundaries desacopláveis; MCP também é detachable. O MCP realtime consulta Telegram diretamente e entra cedo para investigação do domínio; collector/Evidence/recovery formam outro ramo durável; depois o MCP pode consultar dados processados via Query Service. Não existe segundo app e desacoplamento não implica microserviços. Qualidade requerida: segurança, desempenho medido, simplicidade, legibilidade e manutenção de longo prazo. Black Friday 2026 é objetivo, não prazo validado.
 
 ## Tarefas e estado
 
@@ -12,7 +12,7 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e d
 
 **Evidência do DNA:** arquivo fonte no Project 2.171 linhas / 37.531 bytes; SHA-256 `c19c5d97f8e42b311d6c15440e2e9f58cec64fadf1a48b9575e1f2e4dba0e373`. Git blob calculado do Base64/gzip derivado da fonte **é idêntico ao blob remoto reaberto** `ceafec243be87ae28ee2d9658e3912831fc55368`, contendo seis linhas e 17.953 bytes. Assim, conteúdo original foi preservado sem mudança quando descompactado, mas ainda não está como Markdown integral plaintext na raiz: o outro ambiente deve descompactar e comparar SHA antes de afirmar leitura integral. `ENGINEERING_GUIDE.md` e root `ENGINEERING_DNA.md` são resumos/entradas, não falsa versão completa. Protocol Project SHA-256 `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`, blob Git na origem `78b2e86564fb287886f9df065fdb727b20c52727`; branch herda `AGENTS.md` e protocolo v2 do PR #214, cujo Adoption Gate permanece **PARCIAL**.
 
-**Próxima tarefa do novo chat: `L3-001` — INVESTIGAR projeto inicial + autenticação/sessão, sem implementar automaticamente.** Fontes: [`START_HERE.md`](START_HERE.md), [`TASKLIST.md`](TASKLIST.md), [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md), [`ARCHITECTURE_PROPOSAL.md`](ARCHITECTURE_PROPOSAL.md) e root AGENTS/protocolo/ADRs. Recuperar revisão exata, comparar alternativas de isolamento, examinar sessão real/ADR 004 transição, ADR 023 Proposed, experimentos 018/019; delimitar owner da sessão, configuração, segredos, lifecycle, dependências, critérios e testes do primeiro slice. Eventual auth de usuário/MCP não é comprovada no legado, separar de MTProto. No final relatar evidências/decisões pendentes e primeiro bloco implementável; pedir autorização apenas para decisão que não esteja dada no novo pedido.
+**Próxima tarefa do novo chat: `L3-001` — INVESTIGAR projeto inicial + sessão + boundary Telegram/MTProto desacoplável, sem implementar automaticamente.** Fontes: [`START_HERE.md`](START_HERE.md), [`TASKLIST.md`](TASKLIST.md), [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md), [`ARCHITECTURE_PROPOSAL.md`](ARCHITECTURE_PROPOSAL.md) e root AGENTS/protocolo/ADRs. Recuperar revisão exata, comparar alternativas de isolamento, examinar sessão real/ADR 004 transição, ADR 023 Proposed, experimentos 018/019; delimitar owner da sessão, configuração, segredos, lifecycle, dependências, critérios e testes do primeiro slice. Eventual auth de usuário/MCP não é comprovada no legado, separar de MTProto. No final relatar evidências/decisões pendentes e primeiro bloco implementável; pedir autorização apenas para decisão que não esteja dada no novo pedido.
 
 ## Restrições e desconhecidos
 
@@ -32,3 +32,12 @@ Nenhum ADR 021–024 foi promovido, nenhum package/schema novo foi autorizado e 
 ### Verificação de L3-DOC-002
 
 O commit documental `7b8d6d1af12bbd289f9ca3c6e98dcb4fadb0a0cd` foi reaberto na própria branch. O compare contra `84636ae7ae9b84a8424dd2cff85a9a63454f9372` mostrou `ahead_by=1`, `behind_by=0` e exatamente oito arquivos alterados, todos sob `docs/limiar3/`. Os dois documentos novos foram reabertos e seus conteúdos/links principais conferidos. Portanto `L3-DOC-002` passa de `documentada` para `validada`. Esta validação é documental e não altera o estado de implementação do Limiar 3 nem o status dos ADRs 021–024.
+
+
+## Atualização documental — L3-DOC-003
+
+O mantenedor esclareceu três requisitos: MCP deve ser construído cedo antes de congelar o modelo de promoções porque servirá para investigar mensagens reais; o MCP realtime consulta Telegram diretamente sob demanda, sem usar o storage do Limiar como proxy obrigatório; e tanto MCP quanto integração Telegram/MTProto devem ser desacopláveis por contrato, sem transformar desacoplamento em microserviços obrigatórios.
+
+Foi criado `DETACHABLE_BOUNDARIES.md`. O plano agora possui dois ramos após a capability Telegram: `MCP Telegram realtime` para exploração e `collector -> Source Admission -> Evidence` para durabilidade. O modelo comercial vem depois do loop de descoberta do domínio. Futuramente `MCP Limiar data` usa Query Service.
+
+Nenhum código, ADR status, schema, serviço, credencial ou conexão real foi criado por esta atualização.
