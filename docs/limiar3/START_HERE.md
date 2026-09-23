@@ -6,12 +6,13 @@
 
 1. `AGENTS.md` na raiz — Constituição do repositório, ordem de autoridades, limites de permissão e interpretação dos ADRs.
 2. `docs/DOCUMENTATION_AND_CONTINUITY.md` — Agent Development Protocol v2.0; para Limiar 3.0 aplicar sobretudo §5 (inicialização de projeto novo), §7 (RECOVER/RECONCILE), §8 (Implementation Gate) e §9 (tarefas). A adoção v2 do repositório anterior permanece **PARCIAL** no PR #214; não declarar Adoption Gate cumprido sem conferir todas as nove funções e evidências.
-3. `ENGINEERING_DNA.md` na raiz desta branch **se existir e for verificado integralmente**; em caso contrário ler o arquivo canônico anexado ao ChatGPT Project, se realmente acessível, e registrar a lacuna. O documento local de princípios condensados `docs/limiar3/ENGINEERING_GUIDE.md` é orientação derivada e **não substitui o original integral**.
+3. `ENGINEERING_DNA.md` na raiz — entrada e instrução de descompactação; original **integral está preservado no GitHub em `docs/limiar3/ENGINEERING_DNA_ORIGINAL.md.gz.b64`**. O blob remoto `ceafec243be87ae28ee2d9658e3912831fc55368` confere com o blob calculado da origem compactada. Decodificar e conferir SHA-256 `c19c5d97f8e42b311d6c15440e2e9f58cec64fadf1a48b9575e1f2e4dba0e373` antes de mudanças arquiteturais relevantes, no ambiente onde haja ferramentas. **A raiz contém resumo, não Markdown integral descompactado**; não declarar disponibilidade irrestrita ou execução em outro ambiente. `docs/limiar3/ENGINEERING_GUIDE.md` é orientação derivada.
 4. `docs/limiar3/PRODUCT_AND_SCOPE.md` — visão e requisitos explícitos do mantenedor, inclusive MCP.
 5. `docs/limiar3/ARCHITECTURE_PROPOSAL.md` — alternativas, responsabilidades, riscos, reutilização e decisões pendentes; proposta, não ADR Accepted.
 6. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0, sem alterar nem suplantar o tracker da rebaseline anterior `docs/TASKLIST.md` (que governa somente aquela frente). Não duplicar tarefas dentro da frente Limiar 3.0.
 7. `docs/limiar3/PROJECT_STATE.md` — checkpoint com ID de tarefa e próximo passo; registro derivado, não nova autoridade de requisitos.
-8. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
+8. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
+9. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
 
 ## Instrução direta para o próximo chat
 
