@@ -150,10 +150,10 @@ Somente depois do novo caminho funcionar side-by-side: caracterizar legado, exec
 ## 4. Grafo de authorities
 
 ```text
-Session Credential
+`TelegramAuthorizationIdentity`
        |
        v
-Telegram / MTProto Adapter
+TelegramRuntime / gotd Adapter
    |                  \
    v                   v
 MCP realtime        Collector / Source Admission
