@@ -1,282 +1,197 @@
 # Limiar 3.0 — reconstrução bottom-up com separação de authorities
 
-**Estado:** proposta operacional derivada do rebaseline. Não é ADR Accepted, não fixa nomes finais de packages e não autoriza implementação automaticamente.
+**Estado:** proposta operacional derivada do rebaseline e das direções explícitas do mantenedor. Não é ADR Accepted, não fixa nomes finais de packages e não autoriza implementação automaticamente.
 
-Fonte de herança: [`REBASELINE_INHERITANCE.md`](REBASELINE_INHERITANCE.md). Produto: [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md).
+Fontes: [`REBASELINE_INHERITANCE.md`](REBASELINE_INHERITANCE.md), [`DETACHABLE_BOUNDARIES.md`](DETACHABLE_BOUNDARIES.md) e [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md).
 
 ## 1. Objetivo
 
-Cada camada deve ter authority, ownership, lifecycle e failure domain explícitos; entrada/saída testáveis; persistência somente quando necessária; estado derivado reconstruível; e dependências apontando para capabilities inferiores, não para UI ou topologia.
+Construir o Limiar 3 por authorities explícitas, com ownership, lifecycle e failure domain claros. A separação é semântica antes de ser física: mesmo processo, binário ou SQLite não tornam duas responsabilidades a mesma authority.
 
-A separação é semântica antes de ser física. Mesmo processo ou mesmo SQLite não tornam duas responsabilidades a mesma authority.
+**Desacoplável não significa distribuído.**
 
 ## 2. Regras estruturais
 
-1. **Sem repository global.** Não expor `*sql.DB` quando capability estreita resolve.
-2. **Sem package de domínio global por conveniência.** Compartilhar tipos apenas por contrato real.
-3. **Sem goroutine por camada.** Concorrência é mecanismo, não arquitetura.
-4. **Sem event bus obrigatório no início.** Chamada direta é preferível enquanto suficiente.
-5. **Sem provider framework prematuro.** Telegram é a fonte real atual.
-6. **Sem segunda verdade derivada.** Projection persistida deve ter generation/version e ser reconstruível.
-7. **Segredo fora do Evidence DB por default.** Misturar sessão e backup de Evidence exige Decision própria.
-8. **MCP/API/frontend são adapters de consulta.** Não reescrevem Evidence nem regras canônicas.
-9. **UNKNOWN é legítimo.** Processing não fabrica certeza.
-10. **Legado só por adapter de comparação/importação.** Core novo não depende do legado por conveniência.
+1. Sem repository global; capabilities estreitas antes de `*sql.DB` compartilhado.
+2. gotd/MTProto ficam dentro do adapter Telegram; detalhes da biblioteca não vazam por conveniência para o core.
+3. Sessão MTProto é authority de credencial do boundary Telegram, não do collector nem do MCP.
+4. MCP é adapter removível/separável; não acessa SQLite diretamente e não contém regra comercial canônica.
+5. MCP realtime consulta Telegram diretamente através da capability Telegram, não através do storage do Limiar.
+6. Consulta MCP realtime não vira Source Evidence automaticamente; persistência durável passa por Source Admission.
+7. Sem goroutine por camada, event bus ou RPC por ritual.
+8. Sem provider framework prematuro; Telegram é a fonte concreta atual.
+9. Projection persistida deve ser reconstruível/versionada.
+10. Segredo fica fora do Evidence DB por default; misturá-los exige Decision própria.
+11. UNKNOWN é legítimo; processing não fabrica certeza.
+12. Legado entra somente por adapters de comparação/importação.
 
-## 3. Camadas de construção
+## 3. Camadas e ramos de construção
 
 ### B0 — Runtime mínimo
 
-**Responsabilidade:** execução previsível antes do Telegram.
-
-Inclui composition root pequeno, config tipada/fail-closed, paths explícitos, logging sem segredos, shutdown/cancelamento, health/status e build metadata.
-
-**Não inclui:** Telegram, SQL de domínio, parsing comercial ou MCP.
-
-**Gate:** startup sintético; config inválida rejeitada; shutdown testado; nenhum segredo em log.
+Composition root pequeno, config tipada/fail-closed, paths explícitos, logging sem segredos, shutdown/cancelamento, health/status e build metadata.
 
 ### B1 — Session Credential Boundary
 
 **Authority:** bytes da sessão MTProto e lifecycle de segurança.
-
-Contrato conceitual:
 
 ```text
 LoadSession(ctx) -> bytes | not-found | error
 StoreSession(ctx, bytes) -> success | error
 ```
 
-Separado de peer cache e, por default, do SQLite de Evidence. Writers que compartilham credencial precisam de coordenação explícita.
+Separado de peer cache e, por default, do SQLite de Evidence. ADR 023 continua Proposed.
 
-**Gate de decisão:** ADR 023 segue Proposed. L3-001 precisa investigar/decidir antes da produção.
+### B2 — Telegram / MTProto Capability Boundary
 
-**Gate de implementação:** novo/preexistente/permissivo/corrompido, cancelamento, restart, concorrência relevante, race e smoke gotd em ambiente autorizado.
+Encapsular gotd/MTProto e oferecer capabilities estreitas: realtime/history query, update/recovery stream, peer resolution e media retrieval quando necessárias.
 
-### B2 — Storage Kernel de Evidence
+Collector e MCP podem consumir capacidades diferentes do mesmo boundary sem compartilhar lifecycle. Não decidir antecipadamente uma ou várias instâncias de client nem processos.
 
-**Authority:** Source Evidence durável.
+### B3 — MCP Telegram realtime — exploração precoce
 
-Reaproveitar contratos ADR 019/020 e avaliar o `internal/storage/sqlite` existente como capability, sem carregar Tursogo.
-
-Capabilities iniciais:
+Permitir ao ChatGPT consultar Telegram em tempo real, sob demanda, **antes de existir modelo comercial**.
 
 ```text
-Open / Close
-AppendEvidence
-ReadEvidenceByID
-schema/integrity checks necessários ao boundary
+ChatGPT -> MCP adapter -> autorização -> Telegram realtime capability -> Telegram
 ```
 
-Não colocar aqui SourceSyncState, BackfillProgress, session, peer cache, projection ou índices de feed.
+O MCP deve ser detachable: nenhuma dependência de schema SQLite, processing ou frontend. Resposta realtime não é automaticamente Source Evidence.
 
-**Gate:** migrations/reopen, byte-preserving, hash, append-only, schema guard, crash/restart aplicável e backup/restore revalidado quando entrar no caminho L3.
+### B4 — Storage Kernel de Evidence
 
-### B3 — Acquisition Subscription + Source Admission
+Reaproveitar contratos ADR 019/020 e avaliar `internal/storage/sqlite` como capability, sem carregar Tursogo. Não colocar aqui SourceSyncState, BackfillProgress, session, peer cache, projection ou índices de feed.
 
-Authorities distintas:
-
-- configuração/identidade de aquisição;
-- Source Admission;
-- Evidence Store.
+### B5 — Acquisition Subscription + Source Admission
 
 ```text
-Telegram envelope
- + AcquisitionSubscription
-        ↓
-admission classification
-        ↓
-AppendEvidence
-        ↓ sucesso
-forward ao recovery/manager
+Telegram envelope + AcquisitionSubscription
+        -> admission classification
+        -> AppendEvidence
+        -> sucesso
+        -> forward ao recovery/manager
 ```
 
-`subscription_id` nunca nasce de `channel_id` por conveniência.
+`subscription_id` nunca nasce de `channel_id` por conveniência. ADR 024 continua Proposed.
 
-**Gate:** resolver ADR 024 se materializar identity; missing/ambiguous config falha fechada; append failure => no forward.
+### B6 — Live Recovery / SourceSyncState
 
-### B4 — Live Recovery / SourceSyncState
-
-**Authority:** continuidade live Telegram.
-
-Compor `updates.Manager`, GuardedRecoveryAPI, DurabilityBarrier, Supervisor e GuardedStateStorage. ADR 021 continua Proposed para o storage físico.
+Compor `updates.Manager`, GuardedRecoveryAPI, DurabilityBarrier, Supervisor e GuardedStateStorage. ADR 021 continua Proposed.
 
 ```text
 Evidence durável + state antigo = seguro/replay
 Evidence ausente + state novo   = proibido
 ```
 
-**Gate:** crash/restart, state read/write failure, too-long, reset explícito, replay, race e integração gotd real.
+### B7 — Backfill
 
-### B5 — Backfill
-
-**Authority:** cobertura/progresso histórico; nunca live sync.
+**Authority:** cobertura/progresso histórico; nunca live sync. ADR 022 continua Proposed.
 
 ```text
-history page
-   ↓
-Evidence necessária durável
-   ↓
-BackfillProgress pode avançar
+history page -> Evidence necessária durável -> BackfillProgress pode avançar
 ```
 
-ADR 022 continua Proposed.
+### B8 — Peer Cache e Media
 
-**Gate:** ausência ≠ zero; regressão rejeitada; completed não significa continuidade live; cancelamento/rate limit/restart; coexistência com live.
+Peer cache é estado operacional reconstruível; Media resolve referência e obtém asset sem fazer da imagem a fonte da mensagem. Reproduzir a falha histórica de imagens antes de alegar correção.
 
-### B6 — Peer Cache e Media
+### B9 — Source Projection
 
-**Peer cache:** estado operacional reconstruível para access hashes/peers; não session/subscription truth.
+Estado derivado reconstruível da Evidence: current message view, edit/delete/replay e provenance para a Evidence sustentadora.
 
-**Media:** resolver referência e obter asset sem fazer da imagem a fonte da mensagem.
+### B10 — Domain Discovery Loop
+
+Antes de congelar dados de promoção, usar o MCP realtime para investigar corpus real e registrar Findings sobre padrões, exceções e UNKNOWN.
+
+Perguntas típicas: formatos de preço, cupom, Pix, cashback, frete, bundles, múltiplos produtos, diferenças por canal/merchant, mensagens sem preço, ambiguidades de identidade e mídia.
+
+**Findings de exploração orientam schema/processamento, mas não se tornam Decision automaticamente.**
+
+### B11 — Deterministic Findings
+
+Extrair fatos observáveis e tipados: texto normalizado, URLs, merchant/source metadata, dinheiro sem `float64`, coupon candidates, códigos explícitos, disponibilidade e condições. Cada Finding mantém provenance.
+
+### B12 — Promotion Interpretation
+
+Interpretar facetas, não enum exclusivo: preço observado, preço anterior alegado, cupom, cashback, frete, bundle, restrições, confiança e origem. IA, se usada, permanece lateral, versionada e auditável.
+
+### B13 — Commercial Model
+
+Separar `Product`, `Merchant Listing`, `Offer Observation`, `Relations` e `Feed Projection`. Feed nunca define identidade.
+
+### B14 — Limiar Query Service
+
+Capability de leitura dos dados produzidos pelo Limiar. Não é o caminho usado pelo MCP realtime Telegram.
+
+### B15 — MCP Limiar data + HTTP API
 
 ```text
-Evidence/message projection
- -> MediaReference
- -> download idempotente
- -> verificação
- -> MediaAsset/cache
+MCP Telegram realtime -> Telegram capability
+MCP Limiar data       -> Limiar Query Service
+HTTP API              -> Limiar Query Service
 ```
 
-**Gate:** reproduzir a falha histórica de imagens antes de alegar correção; cobrir álbum, referência expirada, partial download, retry, duplicate e restart.
+### B16 — Frontend
 
-### B7 — Source Projection
+Experiência sobre contratos reais da API: feed, busca/filtros, agrupamento, comparação, provenance e estados operacionais.
 
-Estado derivado reconstruível da Evidence. Primeira projection útil: current message view por SourceMessageKey, edit/delete/replay e referência à Evidence que sustenta o estado atual.
+### B17 — Migração e cutover
 
-**Gate:** rebuild do zero equivalente; update composto; generation nova sem destruir Evidence antiga.
-
-### B8 — Deterministic Findings
-
-Extrair fatos antes de interpretação probabilística: texto normalizado, URLs, merchant/source metadata, dinheiro sem `float64`, coupon candidates, códigos explícitos, disponibilidade e condições observáveis.
-
-Cada Finding mantém provenance.
-
-**Gate:** fixtures sintéticas/anonimizadas, UNKNOWN preservado, parser versionado e reprocessável.
-
-### B9 — Promotion Interpretation
-
-Interpretar promoção como facetas, não enum exclusivo: preço observado, preço anterior alegado, cupom, cashback, frete, bundle, restrições, confiança e origem.
-
-IA, se usada, é lateral e produz resultado probabilístico versionado/auditável. Falha de IA não bloqueia o núcleo determinístico.
-
-### B10 — Commercial Model
-
-Separar:
-
-```text
-Product
-Merchant Listing
-Offer Observation
-Relations
-Feed Projection
-```
-
-Product é identidade conceitual quando sustentada; Listing é item do merchant; Offer Observation é condição observada; Relations registram same-as/variant/possible-duplicate; Feed Projection é apresentação, nunca identidade.
-
-**Gate:** não usar URL afiliada, preço semelhante ou posição de feed como identidade canônica.
-
-### B11 — Query Service
-
-Capability de leitura compartilhada por MCP, API e ferramentas internas.
-
-Pode oferecer, conforme demanda real: buscar mensagens admitidas; provenance; pesquisar ofertas; listar ofertas por produto/listing; comparar observações; recuperar mídia.
-
-Query não muta Source Evidence.
-
-**Gate:** paginação/limites, ausência/stale/generation explícitos e autorização antes de retornar conteúdo privado.
-
-### B12 — MCP
-
-Entra em paralelo assim que Query Service tiver uma capability útil.
-
-Primeiro slice:
-
-```text
-ChatGPT
- -> MCP adapter
- -> authorization
- -> Query Service
- -> mensagens admitidas + provenance
-```
-
-Depois ampliar para ofertas.
-
-MCP nunca recebe sessão MTProto, não acessa SQLite diretamente, não duplica regras comerciais, trata Telegram como dado não confiável e pode falhar sem interromper pipeline.
-
-### B13 — HTTP API
-
-Expõe a mesma Query Service. Separar transport DTO, autorização, aplicação/query e domínio. Não duplicar SQL/regras do MCP.
-
-### B14 — Frontend
-
-Experiência sobre contratos reais da API: feed, busca/filtros, agrupamento, comparação, provenance, estados loading/empty/error/partial/stale e acessibilidade.
-
-Regra de identidade ou cálculo comercial canônico não nasce no browser.
-
-### B15 — Migração e cutover
-
-Somente depois do novo caminho funcionar side-by-side:
-
-1. caracterizar comportamento legado necessário;
-2. executar EXP-007 ou sucessor contra cópia histórica real descartável;
-3. comparar contagens/proveniência/fixtures;
-4. validar backup/restore e rollback;
-5. medir performance com workload comparável;
-6. migrar consumidores por fatia;
-7. manter legado read-only durante a janela necessária;
-8. desativar/remover somente após substituto comprovado e autorização.
+Somente depois do novo caminho funcionar side-by-side: caracterizar legado, executar EXP-007/sucessor em cópia histórica real descartável, comparar, validar backup/restore/rollback, medir performance, migrar por fatia e desativar só com substituto comprovado e autorização.
 
 ## 4. Grafo de authorities
 
 ```text
-Session Credential ───────┐
-                          v
-Acquisition Config -> Telegram Adapter
-                          |
-                          v
-                   Source Admission
-                          |
-                          v
-                    Evidence Store
-                     /          \
-                    v            v
-             Live Recovery     Backfill
-                    \            /
-                     v          v
-                    Source Projection
-                          |
-                          v
+Session Credential
+       |
+       v
+Telegram / MTProto Adapter
+   |                  \
+   v                   v
+MCP realtime        Collector / Source Admission
+                         |
+                         v
+                      Evidence
+                    /          \
+                   v            v
+            Live Recovery     Backfill
+                   \            /
+                    v          v
+                   Source Projection
+                         |
+                         +-------> Media
+                         |
+                         v
                 Deterministic Findings
-                          |
-                          v
-                Promotion Interpretation
-                          |
-                          v
-              Product/Listing/Offer/Relations
-                          |
-                          v
-                    Query Service
-                   /      |       \
-                  v       v        v
-                MCP      API    internal tools
-                          |
-                          v
-                       Frontend
+                         |
+                         v
+               Promotion Interpretation
+                         |
+                         v
+             Product/Listing/Offer/Relations
+                         |
+                         v
+                  Limiar Query Service
+                    /             \
+                   v               v
+            MCP Limiar data      HTTP API
+                                      |
+                                      v
+                                   Frontend
 ```
 
-Peer cache e Media são side capabilities; não viram authority entre Evidence e live state.
+**Loop de descoberta:** MCP realtime consulta Telegram e produz material para investigação/Findings antes e durante B11–B13. Ele não escreve Evidence por atalho.
 
 ## 5. Shape de código apenas ilustrativo
-
-Não criar packages antes de precisar. Uma forma possível:
 
 ```text
 cmd/limiar3/
 internal/l3/config/
 internal/l3/session/
+internal/l3/telegram/
+internal/l3/mcp/
 internal/l3/evidence/
 internal/l3/acquisition/
-internal/l3/telegram/
 internal/l3/recovery/
 internal/l3/backfill/
 internal/l3/peers/
@@ -286,55 +201,41 @@ internal/l3/findings/
 internal/l3/promotions/
 internal/l3/catalog/
 internal/l3/query/
-internal/l3/mcp/
 internal/l3/httpapi/
 ```
 
-Se menos packages preservarem ownership com clareza, usar menos.
+Isso é mapa de responsibilities, não decisão de packages.
 
 ## 6. Slices para evitar big rewrite
 
-- **S1 — sessão:** config mínima + session boundary + restart, sem collector.
-- **S2 — Evidence:** novo SQLite + append/round-trip sintético, sem Telegram.
-- **S3 — admission:** adapter/update sintético -> append -> somente então forward.
-- **S4 — recovery:** manager/state/barrier + restart/replay.
-- **S5 — history:** backfill independente escrevendo a mesma Evidence.
-- **S6 — primeira message projection:** Evidence -> current message state.
-- **S7 — mídia:** projection -> MediaReference -> asset verificável.
-- **S8 — primeiro Finding:** regra determinística simples com provenance.
-- **S9 — primeira oferta consultável:** Finding -> Offer Observation -> Query Service.
-- **S10 — primeira ferramenta MCP:** read-only sobre Query Service.
-- **S11 — primeira rota API + tela:** mesma capability, sem regra duplicada.
+- **S1 — sessão:** config mínima + session boundary + restart.
+- **S2 — Telegram capability:** encapsular gotd e provar uma operação realtime mínima.
+- **S3 — MCP realtime:** primeira tool read-only consultando Telegram diretamente.
+- **S4 — Evidence:** SQLite + append/round-trip sintético, independente do MCP.
+- **S5 — admission:** update -> append -> somente então forward.
+- **S6 — recovery:** manager/state/barrier + restart/replay.
+- **S7 — history:** backfill independente escrevendo Evidence.
+- **S8 — projection:** Evidence -> current message state.
+- **S9 — mídia:** referências/assets verificáveis.
+- **S10 — descoberta do domínio:** usar MCP realtime para amostrar casos e registrar Findings.
+- **S11 — primeiro Finding determinístico:** regra simples com provenance.
+- **S12 — primeira oferta consultável:** Findings -> Offer Observation -> Query Service.
+- **S13 — MCP Limiar data:** primeira tool sobre Query Service.
+- **S14 — primeira rota API + tela:** mesma capability, sem regra duplicada.
 
-Cada slice precisa de build/test/race pertinente e critério observável antes do próximo.
+Os ramos S3 e S4–S9 podem evoluir em paralelo depois de S2; o modelo comercial não deve ser congelado antes do loop S10.
 
-## 7. O que medir
-
-Medir quando a fatia existir: startup/reopen; latência/throughput de append; crescimento do banco; rebuild de projection; backlog/replay; download/cache de mídia; latência de Query Service; latência MCP/API separada do core; CPU/memória sob workload definido; goroutines/conexões quando relevante.
-
-Benchmarks antigos são referência histórica, não prova L3.
-
-## 8. Decisões ainda necessárias
+## 7. Decisões ainda necessárias
 
 1. Sessão: revisar/aceitar/rejeitar ADR 023 ou substituto.
 2. Subscription identity: resolver ADR 024 antes de Source Admission produtiva.
 3. SourceSyncState: aceitar/revisar ADR 021 antes do schema produtivo.
 4. BackfillProgress: aceitar/revisar ADR 022 antes do schema produtivo.
-5. Media: investigar boundary e bug real antes de Decision estrutural.
-6. Processing generations/projections: Decision quando o primeiro storage derivado exigir.
-7. Auth de consumidor/MCP: decidir quando Query Service existir e o threat model estiver claro.
+5. Boundary concreto Telegram capabilities: manter gotd encapsulado sem abstração excessiva.
+6. Auth/autorização MCP realtime: definir scopes quando a primeira tool real for implementada.
+7. Media: investigar boundary e bug real antes de Decision estrutural.
+8. Processing generations/projections: Decision quando storage derivado exigir.
 
-## 9. Quando a fundação estará pronta
+## 8. Fundação pronta
 
-Não quando existir skeleton, mas quando:
-
-- sessão puder persistir/reabrir sob contrato aceito;
-- Source Evidence puder ser admitida/persistida sob ADR 016–020;
-- falha de Evidence não deixar progresso avançar;
-- restart/replay for seguro;
-- live/backfill/session/peer permanecerem separados;
-- primeira projection for reconstruível;
-- segredo não estiver misturado ao backup de Evidence sem decisão;
-- testes e observabilidade provarem os failure modes relevantes.
-
-A partir daí, processing e superfícies podem crescer sem reabrir a fundação a cada feature.
+A fundação precisa provar sessão sob contrato aceito, Telegram capability desacoplada, Source Evidence sob ADR 016–020, ordering seguro, restart/replay, separação live/backfill/session/peer e primeira projection reconstruível. O MCP realtime pode estar funcional antes disso como ramo exploratório, mas sua existência não certifica durabilidade do collector.
