@@ -9,12 +9,13 @@
 3. `ENGINEERING_DNA.md` na raiz — entrada e instrução de descompactação; original **integral está preservado no GitHub em `docs/limiar3/ENGINEERING_DNA_ORIGINAL.md.gz.b64`**. O blob remoto `ceafec243be87ae28ee2d9658e3912831fc55368` confere com o blob calculado da origem compactada. Decodificar e conferir SHA-256 `c19c5d97f8e42b311d6c15440e2e9f58cec64fadf1a48b9575e1f2e4dba0e373` antes de mudanças arquiteturais relevantes, no ambiente onde haja ferramentas. **A raiz contém resumo, não Markdown integral descompactado**; não declarar disponibilidade irrestrita ou execução em outro ambiente. `docs/limiar3/ENGINEERING_GUIDE.md` é orientação derivada.
 4. `docs/limiar3/PRODUCT_AND_SCOPE.md` — visão e requisitos explícitos do mantenedor, inclusive MCP.
 5. `docs/limiar3/REBASELINE_INHERITANCE.md` — contratos, Evidence, limites e pendências que o Limiar 3 herda da Rebaseline 2026 sem transformar experimentos ou ADRs Proposed em produção.
-6. `docs/limiar3/BOTTOM_UP_REBUILD_PLAN.md` — construção de baixo para cima por authorities separadas, com dependências, gates e slices verificáveis.
-7. `docs/limiar3/ARCHITECTURE_PROPOSAL.md` — alternativas, responsabilidades, riscos, reutilização e decisões pendentes; proposta, não ADR Accepted.
-8. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0, sem alterar nem suplantar o tracker da rebaseline anterior `docs/TASKLIST.md` (que governa somente aquela frente). Não duplicar tarefas dentro da frente Limiar 3.0.
-9. `docs/limiar3/PROJECT_STATE.md` — checkpoint com ID de tarefa e próximo passo; registro derivado, não nova autoridade de requisitos.
-10. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
-11. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
+6. `docs/limiar3/DETACHABLE_BOUNDARIES.md` — princípio de desacoplamento de sessão/Telegram/MTProto/MCP; desacoplável por contrato não significa distribuído.
+7. `docs/limiar3/BOTTOM_UP_REBUILD_PLAN.md` — construção de baixo para cima por authorities separadas, com MCP realtime antes da modelagem comercial.
+8. `docs/limiar3/ARCHITECTURE_PROPOSAL.md` — alternativas, responsabilidades, riscos, reutilização e decisões pendentes; proposta, não ADR Accepted.
+9. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0, sem alterar nem suplantar o tracker da rebaseline anterior `docs/TASKLIST.md`.
+10. `docs/limiar3/PROJECT_STATE.md` — checkpoint com ID de tarefa e próximo passo.
+11. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
+12. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
 
 ## Regra de herança da rebaseline
 
@@ -22,9 +23,9 @@
 
 ## Instrução direta para o próximo chat
 
-**Pedido já respondido pelo mantenedor:** reconstruir a implementação integral do Limiar como Limiar 3.0, incrementalmente e de baixo para cima, com separação clara de ownership, desempenho mensurável, segurança, robustez, legibilidade e manutenção de longo prazo; incluir o MCP em paralelo como extensão que permita ao ChatGPT ler dados/mensagens autorizados e consultar promoções. Produto: Telegram → coleta/Evidence → processamento/agrupamento → dados limpos → API → frontend; MCP é superfície transversal de acesso controlado, capaz de consultar mensagens admitidas e dados processados, **não** um substituto da coleta nem dependência obrigatória da persistência/processing. **Não existe um segundo 'aplicativo Limiar' no escopo.**
+**Pedido já respondido pelo mantenedor:** reconstruir integralmente o Limiar 3.0 bottom-up com boundaries corretos. Sessão e integração Telegram/MTProto devem ser desacopláveis do core por contrato; MCP também deve ser detachable. O MCP possui um ramo **Telegram realtime** que consulta a fonte diretamente, sob demanda, antes do modelo de promoções, para ajudar a descobrir quais dados devem ser coletados/modelados; depois pode ganhar tools de **Limiar data** sobre Query Service. Collector/Evidence continuam um ramo independente e durável. Desacoplamento não exige microserviços. **Não existe um segundo aplicativo Limiar.**
 
-**Tarefa ativa de continuidade:** `L3-001` — investigar o projeto inicial e a primeira capacidade de autenticação/sessão, recuperando a revisão real, comparando opções mínimas de isolamento e confrontando contratos já aceitos com ADR 023 Proposed. O usuário disse que abrirá outro chat para esta **investigação**. Não codificar, criar novos ambientes, aceitar ADRs, conectar Telegram/MCP, criar credenciais, migrar dados, fazer merge ou deploy automaticamente por causa deste handoff. Ao fim da investigação, entregar recomendação técnica, dependências, decisões que exigem aceite, primeiro slice verificável e atualizar tracker/checkpoint apenas se o novo pedido conceder escrita.
+**Tarefa ativa de continuidade:** `L3-001` — investigar projeto inicial, sessão e o boundary Telegram/MTProto desacoplável que sustentará tanto collector quanto MCP realtime, recuperando a revisão real e confrontando ADR 023 Proposed. O usuário disse que abrirá outro chat para esta **investigação**. Não codificar, criar novos ambientes, aceitar ADRs, conectar Telegram/MCP, criar credenciais, migrar dados, fazer merge ou deploy automaticamente por causa deste handoff. Ao fim da investigação, entregar recomendação técnica, dependências, decisões que exigem aceite, primeiro slice verificável e atualizar tracker/checkpoint apenas se o novo pedido conceder escrita.
 
 **Distinção de autenticações:** (a) sessão MTProto sensível usada pelo coletor para conectar-se ao Telegram; (b) eventual identidade/autorização para consumidores do Limiar e acesso pelo ChatGPT/MCP. Não pressupor que (b) já existe no legado, nem reutilizar diretamente arquivo de sessão Telegram como token MCP. Investigar autenticação de consumidor somente na medida em que for dependência real do primeiro slice, sem inventar sistema de contas.
 
