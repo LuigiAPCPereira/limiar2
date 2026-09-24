@@ -29,7 +29,7 @@
 ## Ritmo e documentação
 
 - Reconstruir projeto inteiro em fatias observáveis, **de baixo para cima**: fundação/configuração/autenticação MTProto → admissão/mensagens/Evidence/recovery → mídia → processamento/dados limpos → superfícies MCP/API → frontend. MCP é considerado desde o início e pode ter fatias paralelas assim que existir capability real. Ordem depende de dependências observadas.
-- L3-001, L3-001A e L3-001B já investigaram fundação, MTProto/gotd e hardening/performance. A única pesquisa adicional recomendada antes do pinning final da dependência é a auditoria upstream-only `L3-001C`, limitada ao gotd stable atual. Depois disso, resolver decisões bloqueantes e aplicar o Implementation Gate; não manter análise aberta sem dúvida material.
+- L3-001/A/B/C concluíram a investigação ampla da fundação. A auditoria upstream-only atingiu sua stop condition; daqui em diante, só investigar dúvida material concreta. Resolver decisões bloqueantes, executar experimentos estreitos e aplicar o Implementation Gate quando houver autorização.
 - Agent Development Protocol v2.0 `docs/DOCUMENTATION_AND_CONTINUITY.md`: §5 para projeto novo, RECOVER/RECONCILE, ID de tarefa, checkpoint, Implementation Gate e HANDOFF. Evitar loop interminável de ADRs/experimentos; implementar assim que informação suficiente **e autorização** existirem.
 - Craftsmanship: solução menor **completa** e comprovada, simples, correta, coesa, segura, legível, eficiente; qualidade não é quantidade de arquivos/interfaces/docs.
 
