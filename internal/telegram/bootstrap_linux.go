@@ -174,7 +174,7 @@ func (b *Bootstrapper) QR(
 	if runErr != nil {
 		return BootstrapResult{}, runErr
 	}
-	if err := b.commit(ctx, staging); err != nil {
+	if err := b.finalize(ctx, result, staging); err != nil {
 		return BootstrapResult{}, err
 	}
 	return result, nil
@@ -231,7 +231,7 @@ func (b *Bootstrapper) Code(
 	if runErr != nil {
 		return BootstrapResult{}, runErr
 	}
-	if err := b.commit(ctx, staging); err != nil {
+	if err := b.finalize(ctx, result, staging); err != nil {
 		return BootstrapResult{}, err
 	}
 	return result, nil
@@ -261,6 +261,13 @@ func (b *Bootstrapper) verifySelf(ctx context.Context, client *gotdtelegram.Clie
 		return 0, fmt.Errorf("%w: expected user id %d, got %d", ErrSelfMismatch, b.cfg.ExpectedSelfUserID, status.User.ID)
 	}
 	return status.User.ID, nil
+}
+
+func (b *Bootstrapper) finalize(ctx context.Context, result BootstrapResult, staging *stagingSessionStorage) error {
+	if strings.TrimSpace(result.IdentityKey) == "" || result.SelfUserID <= 0 {
+		return ErrBootstrapUnauthorized
+	}
+	return b.commit(ctx, staging)
 }
 
 func (b *Bootstrapper) commit(ctx context.Context, staging *stagingSessionStorage) error {
