@@ -15,7 +15,7 @@ import (
 func TestQueryResolveCachesOperationalPeerWithoutLeakingAccessHash(t *testing.T) {
 	t.Parallel()
 
-	q, err := newQueryClientWithFuncs(2,
+	q, err := newQueryClientWithFuncs(2, 100,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 999999}, nil
 		},
@@ -47,7 +47,7 @@ func TestQueryResolveCachesOperationalPeerWithoutLeakingAccessHash(t *testing.T)
 func TestQueryHistoryRequiresPeerResolvedInThisRuntime(t *testing.T) {
 	t.Parallel()
 
-	q, err := newQueryClientWithFuncs(1,
+	q, err := newQueryClientWithFuncs(1, 100,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 7}, nil
 		},
@@ -69,7 +69,7 @@ func TestQueryHistoryMapsBoundedPageAndOpaqueCursor(t *testing.T) {
 	t.Parallel()
 
 	var gotLimit, gotOffset int
-	q, err := newQueryClientWithFuncs(2,
+	q, err := newQueryClientWithFuncs(2, 100,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 12345}, nil
 		},
@@ -128,7 +128,7 @@ func TestQueryHistoryMapsServiceAndUnknownWithoutInventingText(t *testing.T) {
 	t.Parallel()
 
 	key := PeerKey{Kind: PeerKindChat, ID: 5}
-	q, err := newQueryClientWithFuncs(1,
+	q, err := newQueryClientWithFuncs(1, 100,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChat{ChatID: 5}, nil
 		},
@@ -157,7 +157,7 @@ func TestQueryHistoryMapsServiceAndUnknownWithoutInventingText(t *testing.T) {
 func TestQueryValidatesLimitCursorAndPeer(t *testing.T) {
 	t.Parallel()
 
-	q, err := newQueryClientWithFuncs(1,
+	q, err := newQueryClientWithFuncs(1, 100,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerUser{UserID: 7, AccessHash: 1}, nil
 		},
@@ -194,7 +194,7 @@ func TestQueryAdmissionIsBoundedAndCancelable(t *testing.T) {
 
 	entered := make(chan struct{})
 	release := make(chan struct{})
-	q, err := newQueryClientWithFuncs(1,
+	q, err := newQueryClientWithFuncs(1, 100,
 		func(ctx context.Context, _ string) (tg.InputPeerClass, error) {
 			close(entered)
 			select {
