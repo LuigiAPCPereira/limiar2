@@ -15,7 +15,7 @@ func (memorySessionStorage) LoadSession(context.Context) ([]byte, error) { retur
 func (memorySessionStorage) StoreSession(context.Context, []byte) error  { return nil }
 
 func TestNewRuntimeValidatesConfig(t *testing.T) {
-	good := RuntimeConfig{Identity: AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, AppID: 1, AppHash: "secret", SessionStorage: memorySessionStorage{}, Coordinator: NewAuthorizationCoordinator(), ReadinessTimeout: time.Second, MaxConcurrentQueries: 2, MaxHistoryPageSize: 100}
+	good := RuntimeConfig{Identity: AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, AppID: 1, AppHash: "secret", SessionStorage: memorySessionStorage{}, Coordinator: NewAuthorizationCoordinator(), ReadinessTimeout: time.Second, MaxConcurrentQueries: 2, MaxHistoryPageSize: 100, MaxResolvedPeers: 256}
 	tests := []struct {
 		name   string
 		mutate func(*RuntimeConfig)
@@ -29,6 +29,7 @@ func TestNewRuntimeValidatesConfig(t *testing.T) {
 		{"timeout", func(c *RuntimeConfig) { c.ReadinessTimeout = 0 }},
 		{"query concurrency", func(c *RuntimeConfig) { c.MaxConcurrentQueries = 0 }},
 		{"history page size", func(c *RuntimeConfig) { c.MaxHistoryPageSize = 0 }},
+		{"resolved peers", func(c *RuntimeConfig) { c.MaxResolvedPeers = 0 }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
