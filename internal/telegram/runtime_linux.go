@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	gotdsession "github.com/gotd/td/session"
 	gotdtelegram "github.com/gotd/td/telegram"
 )
 
@@ -75,6 +76,7 @@ type authorizationStatus struct {
 
 type runFunc func(context.Context, func(context.Context) error) error
 type statusFunc func(context.Context) (authorizationStatus, error)
+type preflightFunc func(context.Context) error
 
 // Runtime owns exactly one main gotd telegram.Client for one authorization
 // identity. The client is intentionally not exposed to consumers.
@@ -84,6 +86,7 @@ type Runtime struct {
 	readinessTimeout time.Duration
 	run              runFunc
 	status           statusFunc
+	preflight        preflightFunc
 	started          atomic.Bool
 }
 
@@ -103,6 +106,16 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		client:           client,
 		readinessTimeout: cfg.ReadinessTimeout,
 		run:              client.Run,
+		preflight: func(ctx context.Context) error {
+			loader := gotdsession.Loader{Storage: cfg.SessionStorage}
+			if _, err := loader.Load(ctx); err != nil {
+				if errors.Is(err, gotdsession.ErrNotFound) {
+					return ErrRebootstrapRequired
+				}
+				return fmt.Errorf("telegram runtime: preflight persisted authorization: %w", err)
+			}
+			return nil
+		},
 		status: func(ctx context.Context) (authorizationStatus, error) {
 			status, err := client.Auth().Status(ctx)
 			if err != nil {
@@ -135,7 +148,7 @@ func (r *Runtime) Identity() AuthorizationIdentity {
 // gotd client. A Runtime is intentionally one-shot; construct a new one after
 // shutdown/restart.
 func (r *Runtime) Run(ctx context.Context, serve func(context.Context) error) error {
-	if r == nil || r.run == nil || r.status == nil || r.readinessTimeout <= 0 {
+	if r == nil || r.run == nil || r.status == nil || r.preflight == nil || r.readinessTimeout <= 0 {
 		return fmt.Errorf("%w: invalid runtime", ErrInvalidRuntimeConfig)
 	}
 	if serve == nil {
@@ -143,6 +156,13 @@ func (r *Runtime) Run(ctx context.Context, serve func(context.Context) error) er
 	}
 	if !r.started.CompareAndSwap(false, true) {
 		return ErrAlreadyStarted
+	}
+
+	preflightCtx, cancel := context.WithTimeout(ctx, r.readinessTimeout)
+	preflightErr := r.preflight(preflightCtx)
+	cancel()
+	if preflightErr != nil {
+		return preflightErr
 	}
 
 	callbackResult := make(chan error, 1)
@@ -192,5 +212,5 @@ func (r *Runtime) runReady(ctx context.Context, serve func(context.Context) erro
 }
 
 func newRuntimeForTest(identity AuthorizationIdentity, readinessTimeout time.Duration, run runFunc, status statusFunc) *Runtime {
-	return &Runtime{identity: identity, readinessTimeout: readinessTimeout, run: run, status: status}
+	return &Runtime{identity: identity, readinessTimeout: readinessTimeout, run: run, status: status, preflight: func(context.Context) error { return nil }}
 }
