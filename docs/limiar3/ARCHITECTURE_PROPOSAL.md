@@ -77,9 +77,9 @@ O MCP realtime é construído cedo para explorar o Telegram e ajudar a descobrir
 
 ## Plano incremental, de baixo para cima (sequência revisável)
 
-**M0 — investigações da fundação, `L3-001` + `L3-001A/B/C` — concluídas documentalmente:** ownership, sessão/autorização, MTProto, gotd, hardening, performance, supply chain e extension points foram investigados. A stop condition da pesquisa ampla foi atingida. Antes de código, resolver somente Decisions/gates que realmente bloqueiam L3-002; não abrir nova investigação geral sem dúvida material.
+**M0 — investigações e Decisions da fundação, `L3-001` + `L3-001A/B/C` — concluídas:** a pesquisa ampla atingiu a stop condition e L3 ADR 001/002 foram aceitos pelo mantenedor. Não abrir nova investigação geral sem dúvida material.
 
-**M1 — runtime + authorization lifecycle + restore/reuse (`L3-002`):** compor entrypoint isolado, storage privado do boundary Telegram, owner único do main `gotd/telegram.Client`, bootstrap explícito e steady-state fail-closed. Provar gotd real: login controlado -> persistência -> shutdown -> restart -> autorizado sem novo OTP. Só depois estabilizar `TelegramQuery` read-only (`ResolvePeer` + `History`) com types source-aware e erros semânticos.
+**M1 — runtime + authorization lifecycle + restore/reuse (`L3-002`):** **Decision aceita, aguardando Implementation Gate/autorização de código.** Usar Go 1.27.1 + gotd v0.162.0 pinados; hardened `session.Storage` conforme L3 ADR 001; owner único/bootstrap/fail-closed/readiness conforme L3 ADR 002. Provar gotd real: login controlado -> persistência -> shutdown -> restart -> mesmo `self` autorizado sem novo OTP; depois estabilizar `TelegramQuery` read-only (`ResolvePeer` + `History`).
 
 **M2 — MCP realtime (`L3-003`):** expor a `TelegramQuery` via MCP read-only diretamente ao Telegram, sem depender do Evidence DB; usar esse ramo para explorar o corpus. Não criar segundo main client.
 
@@ -106,4 +106,4 @@ A investigação da versão real `gotd/td v0.161.0` sustenta a direção desta P
 
 ## Refinamento upstream-only L3-001C
 
-A auditoria do gotd como biblioteca independente recomenda reduzir a extensão L3 a cinco responsabilidades: hardened `session.Storage`, runtime ownership/readiness, `TelegramQuery` adapter, error translation e bounded admission. Reconnect, pools, DC migration, RPC/MTProto, pagination e media machinery permanecem no upstream. O relatório recomenda `gotd/td v0.162.0` como pin de L3-002, sujeito a decisão do mantenedor e Implementation Gate. Também recomenda evitar `session.FileStorage` production, `telegram/peers.Manager` na fundação e `gotd/contrib/middleware/floodwait.Waiter` global nas condições atuais; issues de updates ficam para o collector. Nenhuma dessas recomendações promove ADR ou autoriza código.
+A auditoria do gotd como biblioteca independente recomenda reduzir a extensão L3 a cinco responsabilidades: hardened `session.Storage`, runtime ownership/readiness, `TelegramQuery` adapter, error translation e bounded admission. Reconnect, pools, DC migration, RPC/MTProto, pagination e media machinery permanecem no upstream. O mantenedor posteriormente **aceitou** `gotd/td v0.162.0` como pin inicial de L3-002 no L3 ADR 002, ainda sujeito ao Implementation Gate. Também recomenda evitar `session.FileStorage` production, `telegram/peers.Manager` na fundação e `gotd/contrib/middleware/floodwait.Waiter` global nas condições atuais; issues de updates ficam para o collector. Nenhuma dessas recomendações promove ADR ou autoriza código.
