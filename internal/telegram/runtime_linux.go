@@ -19,6 +19,7 @@ var (
 	ErrInvalidRuntimeConfig = errors.New("telegram runtime: invalid config")
 	ErrAlreadyStarted       = errors.New("telegram runtime: already started")
 	ErrRebootstrapRequired  = errors.New("telegram runtime: rebootstrap required")
+	ErrIncompatibleSession = errors.New("telegram runtime: incompatible persisted session")
 	ErrSelfMismatch         = errors.New("telegram runtime: authorization identity mismatch")
 	ErrInvalidAuthStatus    = errors.New("telegram runtime: invalid authorization status")
 )
@@ -107,14 +108,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		readinessTimeout: cfg.ReadinessTimeout,
 		run:              client.Run,
 		preflight: func(ctx context.Context) error {
-			loader := gotdsession.Loader{Storage: cfg.SessionStorage}
-			if _, err := loader.Load(ctx); err != nil {
-				if errors.Is(err, gotdsession.ErrNotFound) {
-					return ErrRebootstrapRequired
-				}
-				return fmt.Errorf("telegram runtime: preflight persisted authorization: %w", err)
-			}
-			return nil
+			return preflightPersistedSession(ctx, cfg.SessionStorage)
 		},
 		status: func(ctx context.Context) (authorizationStatus, error) {
 			status, err := client.Auth().Status(ctx)
@@ -136,6 +130,40 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 }
 
 // Identity returns the non-secret Limiar authorization identity binding.
+
+func preflightPersistedSession(ctx context.Context, storage gotdtelegram.SessionStorage) error {
+	raw, err := storage.LoadSession(ctx)
+	if err != nil {
+		return fmt.Errorf("telegram runtime: load persisted authorization: %w", err)
+	}
+	if len(raw) == 0 {
+		return ErrRebootstrapRequired
+	}
+
+	loader := gotdsession.Loader{Storage: staticSessionStorage{data: raw}}
+	if _, err := loader.Load(ctx); err != nil {
+		if errors.Is(err, gotdsession.ErrNotFound) {
+			// At this point physical storage was present and non-empty, so gotd's
+			// ErrNotFound can only represent an incompatible serialized version.
+			return fmt.Errorf("%w: %v", ErrIncompatibleSession, err)
+		}
+		return fmt.Errorf("telegram runtime: decode persisted authorization: %w", err)
+	}
+	return nil
+}
+
+type staticSessionStorage struct {
+	data []byte
+}
+
+func (s staticSessionStorage) LoadSession(context.Context) ([]byte, error) {
+	return s.data, nil
+}
+
+func (staticSessionStorage) StoreSession(context.Context, []byte) error {
+	return errors.New("telegram runtime: read-only session validation storage")
+}
+
 func (r *Runtime) Identity() AuthorizationIdentity {
 	if r == nil {
 		return AuthorizationIdentity{}
