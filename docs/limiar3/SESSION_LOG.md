@@ -120,3 +120,30 @@ A aceitação foi registrada de forma durável no commit `baa626b59ec21d36f0dbde
 O pacote também aceita Go 1.27.1 e `github.com/gotd/td v0.162.0` como baseline inicial de L3-002, sob `Current Stable First`. O ADR histórico 023 da rebaseline permanece `Proposed`; sua Evidence foi reaproveitada, mas ele não foi promovido retroativamente.
 
 A aceitação é arquitetural/documental. Não houve autorização implícita de código, login Telegram, OTP/2FA, credenciais, PR de implementação, merge ou deploy. O próximo estado é `L3-002 pronta para Implementation Gate`.
+
+
+## Repository rebaseline / legacy containment — L3-BASE-001
+
+Em 2026-09-23, o mantenedor autorizou executar a separação física entre a reconstrução Limiar 3 e a implementação anterior. Foi criada a branch `refactor/limiar3-repository-rebaseline` a partir de `docs/limiar-3-foundation-20260922@00e5c422b2ed98b10ab145c53b71936352b90585`.
+
+A aceitação foi registrada no commit `70dcd4982b90a26fa6eb7f722a679537f54bb1e0` e L3 ADR 003 — Repository topology and legacy containment — foi criado como `Accepted`.
+
+A movimentação principal foi feita por Git tree, preservando blob SHAs quando o conteúdo não precisava mudar. Foram realocados 311 blobs para `legacy/limiar2/`, incluindo implementação Go anterior, módulo/go.sum, workflows, experiments, tools, scripts e documentação histórica/rebaseline. O antigo `go.mod` mantém o blob `32b740c3d7aee68c2fb21729bf2a999b86676cf6` e `module github.com/limiar/collector`.
+
+O root passou a ter:
+
+- `module github.com/LuigiAPCPereira/limiar2`;
+- `go 1.27.1` e `toolchain go1.27.1`;
+- README/baseline/arquitetura derivados do Limiar 3;
+- apenas um package sentinela `internal/foundation`, sem lógica de produto;
+- CI único do root L3, pinado em Go 1.27.1;
+- gate `scripts/ci/check-no-legacy-imports.sh`;
+- namespace novo `docs/limiar3/evolution/`.
+
+Os workflows anteriores estão preservados sob `legacy/limiar2/.github/workflows/` e deixam de executar como workflows do root.
+
+A cópia integral do Engineering DNA disponível no Project foi verificada localmente nesta execução: 37.531 bytes, 2.171 LF, SHA-256 `c19c5d97f8e42b311d6c15440e2e9f58cec64fadf1a48b9575e1f2e4dba0e373`, igual ao hash canônico esperado. Isso não implica sincronização automática em outros ambientes.
+
+O container local disponível usa Go 1.23.2, portanto não foi usado para declarar build/test/race do módulo Go 1.27.1. A validação objetiva dessa combinação deve ocorrer no CI da branch/PR.
+
+Nenhuma capability L3-002, TelegramRuntime, login Telegram, OTP/2FA, session credential, MCP real, merge ou deploy foi criado por esta fatia.
