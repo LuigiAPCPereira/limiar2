@@ -147,3 +147,23 @@ A cópia integral do Engineering DNA disponível no Project foi verificada local
 O container local disponível usa Go 1.23.2, portanto não foi usado para declarar build/test/race do módulo Go 1.27.1. A validação objetiva dessa combinação deve ocorrer no CI da branch/PR.
 
 Nenhuma capability L3-002, TelegramRuntime, login Telegram, OTP/2FA, session credential, MCP real, merge ou deploy foi criado por esta fatia.
+
+
+## Verificação de L3-BASE-001
+
+A árvore remota foi reaberta após a movimentação. O compare contra `00e5c422b2ed98b10ab145c53b71936352b90585` mostrou 300 arquivos: **269 renames, 18 modified, 13 added e zero removed**. A implementação antiga permanece preservada; não houve deleção pura no diff.
+
+Checks estáticos:
+
+- 158 arquivos Go preservados sob `legacy/limiar2/`;
+- nenhum package de implementação L2 permaneceu em `cmd/` ou `internal/`; o único package de produto/root é o sentinela sem lógica `internal/foundation/doc.go`;
+- o `legacy/limiar2/go.mod` mantém blob `32b740c3d7aee68c2fb21729bf2a999b86676cf6` e `module github.com/limiar/collector`;
+- root `go.mod`: `module github.com/LuigiAPCPereira/limiar2`, Go/toolchain 1.27.1;
+- workflow root único: `.github/workflows/ci.yml`; oito workflows anteriores foram preservados sob legacy;
+- links relativos dos documentos canônicos/root e de todos os documentos L3 verificados não apresentaram targets quebrados;
+- protocolo do Project confirmado em 33.162 bytes / 247 LF / SHA-256 `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`; blob da branch continua `78b2e86564fb287886f9df065fdb727b20c52727`;
+- Engineering DNA integral do Project confirmado em 37.531 bytes / 2.171 LF / SHA-256 `c19c5d97f8e42b311d6c15440e2e9f58cec64fadf1a48b9575e1f2e4dba0e373`.
+
+O CI novo foi disparado no run GitHub Actions `35948099372`. Attempts 1 e 2 terminaram em failure antes de qualquer step, ambos com `runner_id=0`, `runner_name=""` e `steps=[]`. Portanto a causa exata de infraestrutura/conta do Actions permanece UNKNOWN e **nenhum build/vet/test/race/govulncheck chegou a executar**. A tarefa não deve ser marcada como plenamente validada enquanto esse gate não rodar.
+
+O ambiente container local disponível usa Go 1.23.2 e não foi usado para fingir validação do baseline Go 1.27.1.
