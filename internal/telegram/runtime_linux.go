@@ -47,9 +47,10 @@ type RuntimeConfig struct {
 	Identity         AuthorizationIdentity
 	AppID            int
 	AppHash          string
-	SessionStorage       gotdtelegram.SessionStorage
-	ReadinessTimeout     time.Duration
-	MaxConcurrentQueries int
+	SessionStorage        gotdtelegram.SessionStorage
+	ReadinessTimeout      time.Duration
+	MaxConcurrentQueries  int
+	MaxHistoryPageSize    int
 }
 
 func (c RuntimeConfig) validate() error {
@@ -70,6 +71,9 @@ func (c RuntimeConfig) validate() error {
 	}
 	if c.MaxConcurrentQueries <= 0 {
 		return fmt.Errorf("%w: max concurrent queries must be positive", ErrInvalidRuntimeConfig)
+	}
+	if c.MaxHistoryPageSize <= 0 {
+		return fmt.Errorf("%w: max history page size must be positive", ErrInvalidRuntimeConfig)
 	}
 	return nil
 }
@@ -111,7 +115,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		SessionStorage: cfg.SessionStorage,
 		NoUpdates:      true,
 	})
-	queryClient, err := newQueryClient(client.API(), cfg.MaxConcurrentQueries)
+	queryClient, err := newQueryClient(client.API(), cfg.MaxConcurrentQueries, cfg.MaxHistoryPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("telegram runtime: construct query capability: %w", err)
 	}
