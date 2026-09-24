@@ -10,6 +10,7 @@
 - **Sem arquitetura ornamental:** não introduzir interfaces por convenção, DI frameworks, registries, abstrações de múltiplas fontes, microserviços ou dezenas de pastas sem demanda real. Co-localizar quando owner e motivo de mudança forem os mesmos. Evitar `utils` genérico, estado global mutável e dependências circulares.
 - Código Go idiomático, nomes expressivos com semântica de exportação correta; não dividir por tamanho de arquivo nem fazer renomeações universais.
 - Legado é referência de comportamento, regressão, dados históricos e migração, não estrutura-alvo. Isolar compatibilidade e remover apenas depois de prova e autorização. Reusar SQLite/Evidence quando contratos e garantias seguirem válidos; não reescrever por estética.
+- **Current Stable First:** para projeto novo, linguagem/toolchain/dependência stable atual é o default de avaliação. Versão anterior exige motivo técnico concreto, documentado e demonstrável. Pinning continua obrigatório; features novas entram seletivamente quando ajudam o escopo real. Fonte detalhada: [`DEPENDENCY_TOOLCHAIN_POLICY.md`](DEPENDENCY_TOOLCHAIN_POLICY.md).
 
 ## Correção, segurança e runtime
 
@@ -28,7 +29,7 @@
 ## Ritmo e documentação
 
 - Reconstruir projeto inteiro em fatias observáveis, **de baixo para cima**: fundação/configuração/autenticação MTProto → admissão/mensagens/Evidence/recovery → mídia → processamento/dados limpos → superfícies MCP/API → frontend. MCP é considerado desde o início e pode ter fatias paralelas assim que existir capability real. Ordem depende de dependências observadas.
-- Primeiro bloco do próximo chat é **investigar** projeto inicial + autenticação/sessão (`L3-001`), não codificar por efeito do handoff. Resolver apenas decisões que bloqueiam primeiro slice; consultar documentação primária/versionada gotd/MCP quando materialmente necessário.
+- L3-001, L3-001A e L3-001B já investigaram fundação, MTProto/gotd e hardening/performance. A única pesquisa adicional recomendada antes do pinning final da dependência é a auditoria upstream-only `L3-001C`, limitada ao gotd stable atual. Depois disso, resolver decisões bloqueantes e aplicar o Implementation Gate; não manter análise aberta sem dúvida material.
 - Agent Development Protocol v2.0 `docs/DOCUMENTATION_AND_CONTINUITY.md`: §5 para projeto novo, RECOVER/RECONCILE, ID de tarefa, checkpoint, Implementation Gate e HANDOFF. Evitar loop interminável de ADRs/experimentos; implementar assim que informação suficiente **e autorização** existirem.
 - Craftsmanship: solução menor **completa** e comprovada, simples, correta, coesa, segura, legível, eficiente; qualidade não é quantidade de arquivos/interfaces/docs.
 
