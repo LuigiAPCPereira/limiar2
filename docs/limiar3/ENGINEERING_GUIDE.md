@@ -34,3 +34,7 @@
 - Craftsmanship: solução menor **completa** e comprovada, simples, correta, coesa, segura, legível, eficiente; qualidade não é quantidade de arquivos/interfaces/docs.
 
 **Limite residual:** o original integral está no GitHub **compactado com identidade de blob verificada**, não como Markdown integral de leitura imediata. Descompactar e verificar SHA no ambiente do novo chat antes de afirmar que a fonte completa foi efetivamente consumida. Não inferir sincronização com Project, Codex ou Tarefas Agendadas.
+
+## Legacy containment
+
+Por L3 ADR 003, o root é exclusivamente Limiar 3. `legacy/limiar2` é Evidence/histórico; código corrente não importa packages legacy. Copiar mecanismo antigo exige justificativa própria e authority vigente, não apenas existência anterior.
