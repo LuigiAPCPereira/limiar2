@@ -74,3 +74,22 @@ Resultado: a direção central foi sustentada com ajustes. O owner passa a ser u
 A sequência bottom-up foi refinada para provar gotd real restore/reuse antes de estabilizar `TelegramQuery`. O primeiro contract proposto é coeso e read-only (`ResolvePeer` + `History`), com `PeerKey`/message identity source-aware e sem `tg.*`, `InputPeer`, access hash ou session bytes.
 
 O relatório está em [L3_001A_MTPROTO_GOTD_INVESTIGATION.md](L3_001A_MTPROTO_GOTD_INVESTIGATION.md). `MTPROTO_GOTD_RESEARCH_BRIEF.md` foi marcado como concluído. ADR 023 e demais Proposed não foram promovidos. Nenhum experimento real, login, OTP, código de produto, branch de implementação, PR, merge ou deploy foi executado nesta internalização.
+
+
+## Fundação de produção e política de versões — L3-001B
+
+Em 2026-09-23, o mantenedor forneceu o terceiro relatório de fundação, cobrindo histórico dos Limiares, Go/toolchain, gotd ecosystem, auth/session, threat model, filesystem hardening, QR bootstrap, PFS, peer cache, concurrency/fairness, retry, observability, profiling, supply chain e gates de L3-002.
+
+O relatório foi internalizado em [L3_001B_PRODUCTION_FOUNDATION_RESEARCH.md](L3_001B_PRODUCTION_FOUNDATION_RESEARCH.md). Ele mantém a arquitetura mínima: authorization identity explícita, private session storage, bootstrap administrativo, um main gotd client, semantic Ready/self binding, restart/reuse real e depois TelegramQuery read-only.
+
+Na conversa posterior, o mantenedor definiu a política **Current Stable First**: para uma geração nova, stable atual é o default; permanecer em versão inferior exige motivo técnico concreto. Features atuais devem ser aproveitadas quando úteis ao escopo, sem modernidade ornamental. A política está em [DEPENDENCY_TOOLCHAIN_POLICY.md](DEPENDENCY_TOOLCHAIN_POLICY.md).
+
+A consequência para Go é avaliar a stable atual como baseline preferencial da Evidence de L3-002, em vez de validar tudo em uma linha antiga e migrar imediatamente depois. A consequência para gotd é semelhante: v0.161.0 continua uma referência profundamente investigada, mas o stable atual precisa ser auditado/testado antes do pinning final.
+
+### Pesquisa gotd independente
+
+L3-001A e L3-001B usaram pesquisa externa upstream real sobre gotd, incluindo versão fixada, arquitetura, packages, releases, issues e ecossistema. Porém essa pesquisa sempre respondeu perguntas do Limiar. Ainda não existe uma auditoria documental em que o gotd seja estudado **por si só primeiro** e apenas depois confrontado com L3-002.
+
+Foi criado [GOTD_UPSTREAM_ONLY_RESEARCH_BRIEF.md](GOTD_UPSTREAM_ONLY_RESEARCH_BRIEF.md) como tarefa recomendada L3-001C. Ela é limitada: não refaz MTProto nem produto; serve para fechar stable version, extension points, maturity, security, performance e known pitfalls do gotd.
+
+Nenhum upgrade, código, login Telegram, ADR promotion, PR, merge ou deploy foi executado por esta atualização.
