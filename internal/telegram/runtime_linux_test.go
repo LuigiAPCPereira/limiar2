@@ -200,3 +200,63 @@ func TestRunPreflightTimeoutIsBounded(t *testing.T) {
 		t.Fatalf("Run() error=%v, want preflight deadline", err)
 	}
 }
+
+
+type fixedSessionStorage struct {
+	data []byte
+	err  error
+}
+
+func (s fixedSessionStorage) LoadSession(context.Context) ([]byte, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.data, nil
+}
+
+func (fixedSessionStorage) StoreSession(context.Context, []byte) error { return nil }
+
+func TestPreflightDistinguishesPhysicalAbsenceFromIncompatibleBlob(t *testing.T) {
+	t.Parallel()
+
+	if err := preflightPersistedSession(context.Background(), fixedSessionStorage{}); !errors.Is(err, ErrRebootstrapRequired) {
+		t.Fatalf("absent session error=%v, want ErrRebootstrapRequired", err)
+	}
+
+	incompatible := []byte(`{"Version":2,"Data":{}}`)
+	err := preflightPersistedSession(context.Background(), fixedSessionStorage{data: incompatible})
+	if !errors.Is(err, ErrIncompatibleSession) {
+		t.Fatalf("incompatible session error=%v, want ErrIncompatibleSession", err)
+	}
+	if errors.Is(err, ErrRebootstrapRequired) {
+		t.Fatalf("incompatible session must not be classified as rebootstrap absence: %v", err)
+	}
+}
+
+func TestPreflightPreservesMalformedAndStorageFailures(t *testing.T) {
+	t.Parallel()
+
+	malformed := []byte("{not-json")
+	err := preflightPersistedSession(context.Background(), fixedSessionStorage{data: malformed})
+	if err == nil {
+		t.Fatal("malformed session error=nil, want decode failure")
+	}
+	if errors.Is(err, ErrRebootstrapRequired) || errors.Is(err, ErrIncompatibleSession) {
+		t.Fatalf("malformed session misclassified: %v", err)
+	}
+
+	sentinel := errors.New("permission denied")
+	err = preflightPersistedSession(context.Background(), fixedSessionStorage{err: sentinel})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("storage failure error=%v, want sentinel", err)
+	}
+}
+
+func TestPreflightAcceptsCurrentGotdSessionEncoding(t *testing.T) {
+	t.Parallel()
+
+	current := []byte(`{"Version":1,"Data":{}}`)
+	if err := preflightPersistedSession(context.Background(), fixedSessionStorage{data: current}); err != nil {
+		t.Fatalf("current session preflight error=%v", err)
+	}
+}
