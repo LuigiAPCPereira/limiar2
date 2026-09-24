@@ -15,7 +15,7 @@ func (memorySessionStorage) LoadSession(context.Context) ([]byte, error) { retur
 func (memorySessionStorage) StoreSession(context.Context, []byte) error  { return nil }
 
 func TestNewRuntimeValidatesConfig(t *testing.T) {
-	good := RuntimeConfig{Identity: AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, AppID: 1, AppHash: "secret", SessionStorage: memorySessionStorage{}, ReadinessTimeout: time.Second, MaxConcurrentQueries: 2, MaxHistoryPageSize: 100}
+	good := RuntimeConfig{Identity: AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, AppID: 1, AppHash: "secret", SessionStorage: memorySessionStorage{}, Coordinator: NewAuthorizationCoordinator(), ReadinessTimeout: time.Second, MaxConcurrentQueries: 2, MaxHistoryPageSize: 100}
 	tests := []struct {
 		name   string
 		mutate func(*RuntimeConfig)
@@ -25,6 +25,7 @@ func TestNewRuntimeValidatesConfig(t *testing.T) {
 		{"app id", func(c *RuntimeConfig) { c.AppID = 0 }},
 		{"app hash", func(c *RuntimeConfig) { c.AppHash = "" }},
 		{"storage", func(c *RuntimeConfig) { c.SessionStorage = nil }},
+		{"coordinator", func(c *RuntimeConfig) { c.Coordinator = nil }},
 		{"timeout", func(c *RuntimeConfig) { c.ReadinessTimeout = 0 }},
 		{"query concurrency", func(c *RuntimeConfig) { c.MaxConcurrentQueries = 0 }},
 		{"history page size", func(c *RuntimeConfig) { c.MaxHistoryPageSize = 0 }},
@@ -64,8 +65,8 @@ func TestRunUnauthorizedRequiresExplicitRebootstrap(t *testing.T) {
 		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
 		func(context.Context) (authorizationStatus, error) { return authorizationStatus{}, nil })
 	err := r.Run(context.Background(), func(context.Context, Capabilities) error { served = true; return nil })
-	if !errors.Is(err, ErrRebootstrapRequired) {
-		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired", err)
+	if !errors.Is(err, ErrRebootstrapRequired) || !errors.Is(err, ErrAuthorizationRejected) {
+		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired + ErrAuthorizationRejected", err)
 	}
 	if served {
 		t.Fatal("serve called for unauthorized runtime")
@@ -221,17 +222,17 @@ func (fixedSessionStorage) StoreSession(context.Context, []byte) error { return 
 func TestPreflightDistinguishesPhysicalAbsenceFromIncompatibleBlob(t *testing.T) {
 	t.Parallel()
 
-	if err := preflightPersistedSession(context.Background(), fixedSessionStorage{}); !errors.Is(err, ErrRebootstrapRequired) {
-		t.Fatalf("absent session error=%v, want ErrRebootstrapRequired", err)
+	if err := preflightPersistedSession(context.Background(), fixedSessionStorage{}); !errors.Is(err, ErrRebootstrapRequired) || !errors.Is(err, ErrSessionAbsent) {
+		t.Fatalf("absent session error=%v, want ErrRebootstrapRequired + ErrSessionAbsent", err)
 	}
 
 	incompatible := []byte(`{"Version":2,"Data":{}}`)
 	err := preflightPersistedSession(context.Background(), fixedSessionStorage{data: incompatible})
-	if !errors.Is(err, ErrIncompatibleSession) {
-		t.Fatalf("incompatible session error=%v, want ErrIncompatibleSession", err)
+	if !errors.Is(err, ErrIncompatibleSession) || !errors.Is(err, ErrRebootstrapRequired) {
+		t.Fatalf("incompatible session error=%v, want ErrIncompatibleSession + ErrRebootstrapRequired", err)
 	}
-	if errors.Is(err, ErrRebootstrapRequired) {
-		t.Fatalf("incompatible session must not be classified as rebootstrap absence: %v", err)
+	if errors.Is(err, ErrSessionAbsent) {
+		t.Fatalf("incompatible session misclassified as physical absence: %v", err)
 	}
 }
 
@@ -277,6 +278,7 @@ func (testQuery) History(context.Context, PeerKey, HistoryRequest) (MessagePage,
 func newRuntimeForTest(identity AuthorizationIdentity, readinessTimeout time.Duration, run runFunc, status statusFunc) *Runtime {
 	return &Runtime{
 		identity:         identity,
+		coordinator:      NewAuthorizationCoordinator(),
 		readinessTimeout: readinessTimeout,
 		run:              run,
 		status:           status,
@@ -330,4 +332,63 @@ func TestRunDoesNotExposeCapabilitiesBeforeReadiness(t *testing.T) {
 	if served {
 		t.Fatal("capabilities callback ran before semantic readiness")
 	}
+}
+
+
+func TestRuntimeOwnershipRejectsConcurrentSameIdentity(t *testing.T) {
+	t.Parallel()
+
+	coordinator := NewAuthorizationCoordinator()
+	identity := AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}
+	ready := make(chan struct{})
+	releaseServe := make(chan struct{})
+
+	first := newRuntimeForTest(identity, time.Second,
+		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
+		func(context.Context) (authorizationStatus, error) {
+			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
+		})
+	first.coordinator = coordinator
+
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- first.Run(context.Background(), func(context.Context, Capabilities) error {
+			close(ready)
+			<-releaseServe
+			return nil
+		})
+	}()
+	<-ready
+
+	second := newRuntimeForTest(identity, time.Second,
+		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
+		func(context.Context) (authorizationStatus, error) {
+			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
+		})
+	second.coordinator = coordinator
+	if err := second.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, ErrAuthorizationInUse) {
+		t.Fatalf("second runtime error=%v, want ErrAuthorizationInUse", err)
+	}
+
+	close(releaseServe)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first runtime error=%v", err)
+	}
+}
+
+func TestRuntimeOwnershipAllowsDifferentIdentities(t *testing.T) {
+	t.Parallel()
+
+	coordinator := NewAuthorizationCoordinator()
+	releasePrimary, err := coordinator.acquire("primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releasePrimary()
+
+	releaseResearch, err := coordinator.acquire("research")
+	if err != nil {
+		t.Fatalf("different identity acquire error=%v", err)
+	}
+	releaseResearch()
 }
