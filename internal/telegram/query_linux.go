@@ -98,7 +98,8 @@ type QueryClient struct {
 	resolve resolvePeerFunc
 	history historyFunc
 
-	admission chan struct{}
+	admission   chan struct{}
+	maxPageSize int
 
 	mu    sync.RWMutex
 	peers map[PeerKey]tg.InputPeerClass
@@ -106,16 +107,19 @@ type QueryClient struct {
 
 var _ TelegramQuery = (*QueryClient)(nil)
 
-func newQueryClient(raw *tg.Client, maxConcurrent int) (*QueryClient, error) {
+func newQueryClient(raw *tg.Client, maxConcurrent, maxPageSize int) (*QueryClient, error) {
 	if raw == nil {
 		return nil, fmt.Errorf("%w: nil gotd API client", ErrInvalidQuery)
 	}
 	if maxConcurrent <= 0 {
 		return nil, fmt.Errorf("%w: max concurrent queries must be positive", ErrInvalidQuery)
 	}
+	if maxPageSize <= 0 {
+		return nil, fmt.Errorf("%w: max history page size must be positive", ErrInvalidQuery)
+	}
 
 	resolver := peer.DefaultResolver(raw)
-	return newQueryClientWithFuncs(maxConcurrent,
+	return newQueryClientWithFuncs(maxConcurrent, maxPageSize,
 		func(ctx context.Context, value string) (tg.InputPeerClass, error) {
 			return peer.ResolveInputPeer(ctx, resolver, peer.Resolve(value))
 		},
@@ -138,15 +142,16 @@ func newQueryClient(raw *tg.Client, maxConcurrent int) (*QueryClient, error) {
 	)
 }
 
-func newQueryClientWithFuncs(maxConcurrent int, resolve resolvePeerFunc, history historyFunc) (*QueryClient, error) {
-	if maxConcurrent <= 0 || resolve == nil || history == nil {
+func newQueryClientWithFuncs(maxConcurrent, maxPageSize int, resolve resolvePeerFunc, history historyFunc) (*QueryClient, error) {
+	if maxConcurrent <= 0 || maxPageSize <= 0 || resolve == nil || history == nil {
 		return nil, fmt.Errorf("%w: invalid query adapter configuration", ErrInvalidQuery)
 	}
 	return &QueryClient{
-		resolve:    resolve,
-		history:    history,
-		admission:  make(chan struct{}, maxConcurrent),
-		peers:      make(map[PeerKey]tg.InputPeerClass),
+		resolve:     resolve,
+		history:     history,
+		admission:   make(chan struct{}, maxConcurrent),
+		maxPageSize: maxPageSize,
+		peers:       make(map[PeerKey]tg.InputPeerClass),
 	}, nil
 }
 
@@ -186,8 +191,8 @@ func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryReque
 	if err := key.validate(); err != nil {
 		return MessagePage{}, err
 	}
-	if req.Limit < 1 || req.Limit > 100 {
-		return MessagePage{}, fmt.Errorf("%w: history limit must be between 1 and 100", ErrInvalidQuery)
+	if req.Limit < 1 || req.Limit > q.maxPageSize {
+		return MessagePage{}, fmt.Errorf("%w: history limit must be between 1 and %d", ErrInvalidQuery, q.maxPageSize)
 	}
 	offsetID, err := decodeHistoryCursor(req.Cursor)
 	if err != nil {
