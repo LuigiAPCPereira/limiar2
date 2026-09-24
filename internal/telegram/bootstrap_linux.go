@@ -226,6 +226,9 @@ func (b *Bootstrapper) Code(
 
 		flow := auth.NewFlow(authenticator, auth.SendCodeOptions{})
 		if err := flow.Run(runCtx, client.Auth()); err != nil {
+			if errors.Is(err, ErrBootstrapSignUpRequired) {
+				return err
+			}
 			return classifyTelegramError("bootstrap_code", err)
 		}
 
@@ -323,6 +326,11 @@ func (existingAccountAuthAdapter) AcceptTermsOfService(context.Context, tg.HelpT
 func (existingAccountAuthAdapter) SignUp(context.Context) (auth.UserInfo, error) {
 	return auth.UserInfo{}, ErrBootstrapSignUpRequired
 }
+
+var (
+	_ auth.UserAuthenticator   = existingAccountAuthAdapter{}
+	_ auth.PasswordHashProvider = existingAccountAuthAdapter{}
+)
 
 type stagingSessionStorage struct {
 	mu   sync.RWMutex
