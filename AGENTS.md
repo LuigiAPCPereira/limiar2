@@ -26,7 +26,7 @@ Quando houver conflito, use esta ordem:
 
 1. instrução explícita do mantenedor;
 2. este `AGENTS.md`;
-3. ADRs com `Status: Accepted`, observada a regra de transição em `docs/adr/README.md`;
+3. ADRs com `Status: Accepted`, observada a regra vigente em `docs/limiar3/adr/README.md`;
 4. `docs/BASELINE.md`;
 5. specs e documentação derivadas de decisões aceitas;
 6. implementação atual e testes, apenas como evidência do comportamento existente;
@@ -200,8 +200,7 @@ Transições:
 
 Somente uma decisão aceita posterior pode substituir a autoridade de um ADR Accepted.
 
-ADRs anteriores à Rebaseline 2026 devem ser interpretados segundo o registry de
-transição em `docs/adr/README.md` até sua disposição final.
+ADRs exclusivos do Limiar 3 usam o registry `docs/limiar3/adr/README.md`. ADRs e Decisions anteriores à reconstrução permanecem preservados sob `legacy/limiar2/docs/adr/README.md` e só têm efeito no Limiar 3 quando sua herança estiver explicitamente documentada.
 
 ---
 
@@ -232,7 +231,7 @@ particular, não pode:
 
 ## 9. EvolutionDocs
 
-Pesquisa e evolução técnica devem usar `docs/evolution/`.
+Pesquisa e evolução técnica do Limiar 3 deve usar `docs/limiar3/evolution/`.
 
 Fluxo recomendado quando necessário:
 
@@ -241,7 +240,7 @@ Fluxo recomendado quando necessário:
 Nem toda mudança precisa percorrer todas as etapas. Quanto maior a incerteza,
 irreversibilidade ou risco, maior deve ser a evidência antes da decisão.
 
-Consulte `docs/evolution/README.md`.
+Consulte `docs/limiar3/evolution/README.md`.
 
 ---
 
@@ -404,14 +403,14 @@ Para desenvolvimento multissessão, ler primeiro este `AGENTS.md` e a fonte do p
 
 | Função | Fonte neste repositório | Estado na adoção |
 | --- | --- | --- |
-| Identidade, público e limites | `README.md`, `docs/PRODUCT_BRIEF.md`, `docs/BASELINE.md` | parcial; reconciliar fonte vigente |
-| Requisitos e aceites | `docs/PRODUCT_BRIEF.md`, `docs/CONTEXT.md`, `docs/specs/` e ADRs aplicáveis | parcial; cobertura do escopo ativo a conferir |
-| Arquitetura e contratos | `docs/BASELINE.md`, `docs/ARCHITECTURE.md`, ADRs Accepted | parcial; ADR 018/BASELINE reconciliados, demais contratos por conferir |
-| Decisões duráveis | `docs/adr/README.md`, ADRs Accepted; proposals não são decisões | verificada quanto ao registro |
-| Inventário de tarefas | [`docs/TASKLIST.md`](docs/TASKLIST.md) | inventário de adoção, escopo do produto ainda incompleto |
-| Planejamento e marcos | [`docs/ROADMAP.md`](docs/ROADMAP.md), `docs/CONTEXT.md`, `docs/BASELINE.md` | roadmap de adoção verificado; planejamento global a conferir |
-| Histórico recuperável | `docs/evolution/`, ADRs, PRs e commits | equivalência completa a conferir |
-| Checkpoint/ação | [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) | checkpoint de adoção criado; reconciliar HEAD |
-| Instruções/versão | Este arquivo e [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md) | fonte acessível na branch, integridade comprovada; outros ambientes não verificados |
+| Identidade, público e limites | `README.md`, `docs/BASELINE.md`, `docs/limiar3/PRODUCT_AND_SCOPE.md` | **PARCIAL**; produto L3 reconciliado, adoção global do protocolo não declarada concluída |
+| Requisitos e aceites | `docs/limiar3/PRODUCT_AND_SCOPE.md`, TASKLIST e ADRs L3 aplicáveis | **PARCIAL**; requisitos são expandidos por slices |
+| Arquitetura e contratos | `docs/BASELINE.md`, `docs/ARCHITECTURE.md`, `docs/limiar3/` e ADRs L3 Accepted | corrente para a fundação decidida; demais fatias ainda evoluem |
+| Decisões duráveis | `docs/limiar3/adr/README.md`, ADRs Accepted; histórico em `legacy/limiar2/docs/adr/` | verificada quanto ao registry L3 |
+| Inventário de tarefas | [`docs/limiar3/TASKLIST.md`](docs/limiar3/TASKLIST.md) | tracker canônico da reconstrução L3 |
+| Planejamento e marcos | `docs/limiar3/BOTTOM_UP_REBUILD_PLAN.md`, `docs/limiar3/TASKLIST.md`, `docs/BASELINE.md` | corrente para a reconstrução |
+| Histórico recuperável | `docs/limiar3/SESSION_LOG.md`, `docs/limiar3/evolution/`, `legacy/limiar2/`, ADRs, PRs e commits | legado preservado; equivalência completa continua sujeita à Evidence |
+| Checkpoint/ação | [`docs/limiar3/PROJECT_STATE.md`](docs/limiar3/PROJECT_STATE.md) | checkpoint canônico L3 |
+| Instruções/versão | Este arquivo e [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md) | fonte acessível na branch; disponibilidade em outros ambientes deve ser verificada |
 
-O relatório com evidências e lacunas é [`docs/ADOPTION_REPORT.md`](docs/ADOPTION_REPORT.md). Nenhum desses links confirma leitura de Codex ou agendamentos; verificar disponibilidade real em cada execução. `docs/TASKLIST.md` não substitui um inventário de todo o escopo ativo enquanto os itens de produto estiverem incompletos. Manter as permissões reais e os gates constitucionais desta Constituição.
+O relatório proporcional da frente L3 é [`docs/limiar3/INIT_REPORT.md`](docs/limiar3/INIT_REPORT.md). A adoção histórica do protocolo permanece **PARCIAL**; mover o legado ou criar os ADRs L3 não a transforma automaticamente em CONCLUÍDA. Nenhum desses links confirma leitura de Codex ou tarefas agendadas; verificar disponibilidade real em cada execução. Manter as permissões reais e os gates constitucionais desta Constituição.
