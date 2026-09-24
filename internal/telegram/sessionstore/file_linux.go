@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+
+	gotdsession "github.com/gotd/td/session"
 )
 
 var (
@@ -79,6 +81,8 @@ type FileStorage struct {
 	lock   *pathLock
 	faults faultInjector
 }
+
+var _ gotdsession.Storage = (*FileStorage)(nil)
 
 // Path returns the canonical credential path. It never exposes session bytes.
 func (s *FileStorage) Path() string { return s.path }
