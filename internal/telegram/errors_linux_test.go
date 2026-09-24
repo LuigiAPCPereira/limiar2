@@ -56,6 +56,7 @@ func TestClassifyTelegramErrorSemanticCategories(t *testing.T) {
 	}{
 		{"unauthorized", tgerr.New(401, "AUTH_KEY_UNREGISTERED"), ErrorKindUnauthorized},
 		{"revoked", tgerr.New(401, "SESSION_REVOKED"), ErrorKindUnauthorized},
+		{"duplicated auth key", tgerr.New(406, "AUTH_KEY_DUPLICATED"), ErrorKindUnauthorized},
 		{"peer", tgerr.New(400, "PEER_ID_INVALID"), ErrorKindPeerUnavailable},
 		{"username", tgerr.New(400, "USERNAME_NOT_OCCUPIED"), ErrorKindPeerUnavailable},
 		{"access", tgerr.New(406, "CHANNEL_PRIVATE"), ErrorKindAccessDenied},
