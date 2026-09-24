@@ -121,3 +121,10 @@ no runtime suportado:
 
 A transição para `Accepted` exige aceitação explícita e verificável do mantenedor conforme
 `AGENTS.md` e `docs/adr/README.md`.
+
+
+## Nota de relação com Limiar 3
+
+Este ADR permanece `Proposed` no registry histórico da rebaseline e **não foi promovido**. Em 2026-09-23, o mantenedor definiu que o Limiar 3 possui namespace próprio de ADRs reiniciado em 001. A Decision concreta do Limiar 3 para este tema está em `docs/limiar3/adr/001-hardened-telegram-session-storage.md` (`Accepted`).
+
+L3 ADR 001 reaproveita Evidence e aprendizados deste documento, mas possui escopo/nomenclatura atualizados (`TelegramAuthorizationIdentity`, Linux/single-host/single-process, findings L3-001A/B/C). Em qualquer conflito para a reconstrução Limiar 3, prevalece o ADR L3 Accepted conforme a ordem de autoridade.
