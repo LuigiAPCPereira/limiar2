@@ -1,6 +1,6 @@
 # Limiar 3.0 — COMECE AQUI
 
-**Estado:** planejamento/documentação da nova geração, sem implementação autorizada por esta entrega. **Repositório:** `LuigiAPCPereira/limiar2`. **Branch de planejamento:** `docs/limiar-3-foundation-20260922`, criada a partir do commit `7177d929839512b8005ae379d96e3d224feac1f8` da branch documental de adoção v2 (PR #214 draft), que por sua vez partiu de `main@796b7769449b72320b27c2557c2ccb8c8eb183e1`. Estas são referências históricas de origem; **reconsultar HEAD, PRs, divergência com main e testes na execução seguinte**. A `main` não foi modificada por esta preparação. Não pressupor worktree local, acesso Telegram, deploy, credenciais, MCP conectado ou sincronização com arquivos do ChatGPT Project.
+**Estado:** repository rebaseline do Limiar 3 em verificação. **Repositório:** `LuigiAPCPereira/limiar2`. **Branch atual:** `refactor/limiar3-repository-rebaseline`, criada de `docs/limiar-3-foundation-20260922@00e5c422b2ed98b10ab145c53b71936352b90585`. O root já representa Limiar 3 e o legado está contido em `legacy/limiar2/`, mas a integração em `main` ainda não ocorreu. **Reconsultar HEAD, PRs, divergência com main e CI na execução seguinte**. Não pressupor acesso Telegram, deploy, credenciais, MCP conectado ou sincronização automática com arquivos do ChatGPT Project.
 
 ## Leia nesta ordem
 
@@ -34,17 +34,17 @@
 
 **Pedido já respondido pelo mantenedor:** reconstruir integralmente o Limiar 3.0 bottom-up com boundaries corretos. Sessão e integração Telegram/MTProto devem ser desacopláveis do core por contrato; MCP também deve ser detachable. O MCP possui um ramo **Telegram realtime** que consulta a fonte diretamente, sob demanda, antes do modelo de promoções, para ajudar a descobrir quais dados devem ser coletados/modelados; depois pode ganhar tools de **Limiar data** sobre Query Service. Collector/Evidence continuam um ramo independente e durável. Desacoplamento não exige microserviços. **Não existe um segundo aplicativo Limiar.**
 
-**Estado das investigações e Decisions de fundação:** L3-001/A/B/C estão internalizadas e a stop condition da pesquisa ampla foi atingida. O mantenedor aceitou o pacote de fundação com namespace próprio de ADRs reiniciado em 001. L3 ADR 001/002 estão Accepted; Go 1.27.1 e gotd/td v0.162.0 são o baseline inicial aceito. **Próxima ação:** executar o Implementation Gate de L3-002. Código, login Telegram, OTP/credenciais e deploy continuam sem autorização implícita.
+**Estado das investigações e Decisions de fundação:** L3-001/A/B/C estão internalizadas e a stop condition da pesquisa ampla foi atingida. L3 ADR 001/002/003 estão Accepted. `L3-BASE-001` executou a separação física do legado e está em verificação/CI. Go 1.27.1 e gotd/td v0.162.0 seguem como baseline inicial de L3-002. **Próxima ação:** validar/integrar o repository rebaseline e então retomar o Implementation Gate de L3-002.
 
 **Distinção de autenticações:** (a) `TelegramAuthorizationIdentity` + credencial persistida do boundary Telegram; (b) MTProto `session_id`, efêmero e interno ao gotd; (c) eventual identidade/autorização para consumidores do Limiar e acesso pelo ChatGPT/MCP. Não pressupor que (c) já existe no legado, nem reutilizar diretamente arquivo de sessão Telegram como token MCP. Investigar autenticação de consumidor somente na medida em que for dependência real do primeiro slice, sem inventar sistema de contas.
 
-**Autorização desta entrega:** criar esta branch e documentação. Nada de código, novos serviços, custos, operações com dados reais ou merge. Um futuro pedido explícito pode alterar esse limite. Não exigir repetição das respostas do mantenedor contidas nestes documentos; perguntar só decisão material ainda não respondida.
+**Autorização vigente:** o mantenedor autorizou `L3-BASE-001`, incluindo branch, movimentação estrutural, scaffold Go/CI e documentação. Isso não autoriza L3-002 funcional, Telegram/login/OTP, novos serviços, custos, operações com dados reais, merge ou deploy. Não exigir repetição das respostas do mantenedor contidas nestes documentos; perguntar só decisão material ainda não respondida.
 
 ## Próximas leituras técnicas focadas
 
 - Auth/session/runtime: L3 ADR 001/002 **Accepted**. Credential storage hardened local file em Linux/single-process, owner único por `TelegramAuthorizationIdentity`, bootstrap administrativo QR-first/fallback controlado, semantic Ready/self binding, Go 1.27.1 e gotd v0.162.0 são a baseline aceita. O ADR histórico 023 continua `Proposed` apenas no registry legado; não é a authority do Limiar 3.
 - Coleta/Evidence: ADRs 016–020 Accepted; ADR 018 Accepted mas Source Admission ainda não integrada em produção; ADR 024 **Proposed** para `subscription_id` (não inventar ID de produção).
-- Persistência: `internal/storage/sqlite`, migrations; PR #211 integrada (guard de schema), não equivale a substituição completa Tursogo. ADRs 021/022 ainda Proposed; importação real EXP-007 não demonstrada.
+- Persistência histórica: `legacy/limiar2/internal/storage/sqlite`, migrations; PR #211 integrada (guard de schema), não equivale a substituição completa Tursogo. ADRs 021/022 ainda Proposed; importação real EXP-007 não demonstrada.
 - Imagens: falha funcional relatada pelo mantenedor, causa não demonstrada neste trabalho; ADR 011 `DEFER / REVALIDATE`, ADR 012 `RETIRE`.
 
 **Critério de sucesso da preparação documental:** arquivos reabertos na branch correta, referências coerentes, escopo e tarefas recuperáveis, nenhuma pretensão de produto validado. O checkpoint informa o que foi efetivamente conferido.
