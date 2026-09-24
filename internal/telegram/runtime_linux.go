@@ -47,8 +47,9 @@ type RuntimeConfig struct {
 	Identity         AuthorizationIdentity
 	AppID            int
 	AppHash          string
-	SessionStorage   gotdtelegram.SessionStorage
-	ReadinessTimeout time.Duration
+	SessionStorage       gotdtelegram.SessionStorage
+	ReadinessTimeout     time.Duration
+	MaxConcurrentQueries int
 }
 
 func (c RuntimeConfig) validate() error {
@@ -67,6 +68,9 @@ func (c RuntimeConfig) validate() error {
 	if c.ReadinessTimeout <= 0 {
 		return fmt.Errorf("%w: readiness timeout must be positive", ErrInvalidRuntimeConfig)
 	}
+	if c.MaxConcurrentQueries <= 0 {
+		return fmt.Errorf("%w: max concurrent queries must be positive", ErrInvalidRuntimeConfig)
+	}
 	return nil
 }
 
@@ -79,6 +83,11 @@ type runFunc func(context.Context, func(context.Context) error) error
 type statusFunc func(context.Context) (authorizationStatus, error)
 type preflightFunc func(context.Context) error
 
+// Capabilities are exposed only after semantic readiness succeeds.
+type Capabilities struct {
+	Query TelegramQuery
+}
+
 // Runtime owns exactly one main gotd telegram.Client for one authorization
 // identity. The client is intentionally not exposed to consumers.
 type Runtime struct {
@@ -88,6 +97,7 @@ type Runtime struct {
 	run              runFunc
 	status           statusFunc
 	preflight        preflightFunc
+	query            TelegramQuery
 	started          atomic.Bool
 }
 
@@ -101,6 +111,10 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		SessionStorage: cfg.SessionStorage,
 		NoUpdates:      true,
 	})
+	queryClient, err := newQueryClient(client.API(), cfg.MaxConcurrentQueries)
+	if err != nil {
+		return nil, fmt.Errorf("telegram runtime: construct query capability: %w", err)
+	}
 
 	return &Runtime{
 		identity:         cfg.Identity,
@@ -110,6 +124,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		preflight: func(ctx context.Context) error {
 			return preflightPersistedSession(ctx, cfg.SessionStorage)
 		},
+		query: queryClient,
 		status: func(ctx context.Context) (authorizationStatus, error) {
 			status, err := client.Auth().Status(ctx)
 			if err != nil {
@@ -175,8 +190,8 @@ func (r *Runtime) Identity() AuthorizationIdentity {
 // serve while the client lifecycle is active. Returning from serve stops the
 // gotd client. A Runtime is intentionally one-shot; construct a new one after
 // shutdown/restart.
-func (r *Runtime) Run(ctx context.Context, serve func(context.Context) error) error {
-	if r == nil || r.run == nil || r.status == nil || r.preflight == nil || r.readinessTimeout <= 0 {
+func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilities) error) error {
+	if r == nil || r.run == nil || r.status == nil || r.preflight == nil || r.query == nil || r.readinessTimeout <= 0 {
 		return fmt.Errorf("%w: invalid runtime", ErrInvalidRuntimeConfig)
 	}
 	if serve == nil {
@@ -216,7 +231,7 @@ func (r *Runtime) Run(ctx context.Context, serve func(context.Context) error) er
 	return nil
 }
 
-func (r *Runtime) runReady(ctx context.Context, serve func(context.Context) error) error {
+func (r *Runtime) runReady(ctx context.Context, serve func(context.Context, Capabilities) error) error {
 	verifyCtx, cancel := context.WithTimeout(ctx, r.readinessTimeout)
 	defer cancel()
 
@@ -233,12 +248,8 @@ func (r *Runtime) runReady(ctx context.Context, serve func(context.Context) erro
 	if status.SelfUserID != r.identity.ExpectedSelfUserID {
 		return fmt.Errorf("%w: expected user id %d, got %d", ErrSelfMismatch, r.identity.ExpectedSelfUserID, status.SelfUserID)
 	}
-	if err := serve(ctx); err != nil {
+	if err := serve(ctx, Capabilities{Query: r.query}); err != nil {
 		return fmt.Errorf("telegram runtime: serve ready runtime: %w", err)
 	}
 	return nil
-}
-
-func newRuntimeForTest(identity AuthorizationIdentity, readinessTimeout time.Duration, run runFunc, status statusFunc) *Runtime {
-	return &Runtime{identity: identity, readinessTimeout: readinessTimeout, run: run, status: status, preflight: func(context.Context) error { return nil }}
 }
