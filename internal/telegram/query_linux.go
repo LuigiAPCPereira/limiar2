@@ -74,6 +74,7 @@ type Message struct {
 	Peer          PeerKey
 	Date          time.Time
 	Kind          MessageKind
+	UpstreamType  string
 	Text          string
 	EditedAt      time.Time
 	GroupedID     int64
@@ -288,10 +289,11 @@ func decodeHistoryCursor(cursor string) (int, error) {
 
 func messageFromElem(elem querymessages.Elem, fallback PeerKey) Message {
 	result := Message{
-		ID:   int64(elem.Msg.GetID()),
-		Peer: fallback,
-		Date: time.Unix(int64(elem.Msg.GetDate()), 0).UTC(),
-		Kind: MessageKindUnknown,
+		ID:           int64(elem.Msg.GetID()),
+		Peer:         fallback,
+		Date:         telegramTimestamp(elem.Msg.GetDate()),
+		Kind:         MessageKindUnknown,
+		UpstreamType: elem.Msg.TypeName(),
 	}
 	if key, err := peerKey(elem.Peer); err == nil {
 		result.Peer = key
@@ -302,7 +304,7 @@ func messageFromElem(elem querymessages.Elem, fallback PeerKey) Message {
 		result.Kind = MessageKindRegular
 		result.Text = m.Message
 		if m.EditDate > 0 {
-			result.EditedAt = time.Unix(int64(m.EditDate), 0).UTC()
+			result.EditedAt = telegramTimestamp(m.EditDate)
 		}
 		result.GroupedID = m.GroupedID
 		if m.Media != nil && !m.Media.Zero() && m.Media.TypeName() != "messageMediaEmpty" {
@@ -315,4 +317,11 @@ func messageFromElem(elem querymessages.Elem, fallback PeerKey) Message {
 		}
 	}
 	return result
+}
+
+func telegramTimestamp(value int) time.Time {
+	if value <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(int64(value), 0).UTC()
 }
