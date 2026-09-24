@@ -15,7 +15,7 @@ func (memorySessionStorage) LoadSession(context.Context) ([]byte, error) { retur
 func (memorySessionStorage) StoreSession(context.Context, []byte) error  { return nil }
 
 func TestNewRuntimeValidatesConfig(t *testing.T) {
-	good := RuntimeConfig{Identity: AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, AppID: 1, AppHash: "secret", SessionStorage: memorySessionStorage{}, ReadinessTimeout: time.Second}
+	good := RuntimeConfig{Identity: AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, AppID: 1, AppHash: "secret", SessionStorage: memorySessionStorage{}, ReadinessTimeout: time.Second, MaxConcurrentQueries: 2}
 	tests := []struct {
 		name   string
 		mutate func(*RuntimeConfig)
@@ -26,6 +26,7 @@ func TestNewRuntimeValidatesConfig(t *testing.T) {
 		{"app hash", func(c *RuntimeConfig) { c.AppHash = "" }},
 		{"storage", func(c *RuntimeConfig) { c.SessionStorage = nil }},
 		{"timeout", func(c *RuntimeConfig) { c.ReadinessTimeout = 0 }},
+		{"query concurrency", func(c *RuntimeConfig) { c.MaxConcurrentQueries = 0 }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -48,7 +49,7 @@ func TestRunServesOnlyAfterAuthorizedMatchingSelf(t *testing.T) {
 		func(context.Context) (authorizationStatus, error) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
-	if err := r.Run(context.Background(), func(context.Context) error { served = true; return nil }); err != nil {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { served = true; return nil }); err != nil {
 		t.Fatalf("Run() error=%v", err)
 	}
 	if !served {
@@ -61,7 +62,7 @@ func TestRunUnauthorizedRequiresExplicitRebootstrap(t *testing.T) {
 	r := newRuntimeForTest(AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, time.Second,
 		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
 		func(context.Context) (authorizationStatus, error) { return authorizationStatus{}, nil })
-	err := r.Run(context.Background(), func(context.Context) error { served = true; return nil })
+	err := r.Run(context.Background(), func(context.Context, Capabilities) error { served = true; return nil })
 	if !errors.Is(err, ErrRebootstrapRequired) {
 		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired", err)
 	}
@@ -76,7 +77,7 @@ func TestRunRejectsSelfMismatch(t *testing.T) {
 		func(context.Context) (authorizationStatus, error) {
 			return authorizationStatus{Authorized: true, SelfUserID: 99}, nil
 		})
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, ErrSelfMismatch) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, ErrSelfMismatch) {
 		t.Fatalf("Run() error=%v, want ErrSelfMismatch", err)
 	}
 }
@@ -86,7 +87,7 @@ func TestRunPreservesStatusError(t *testing.T) {
 	r := newRuntimeForTest(AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, time.Second,
 		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
 		func(context.Context) (authorizationStatus, error) { return authorizationStatus{}, sentinel })
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, sentinel) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, sentinel) {
 		t.Fatalf("Run() error=%v, want sentinel", err)
 	}
 }
@@ -98,7 +99,7 @@ func TestRunReadinessTimeoutIsBounded(t *testing.T) {
 			<-ctx.Done()
 			return authorizationStatus{}, ctx.Err()
 		})
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, context.DeadlineExceeded) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() error=%v, want deadline", err)
 	}
 }
@@ -109,10 +110,10 @@ func TestRuntimeIsOneShot(t *testing.T) {
 		func(context.Context) (authorizationStatus, error) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); err != nil {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, ErrAlreadyStarted) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, ErrAlreadyStarted) {
 		t.Fatalf("second Run error=%v, want ErrAlreadyStarted", err)
 	}
 }
@@ -123,7 +124,7 @@ func TestRunPreservesServeCancellationEvenIfEngineSwallowsIt(t *testing.T) {
 		func(context.Context) (authorizationStatus, error) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
-	if err := r.Run(context.Background(), func(context.Context) error { return context.Canceled }); !errors.Is(err, context.Canceled) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return context.Canceled }); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run() error=%v, want context.Canceled", err)
 	}
 }
@@ -135,7 +136,7 @@ func TestRunPreservesCallerCancellationWhenEngineReturnsNil(t *testing.T) {
 		func(context.Context) (authorizationStatus, error) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
-	if err := r.Run(ctx, func(context.Context) error { return nil }); !errors.Is(err, context.Canceled) {
+	if err := r.Run(ctx, func(context.Context, Capabilities) error { return nil }); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run() error=%v, want context.Canceled", err)
 	}
 }
@@ -147,7 +148,7 @@ func TestRunPreservesEngineFailureWhenCallbackNeverRuns(t *testing.T) {
 		func(context.Context) (authorizationStatus, error) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, sentinel) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, sentinel) {
 		t.Fatalf("Run() error=%v, want sentinel", err)
 	}
 }
@@ -168,7 +169,7 @@ func TestRunPreflightStopsBeforeClientOnMissingOrIncompatibleCredential(t *testi
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
 	r.preflight = func(context.Context) error { return ErrRebootstrapRequired }
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, ErrRebootstrapRequired) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, ErrRebootstrapRequired) {
 		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired", err)
 	}
 	if engineStarted {
@@ -184,7 +185,7 @@ func TestRunPreflightPreservesStorageFailure(t *testing.T) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
 	r.preflight = func(context.Context) error { return sentinel }
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, sentinel) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, sentinel) {
 		t.Fatalf("Run() error=%v, want storage failure", err)
 	}
 }
@@ -196,7 +197,7 @@ func TestRunPreflightTimeoutIsBounded(t *testing.T) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
 	r.preflight = func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
-	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, context.DeadlineExceeded) {
+	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() error=%v, want preflight deadline", err)
 	}
 }
@@ -258,5 +259,74 @@ func TestPreflightAcceptsCurrentGotdSessionEncoding(t *testing.T) {
 	current := []byte(`{"Version":1,"Data":{}}`)
 	if err := preflightPersistedSession(context.Background(), fixedSessionStorage{data: current}); err != nil {
 		t.Fatalf("current session preflight error=%v", err)
+	}
+}
+
+
+type testQuery struct{}
+
+func (testQuery) ResolvePeer(context.Context, PeerRef) (PeerDescriptor, error) {
+	return PeerDescriptor{}, nil
+}
+
+func (testQuery) History(context.Context, PeerKey, HistoryRequest) (MessagePage, error) {
+	return MessagePage{}, nil
+}
+
+func newRuntimeForTest(identity AuthorizationIdentity, readinessTimeout time.Duration, run runFunc, status statusFunc) *Runtime {
+	return &Runtime{
+		identity:         identity,
+		readinessTimeout: readinessTimeout,
+		run:              run,
+		status:           status,
+		preflight:        func(context.Context, Capabilities) error { return nil },
+		query:            testQuery{},
+	}
+}
+
+func TestRunExposesQueryOnlyAfterSemanticReadiness(t *testing.T) {
+	t.Parallel()
+
+	var got TelegramQuery
+	r := newRuntimeForTest(
+		AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42},
+		time.Second,
+		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
+		func(context.Context) (authorizationStatus, error) {
+			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
+		},
+	)
+	if err := r.Run(context.Background(), func(_ context.Context, caps Capabilities) error {
+		got = caps.Query
+		return nil
+	}); err != nil {
+		t.Fatalf("Run() error=%v", err)
+	}
+	if got == nil {
+		t.Fatal("ready capabilities did not expose TelegramQuery")
+	}
+}
+
+func TestRunDoesNotExposeCapabilitiesBeforeReadiness(t *testing.T) {
+	t.Parallel()
+
+	var served bool
+	r := newRuntimeForTest(
+		AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42},
+		time.Second,
+		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
+		func(context.Context) (authorizationStatus, error) {
+			return authorizationStatus{}, nil
+		},
+	)
+	err := r.Run(context.Background(), func(context.Context, Capabilities) error {
+		served = true
+		return nil
+	})
+	if !errors.Is(err, ErrRebootstrapRequired) {
+		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired", err)
+	}
+	if served {
+		t.Fatal("capabilities callback ran before semantic readiness")
 	}
 }
