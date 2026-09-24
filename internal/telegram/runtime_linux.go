@@ -128,7 +128,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		status: func(ctx context.Context) (authorizationStatus, error) {
 			status, err := client.Auth().Status(ctx)
 			if err != nil {
-				return authorizationStatus{}, fmt.Errorf("telegram runtime: get authorization status: %w", err)
+				return authorizationStatus{}, classifyTelegramError("auth_status", err)
 			}
 			if status == nil {
 				return authorizationStatus{}, ErrInvalidAuthStatus
