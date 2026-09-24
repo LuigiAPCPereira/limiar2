@@ -80,6 +80,7 @@ func TestNewBootstrapperValidatesConfig(t *testing.T) {
 	}{
 		{"identity", func(c *BootstrapConfig) { c.IdentityKey = " " }},
 		{"negative self", func(c *BootstrapConfig) { c.ExpectedSelfUserID = -1 }},
+		{"replacement without binding", func(c *BootstrapConfig) { c.ReplaceExisting = true; c.ExpectedSelfUserID = 0 }},
 		{"app id", func(c *BootstrapConfig) { c.AppID = 0 }},
 		{"app hash", func(c *BootstrapConfig) { c.AppHash = "" }},
 		{"storage", func(c *BootstrapConfig) { c.SessionStorage = nil }},
@@ -96,6 +97,24 @@ func TestNewBootstrapperValidatesConfig(t *testing.T) {
 	}
 	if _, err := NewBootstrapper(good); err != nil {
 		t.Fatalf("NewBootstrapper(good) error=%v", err)
+	}
+}
+
+func TestBootstrapperIsOneShotAcrossBootstrapModes(t *testing.T) {
+	t.Parallel()
+
+	b, err := NewBootstrapper(goodBootstrapConfig(bootstrapStorageAdapter{&memoryBootstrapStorage{}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.started.Store(true)
+
+	presenter := QRPresenterFunc(func(context.Context, QRChallenge) error { return nil })
+	if _, err := b.QR(context.Background(), presenter, nil); !errors.Is(err, ErrBootstrapAlreadyStarted) {
+		t.Fatalf("QR() error=%v, want ErrBootstrapAlreadyStarted", err)
+	}
+	if _, err := b.Code(context.Background(), existingInputStub{}); !errors.Is(err, ErrBootstrapAlreadyStarted) {
+		t.Fatalf("Code() error=%v, want ErrBootstrapAlreadyStarted", err)
 	}
 }
 
@@ -150,6 +169,7 @@ func TestBootstrapReplacementStagesWithoutTouchingOldCredential(t *testing.T) {
 	storage := bootstrapStorageAdapter{base}
 	cfg := goodBootstrapConfig(storage)
 	cfg.ReplaceExisting = true
+	cfg.ExpectedSelfUserID = 42
 	b, err := NewBootstrapper(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -177,6 +197,7 @@ func TestBootstrapCommitPublishesOnlyFinalStagedSnapshot(t *testing.T) {
 	storage := bootstrapStorageAdapter{base}
 	cfg := goodBootstrapConfig(storage)
 	cfg.ReplaceExisting = true
+	cfg.ExpectedSelfUserID = 42
 	b, err := NewBootstrapper(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -244,6 +265,7 @@ func TestBootstrapCommitFailureDoesNotMutateMemoryStorage(t *testing.T) {
 	storage := bootstrapStorageAdapter{base}
 	cfg := goodBootstrapConfig(storage)
 	cfg.ReplaceExisting = true
+	cfg.ExpectedSelfUserID = 42
 	b, err := NewBootstrapper(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -350,6 +372,7 @@ func TestBootstrapFinalizeRequiresVerifiedSelfBeforeDurableCommit(t *testing.T) 
 	storage := bootstrapStorageAdapter{base}
 	cfg := goodBootstrapConfig(storage)
 	cfg.ReplaceExisting = true
+	cfg.ExpectedSelfUserID = 42
 	b, err := NewBootstrapper(cfg)
 	if err != nil {
 		t.Fatal(err)
