@@ -69,6 +69,7 @@ func classifyTelegramError(operation string, err error) error {
 	if tgerr.Is(err,
 		"AUTH_KEY_UNREGISTERED",
 		"AUTH_KEY_INVALID",
+		"AUTH_KEY_DUPLICATED",
 		"SESSION_REVOKED",
 		"SESSION_EXPIRED",
 		"USER_DEACTIVATED",
