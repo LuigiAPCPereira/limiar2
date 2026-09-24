@@ -44,7 +44,7 @@ Separado de peer cache e, por default, do SQLite de Evidence. ADR 023 continua P
 
 ### B2 — TelegramRuntime + restore/reuse real
 
-Compor um owner único por `TelegramAuthorizationIdentity`, possuindo o main `gotd/telegram.Client`, storage privado, auth/readiness lifecycle e peer internals.
+Compor um owner único por `TelegramAuthorizationIdentity`, possuindo o main `gotd/telegram.Client`, storage privado e auth/readiness lifecycle. Usar resolução/query helpers upstream internamente; não adotar `telegram/peers.Manager` como foundation inicial nem duplicar reconnect/pools/retry.
 
 **Antes de estabilizar uma capability**, provar com gotd real na versão fixada: bootstrap controlado -> StoreSession -> shutdown -> restart -> LoadSession -> authorized -> query read-only sem novo OTP.
 
