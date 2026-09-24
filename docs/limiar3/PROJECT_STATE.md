@@ -1,6 +1,6 @@
 # PROJECT_STATE — Limiar 3.0 (checkpoint documental)
 
-**Data de preparação:** 2026-09-22 (America/Bahia). **Última reconciliação:** 2026-09-23. **Repositório:** `LuigiAPCPereira/limiar2`. **Branch atual:** `refactor/limiar3-repository-rebaseline`. **Base da branch:** `docs/limiar-3-foundation-20260922@00e5c422b2ed98b10ab145c53b71936352b90585`, descendente de `main@796b7769449b72320b27c2557c2ccb8c8eb183e1`. **Revalidar HEAD atual, branch e main no início do próximo chat**; este checkpoint não registra o SHA do próprio commit. Não houve merge/deploy.
+**Data de preparação:** 2026-09-22 (America/Bahia). **Última reconciliação:** 2026-09-24. **Repositório:** `LuigiAPCPereira/limiar2`. **Branch atual:** `feat/limiar3-l3-002-telegram-foundation`. **Base da branch:** `docs/limiar-3-foundation-20260922@00e5c422b2ed98b10ab145c53b71936352b90585`, descendente de `main@796b7769449b72320b27c2557c2ccb8c8eb183e1`. **Revalidar HEAD atual, branch e main no início do próximo chat**; este checkpoint não registra o SHA do próprio commit. Não houve merge/deploy.
 
 ## Objetivo confirmado pelo mantenedor
 
@@ -8,7 +8,7 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 ## Tarefas e estado
 
-**Tarefa ativa:** `L3-BASE-001` — repository rebaseline / legacy containment, autorizada pelo mantenedor e governada pelo L3 ADR 003 Accepted. A implementação anterior foi movida por árvore Git para `legacy/limiar2/`; o root recebeu módulo/README/CI/baseline L3 mínimos e barreira contra imports L3→legacy. Nenhum código funcional de L3-002 foi introduzido.
+**Tarefa ativa:** `L3-002` — Telegram authorization/session/runtime foundation. Em 2026-09-24 o mantenedor autorizou continuar apesar da indisponibilidade conhecida de horas do GitHub Actions. O Implementation Gate foi satisfeito: escopo/Decisions/dependências/ownership/riscos estão identificados e existe caminho de verificação local proporcional. A primeira fatia funcional implementa o hardened session storage do L3 ADR 001 em `internal/telegram/sessionstore`.
 
 **Evidência do DNA:** na execução de L3-BASE-001, a fonte integral disponível no Project foi verificada localmente: 37.531 bytes, 2.171 LF e SHA-256 `c19c5d97f8e42b311d6c15440e2e9f58cec64fadf1a48b9575e1f2e4dba0e373`, exatamente o hash esperado documentado. O arquivo arquivado na branch permanece `docs/limiar3/ENGINEERING_DNA_ORIGINAL.md.gz.b64`, Git blob `ceafec243be87ae28ee2d9658e3912831fc55368`. Isso confirma a cópia do Project contra a identidade canônica conhecida; não implica sincronização automática em outros ambientes. `ENGINEERING_GUIDE.md` e root `ENGINEERING_DNA.md` continuam resumos/entradas. Protocol Project SHA-256 `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`, confirmado novamente nesta execução em 33.162 bytes / 247 LF; a branch mantém o blob Git `78b2e86564fb287886f9df065fdb727b20c52727`; branch herda `AGENTS.md` e protocolo v2 do PR #214, cujo Adoption Gate permanece **PARCIAL**.
 
@@ -18,11 +18,11 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 **L3-001C — stop condition atingida:** [L3_001C_GOTD_UPSTREAM_AUDIT.md](L3_001C_GOTD_UPSTREAM_AUDIT.md) conclui que não há blocker upstream para iniciar L3-002 e que não é necessária nova pesquisa ampla de fundação. A extensão mínima proposta é hardened `session.Storage`, runtime ownership/readiness, TelegramQuery adapter, error translation e bounded admission; gotd permanece owner de reconnect/pools/migration/RPC/MTProto/query/media machinery.
 
-**Próxima ação:** resolver/reexecutar o CI de `L3-BASE-001` quando um runner GitHub Actions estiver disponível e só então integrar a rebaseline. O run `35948099372` falhou em duas tentativas com `runner_id=0` e `steps=[]`; isso não constitui falha de build/test do código. Depois da integração, retomar o **Implementation Gate de L3-002** sobre um root já L3. A autorização desta tarefa não autoriza login Telegram, OTP/2FA, credenciais ou deploy. PFS, peer persistence, FLOOD_WAIT UX, updates/recovery e media ficam para suas fatias. Não abrir L3-001D sem dúvida material nova.
+**Próxima ação:** continuar `L3-002` na mesma branch empilhada sobre o repository rebaseline: adicionar o pin/integração real de `github.com/gotd/td v0.162.0`, `TelegramAuthorizationIdentity` e owner/lifecycle mínimo do runtime, sem login real. GitHub Actions permanece um canal de validação indisponível por limite de horas reportado pelo mantenedor; não bloquear desenvolvimento por isso e não declarar os gates exatos Go 1.27.1/govulncheck como executados. Login Telegram, OTP/2FA, credenciais e deploy continuam fora do escopo. PFS, peer persistence, FLOOD_WAIT UX, updates/recovery e media ficam para suas fatias. Não abrir L3-001D sem dúvida material nova.
 
 ## Restrições e desconhecidos
 
-ADRs históricos 021–024 permanecem conforme registry da rebaseline e não foram promovidos; os ADRs exclusivos do Limiar 3 têm registry próprio em `docs/limiar3/adr/`, com L3 ADR 001/002 Accepted; EXP-019 só prova harness Unix/intra-processo, não runtime; `legacy/limiar2/internal/storage/sqlite` + PR #211 são implementação parcial herdada, não Limiar 3.0 integrado. Imagens têm falha relatada, causa não reproduzida. Há apenas scaffolding Go estrutural no root (`internal/foundation/doc.go`) e CI novo; não há capability de produto L3 implementada. O ambiente local desta execução possui Go 1.23.2, portanto não valida o módulo Go 1.27.1. Telegram/MCP não foram conectados; não houve credenciais, PR, merge ou deploy. Decisão final de diretórios, processo, sessão, identidade do consumidor e integração ChatGPT fica para investigação/autoridade apropriada; sem esquema/ID fictício.
+ADRs históricos 021–024 permanecem conforme registry da rebaseline e não foram promovidos; os ADRs exclusivos do Limiar 3 têm registry próprio em `docs/limiar3/adr/`, com L3 ADR 001/002 Accepted; EXP-019 só prova harness Unix/intra-processo, não runtime; `legacy/limiar2/internal/storage/sqlite` + PR #211 são implementação parcial herdada, não Limiar 3.0 integrado. Imagens têm falha relatada, causa não reproduzida. O root já contém a primeira implementação funcional L3: `internal/telegram/sessionstore`. O ambiente local disponível possui Go 1.23.2, então a validação exata no toolchain 1.27.1 permanece UNKNOWN. Para a fatia de storage, um módulo de harness equivalente em Go 1.23.2 executou `go test -count=10`, `go vet` e `go test -race` com PASS; os Git blob SHAs dos arquivos testados coincidem com os blobs remotos. Telegram/MCP não foram conectados; não houve credenciais, PR, merge ou deploy. Decisão final de diretórios, processo, sessão, identidade do consumidor e integração ChatGPT fica para investigação/autoridade apropriada; sem esquema/ID fictício.
 
 **Estado editorial:** arquivos documentais criados; conferir reflinks, presença e compare final da branch antes de declarar L3-DOC-001 validada. Engineering DNA integral compactado e blob verificados, formato Markdown integral na raiz permanece não disponibilizado. A inicialização do Limiar 3.0 não conclui adoção v2 do legado. Atualizar checkpoint apenas com fatos e task IDs, não com inferências de CI antigo.
 
@@ -78,3 +78,26 @@ A movimentação estrutural preservou 311 blobs no primeiro commit de árvore pa
 O root L3 iniciou `module github.com/LuigiAPCPereira/limiar2`, `go 1.27.1`, `toolchain go1.27.1`, CI único L3 e package sentinela sem lógica. A verificação remota encontrou 158 arquivos Go sob `legacy/limiar2`; fora de tooling oculto `.agents`, o único Go de produto/root é `internal/foundation/doc.go`. O único workflow ativo no root é `.github/workflows/ci.yml`; oito workflows anteriores estão preservados sob legacy e não executam como workflows do repositório.
 
 A validação de build/test/race com Go 1.27.1 ainda precisa ocorrer em CI porque o ambiente local disponível nesta execução é Go 1.23.2. Isso é condição de fechamento, não Evidence inventada.
+
+
+## Início de L3-002
+
+Em 2026-09-24, o mantenedor informou que o GitHub Actions está sem horas disponíveis e permanecerá bloqueado por enquanto, e autorizou continuar o desenvolvimento. Esse fato é tratado como limitação externa de validação, não como falha do código nem blocker de implementação.
+
+Revalidação externa antes do código:
+- Go 1.27.1 continua listado como stable atual pelo Go oficial;
+- gotd/td v0.162.0 continua a latest release upstream;
+- o contract v0.162.0 de `session.Storage` permanece `LoadSession(context.Context) ([]byte,error)` + `StoreSession(context.Context,[]byte) error`; o Loader converte resultado vazio em `session.ErrNotFound`.
+
+Primeira fatia implementada:
+- `internal/telegram/sessionstore/file_linux.go` blob `47993f6823c5d3383281185c54d748e0196682bb`;
+- `internal/telegram/sessionstore/file_linux_test.go` blob `9889f56e555c8b921b0000f6adcd3b6b03c938da`;
+- escopo Linux/single-host/single-process;
+- parent/target ownership e private perms fail-closed;
+- symlink/non-regular rejected;
+- temp no mesmo diretório com 0600, full write, file sync, atomic rename, directory sync;
+- coordenação intra-processo explícita e cancelável por path;
+- fault injection apenas interno aos testes;
+- bytes da sessão nunca entram em erros.
+
+Validação local proporcional: `go test -count=10 ./...`, `go vet ./...` e `go test -race -count=1 ./...` PASS em harness Go 1.23.2 sem dependência externa. Isso valida a lógica stdlib e concorrência, mas **não** substitui o gate exato Go 1.27.1 + gotd real + govulncheck.
