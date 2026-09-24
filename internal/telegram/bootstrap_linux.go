@@ -128,19 +128,14 @@ func (b *Bootstrapper) QR(
 	if presenter == nil {
 		return BootstrapResult{}, fmt.Errorf("%w: qr presenter is required", ErrInvalidBootstrapConfig)
 	}
-	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
-	if err != nil {
-		return BootstrapResult{}, err
-	}
-	defer release()
-	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
-	if err != nil {
-		return BootstrapResult{}, err
-	}
-	defer release()
 	if !b.started.CompareAndSwap(false, true) {
 		return BootstrapResult{}, ErrBootstrapAlreadyStarted
 	}
+	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
+	if err != nil {
+		return BootstrapResult{}, err
+	}
+	defer release()
 
 	staging, replaced, err := b.prepare(ctx)
 	if err != nil {
@@ -216,6 +211,11 @@ func (b *Bootstrapper) Code(
 	if !b.started.CompareAndSwap(false, true) {
 		return BootstrapResult{}, ErrBootstrapAlreadyStarted
 	}
+	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
+	if err != nil {
+		return BootstrapResult{}, err
+	}
+	defer release()
 
 	staging, replaced, err := b.prepare(ctx)
 	if err != nil {
