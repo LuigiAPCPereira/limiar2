@@ -93,22 +93,30 @@ type TelegramQuery interface {
 }
 
 type resolvePeerFunc func(context.Context, string) (tg.InputPeerClass, error)
-type historyFunc func(context.Context, tg.InputPeerClass, int, int) ([]querymessages.Elem, error)
+
+type historyOffset struct {
+	ID   int
+	Date int
+}
+
+type historyFunc func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error)
 
 type QueryClient struct {
 	resolve resolvePeerFunc
 	history historyFunc
 
-	admission   chan struct{}
-	maxPageSize int
+	admission        chan struct{}
+	maxPageSize      int
+	maxResolvedPeers int
 
-	mu    sync.RWMutex
-	peers map[PeerKey]tg.InputPeerClass
+	mu        sync.RWMutex
+	peers     map[PeerKey]tg.InputPeerClass
+	peerOrder []PeerKey
 }
 
 var _ TelegramQuery = (*QueryClient)(nil)
 
-func newQueryClient(raw *tg.Client, maxConcurrent, maxPageSize int) (*QueryClient, error) {
+func newQueryClient(raw *tg.Client, maxConcurrent, maxPageSize, maxResolvedPeers int) (*QueryClient, error) {
 	if raw == nil {
 		return nil, fmt.Errorf("%w: nil gotd API client", ErrInvalidQuery)
 	}
@@ -118,17 +126,21 @@ func newQueryClient(raw *tg.Client, maxConcurrent, maxPageSize int) (*QueryClien
 	if maxPageSize <= 0 {
 		return nil, fmt.Errorf("%w: max history page size must be positive", ErrInvalidQuery)
 	}
+	if maxResolvedPeers <= 0 {
+		return nil, fmt.Errorf("%w: max resolved peers must be positive", ErrInvalidQuery)
+	}
 
 	resolver := peer.DefaultResolver(raw)
-	return newQueryClientWithFuncs(maxConcurrent, maxPageSize,
+	return newQueryClientWithFuncs(maxConcurrent, maxPageSize, maxResolvedPeers,
 		func(ctx context.Context, value string) (tg.InputPeerClass, error) {
 			return peer.ResolveInputPeer(ctx, resolver, peer.Resolve(value))
 		},
-		func(ctx context.Context, input tg.InputPeerClass, limit, offsetID int) ([]querymessages.Elem, error) {
+		func(ctx context.Context, input tg.InputPeerClass, limit int, offset historyOffset) ([]querymessages.Elem, error) {
 			iter := querymessages.NewQueryBuilder(raw).
 				GetHistory(input).
 				BatchSize(limit).
-				OffsetID(offsetID).
+				OffsetID(offset.ID).
+				OffsetDate(offset.Date).
 				Iter()
 
 			result := make([]querymessages.Elem, 0, limit)
@@ -143,16 +155,18 @@ func newQueryClient(raw *tg.Client, maxConcurrent, maxPageSize int) (*QueryClien
 	)
 }
 
-func newQueryClientWithFuncs(maxConcurrent, maxPageSize int, resolve resolvePeerFunc, history historyFunc) (*QueryClient, error) {
-	if maxConcurrent <= 0 || maxPageSize <= 0 || resolve == nil || history == nil {
+func newQueryClientWithFuncs(maxConcurrent, maxPageSize, maxResolvedPeers int, resolve resolvePeerFunc, history historyFunc) (*QueryClient, error) {
+	if maxConcurrent <= 0 || maxPageSize <= 0 || maxResolvedPeers <= 0 || resolve == nil || history == nil {
 		return nil, fmt.Errorf("%w: invalid query adapter configuration", ErrInvalidQuery)
 	}
 	return &QueryClient{
 		resolve:     resolve,
 		history:     history,
-		admission:   make(chan struct{}, maxConcurrent),
-		maxPageSize: maxPageSize,
-		peers:       make(map[PeerKey]tg.InputPeerClass),
+		admission:        make(chan struct{}, maxConcurrent),
+		maxPageSize:      maxPageSize,
+		maxResolvedPeers: maxResolvedPeers,
+		peers:            make(map[PeerKey]tg.InputPeerClass, maxResolvedPeers),
+		peerOrder:        make([]PeerKey, 0, maxResolvedPeers),
 	}, nil
 }
 
@@ -178,9 +192,7 @@ func (q *QueryClient) ResolvePeer(ctx context.Context, ref PeerRef) (PeerDescrip
 		return PeerDescriptor{}, err
 	}
 
-	q.mu.Lock()
-	q.peers[key] = input
-	q.mu.Unlock()
+	q.rememberPeer(key, input)
 
 	return PeerDescriptor{Key: key}, nil
 }
@@ -195,7 +207,7 @@ func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryReque
 	if req.Limit < 1 || req.Limit > q.maxPageSize {
 		return MessagePage{}, fmt.Errorf("%w: history limit must be between 1 and %d", ErrInvalidQuery, q.maxPageSize)
 	}
-	offsetID, err := decodeHistoryCursor(req.Cursor)
+	offset, err := decodeHistoryCursor(req.Cursor)
 	if err != nil {
 		return MessagePage{}, err
 	}
@@ -212,7 +224,7 @@ func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryReque
 	}
 	defer q.release()
 
-	elems, err := q.history(ctx, input, req.Limit, offsetID)
+	elems, err := q.history(ctx, input, req.Limit, offset)
 	if err != nil {
 		return MessagePage{}, classifyTelegramError("history", err)
 	}
@@ -227,7 +239,7 @@ func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryReque
 	if len(out) == req.Limit {
 		lastID := out[len(out)-1].ID
 		if lastID > 0 {
-			page.NextCursor = encodeHistoryCursor(lastID)
+			page.NextCursor = encodeHistoryCursor(lastID, out[len(out)-1].Date)
 		}
 	}
 	return page, nil
@@ -263,28 +275,55 @@ func peerKey(input tg.InputPeerClass) (PeerKey, error) {
 	}
 }
 
-const historyCursorPrefix = "tg-history-v1:"
+func (q *QueryClient) rememberPeer(key PeerKey, input tg.InputPeerClass) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-func encodeHistoryCursor(messageID int64) string {
-	if messageID <= 0 {
-		return ""
+	if _, exists := q.peers[key]; exists {
+		q.peers[key] = input
+		return
 	}
-	return historyCursorPrefix + strconv.FormatInt(messageID, 10)
+	if len(q.peerOrder) >= q.maxResolvedPeers {
+		evict := q.peerOrder[0]
+		delete(q.peers, evict)
+		copy(q.peerOrder, q.peerOrder[1:])
+		q.peerOrder = q.peerOrder[:len(q.peerOrder)-1]
+	}
+	q.peers[key] = input
+	q.peerOrder = append(q.peerOrder, key)
 }
 
-func decodeHistoryCursor(cursor string) (int, error) {
+const historyCursorPrefix = "tg-history-v1:"
+
+func encodeHistoryCursor(messageID int64, date time.Time) string {
+	if messageID <= 0 || date.IsZero() {
+		return ""
+	}
+	return historyCursorPrefix +
+		strconv.FormatInt(messageID, 10) + ":" +
+		strconv.FormatInt(date.Unix(), 10)
+}
+
+func decodeHistoryCursor(cursor string) (historyOffset, error) {
 	if cursor == "" {
-		return 0, nil
+		return historyOffset{}, nil
 	}
 	if !strings.HasPrefix(cursor, historyCursorPrefix) {
-		return 0, ErrInvalidCursor
+		return historyOffset{}, ErrInvalidCursor
 	}
-	raw := strings.TrimPrefix(cursor, historyCursorPrefix)
-	id, err := strconv.ParseInt(raw, 10, 32)
+	parts := strings.Split(strings.TrimPrefix(cursor, historyCursorPrefix), ":")
+	if len(parts) != 2 {
+		return historyOffset{}, ErrInvalidCursor
+	}
+	id, err := strconv.ParseInt(parts[0], 10, 32)
 	if err != nil || id <= 0 {
-		return 0, ErrInvalidCursor
+		return historyOffset{}, ErrInvalidCursor
 	}
-	return int(id), nil
+	date, err := strconv.ParseInt(parts[1], 10, 32)
+	if err != nil || date <= 0 {
+		return historyOffset{}, ErrInvalidCursor
+	}
+	return historyOffset{ID: int(id), Date: int(date)}, nil
 }
 
 func messageFromElem(elem querymessages.Elem, fallback PeerKey) Message {
