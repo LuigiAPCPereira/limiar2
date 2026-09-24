@@ -37,6 +37,7 @@ type BootstrapConfig struct {
 	AppID              int
 	AppHash            string
 	SessionStorage     gotdtelegram.SessionStorage
+	Coordinator        *AuthorizationCoordinator
 	ReplaceExisting    bool
 	CommitTimeout      time.Duration
 }
@@ -59,6 +60,9 @@ func (c BootstrapConfig) validate() error {
 	}
 	if c.SessionStorage == nil {
 		return fmt.Errorf("%w: session storage is required", ErrInvalidBootstrapConfig)
+	}
+	if c.Coordinator == nil {
+		return fmt.Errorf("%w: authorization coordinator is required", ErrInvalidBootstrapConfig)
 	}
 	if c.CommitTimeout <= 0 {
 		return fmt.Errorf("%w: commit timeout must be positive", ErrInvalidBootstrapConfig)
@@ -124,6 +128,16 @@ func (b *Bootstrapper) QR(
 	if presenter == nil {
 		return BootstrapResult{}, fmt.Errorf("%w: qr presenter is required", ErrInvalidBootstrapConfig)
 	}
+	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
+	if err != nil {
+		return BootstrapResult{}, err
+	}
+	defer release()
+	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
+	if err != nil {
+		return BootstrapResult{}, err
+	}
+	defer release()
 	if !b.started.CompareAndSwap(false, true) {
 		return BootstrapResult{}, ErrBootstrapAlreadyStarted
 	}
