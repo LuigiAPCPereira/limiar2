@@ -58,6 +58,7 @@ func goodBootstrapConfig(storage gotdSessionStorageForTest) BootstrapConfig {
 		AppID:          1,
 		AppHash:        "secret",
 		SessionStorage: storage,
+		Coordinator:    NewAuthorizationCoordinator(),
 		CommitTimeout:  time.Second,
 	}
 }
@@ -84,6 +85,7 @@ func TestNewBootstrapperValidatesConfig(t *testing.T) {
 		{"app id", func(c *BootstrapConfig) { c.AppID = 0 }},
 		{"app hash", func(c *BootstrapConfig) { c.AppHash = "" }},
 		{"storage", func(c *BootstrapConfig) { c.SessionStorage = nil }},
+		{"coordinator", func(c *BootstrapConfig) { c.Coordinator = nil }},
 		{"commit timeout", func(c *BootstrapConfig) { c.CommitTimeout = 0 }},
 	}
 	for _, tt := range tests {
@@ -400,4 +402,52 @@ func TestBootstrapFinalizeRequiresVerifiedSelfBeforeDurableCommit(t *testing.T) 
 	if got := string(base.data); got != "new-session" {
 		t.Fatalf("durable credential=%q, want new-session", got)
 	}
+}
+
+
+func TestBootstrapAndRuntimeShareExclusiveAuthorizationOwnership(t *testing.T) {
+	t.Parallel()
+
+	coordinator := NewAuthorizationCoordinator()
+	release, err := coordinator.acquire("primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	cfg := goodBootstrapConfig(bootstrapStorageAdapter{&memoryBootstrapStorage{}})
+	cfg.Coordinator = coordinator
+	b, err := NewBootstrapper(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	presenter := QRPresenterFunc(func(context.Context, QRChallenge) error { return nil })
+	if _, err := b.QR(context.Background(), presenter, nil); !errors.Is(err, ErrAuthorizationInUse) {
+		t.Fatalf("QR() error=%v, want ErrAuthorizationInUse", err)
+	}
+}
+
+func TestBootstrapOwnershipLeaseIsReleasedOnPrepareFailure(t *testing.T) {
+	t.Parallel()
+
+	coordinator := NewAuthorizationCoordinator()
+	sentinel := errors.New("read session failed")
+	cfg := goodBootstrapConfig(bootstrapStorageAdapter{&memoryBootstrapStorage{loadErr: sentinel}})
+	cfg.Coordinator = coordinator
+	b, err := NewBootstrapper(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	presenter := QRPresenterFunc(func(context.Context, QRChallenge) error { return nil })
+
+	if _, err := b.QR(context.Background(), presenter, nil); !errors.Is(err, sentinel) {
+		t.Fatalf("QR() error=%v, want sentinel", err)
+	}
+
+	release, err := coordinator.acquire("primary")
+	if err != nil {
+		t.Fatalf("ownership remained stuck after bootstrap failure: %v", err)
+	}
+	release()
 }
