@@ -14,11 +14,14 @@
 8. `docs/limiar3/ARCHITECTURE_PROPOSAL.md` — alternativas, responsabilidades, riscos, reutilização e decisões pendentes; proposta, não ADR Accepted.
 9. `docs/limiar3/L3_001_SESSION_BOUNDARY_INVESTIGATION.md` — Proposal inicial de L3-001; foi refinada por L3-001A.
 10. `docs/limiar3/L3_001A_MTPROTO_GOTD_INVESTIGATION.md` — investigação concluída de MTProto + `gotd/td v0.161.0`; fonte técnica posterior para o boundary Telegram, ainda não Decision.
-11. `docs/limiar3/MTPROTO_GOTD_RESEARCH_BRIEF.md` — brief histórico de L3-001A, marcado como concluído.
-12. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0.
-13. `docs/limiar3/PROJECT_STATE.md` — checkpoint e próxima ação.
-14. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
-15. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
+11. `docs/limiar3/L3_001B_PRODUCTION_FOUNDATION_RESEARCH.md` — terceira investigação: hardening, toolchain, bootstrap, performance, observability, supply chain e gates de produção.
+12. `docs/limiar3/DEPENDENCY_TOOLCHAIN_POLICY.md` — direção `Current Stable First` do mantenedor.
+13. `docs/limiar3/GOTD_UPSTREAM_ONLY_RESEARCH_BRIEF.md` — escopo da auditoria L3-001C, upstream-only e limitada ao gotd.
+14. `docs/limiar3/MTPROTO_GOTD_RESEARCH_BRIEF.md` — brief histórico de L3-001A, concluído.
+15. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0.
+16. `docs/limiar3/PROJECT_STATE.md` — checkpoint e próxima ação.
+17. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
+18. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
 
 ## Regra de herança da rebaseline
 
@@ -28,7 +31,7 @@
 
 **Pedido já respondido pelo mantenedor:** reconstruir integralmente o Limiar 3.0 bottom-up com boundaries corretos. Sessão e integração Telegram/MTProto devem ser desacopláveis do core por contrato; MCP também deve ser detachable. O MCP possui um ramo **Telegram realtime** que consulta a fonte diretamente, sob demanda, antes do modelo de promoções, para ajudar a descobrir quais dados devem ser coletados/modelados; depois pode ganhar tools de **Limiar data** sobre Query Service. Collector/Evidence continuam um ramo independente e durável. Desacoplamento não exige microserviços. **Não existe um segundo aplicativo Limiar.**
 
-**Estado de L3-001/L3-001A:** ambas as investigações estão internalizadas. L3-001A refinou a Proposal: owner por `TelegramAuthorizationIdentity` (não MTProto `session_id`), main gotd client único por autorização, private session storage, bootstrap explícito/fail-closed, peer state authorization-scoped, restore/reuse real antes da primeira capability e guards externos ao `updates.Manager`. Fonte: `L3_001A_MTPROTO_GOTD_INVESTIGATION.md`. **Próxima ação não é implementação automática:** decidir apenas os bloqueios reais de L3-002 e passar pelo Implementation Gate.
+**Estado das investigações de fundação:** L3-001, L3-001A e L3-001B estão internalizadas. L3-001A refinou ownership/MTProto/gotd; L3-001B adicionou hardening, threat model, bootstrap, toolchain, performance, observability e supply chain. O mantenedor decidiu `Current Stable First`: versões stable atuais são o default e versões anteriores precisam de justificativa concreta. **Próxima ação recomendada antes do pinning final:** L3-001C, auditoria gotd-only upstream. Depois disso, decidir blockers e passar pelo Implementation Gate; não implementar automaticamente por efeito do handoff.
 
 **Distinção de autenticações:** (a) `TelegramAuthorizationIdentity` + credencial persistida do boundary Telegram; (b) MTProto `session_id`, efêmero e interno ao gotd; (c) eventual identidade/autorização para consumidores do Limiar e acesso pelo ChatGPT/MCP. Não pressupor que (c) já existe no legado, nem reutilizar diretamente arquivo de sessão Telegram como token MCP. Investigar autenticação de consumidor somente na medida em que for dependência real do primeiro slice, sem inventar sistema de contas.
 
@@ -36,7 +39,7 @@
 
 ## Próximas leituras técnicas focadas
 
-- Autorização/session storage: L3-001A concluiu a investigação upstream em `gotd/td v0.161.0`; ADR 023 continua **Proposed**; EXP-018/019 mantêm seus limites. Backend de credential storage, plataforma inicial e bootstrap operacional ainda exigem decisão explícita antes de L3-002.
+- Auth/session/runtime: L3-001A/B concluídas; `Current Stable First` exige auditar o gotd stable atual antes do pinning. ADR 023 continua **Proposed**; EXP-018/019 mantêm seus limites. Credential storage, plataforma/deployment inicial e bootstrap exigem decisão explícita antes de L3-002.
 - Coleta/Evidence: ADRs 016–020 Accepted; ADR 018 Accepted mas Source Admission ainda não integrada em produção; ADR 024 **Proposed** para `subscription_id` (não inventar ID de produção).
 - Persistência: `internal/storage/sqlite`, migrations; PR #211 integrada (guard de schema), não equivale a substituição completa Tursogo. ADRs 021/022 ainda Proposed; importação real EXP-007 não demonstrada.
 - Imagens: falha funcional relatada pelo mantenedor, causa não demonstrada neste trabalho; ADR 011 `DEFER / REVALIDATE`, ADR 012 `RETIRE`.
