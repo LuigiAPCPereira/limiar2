@@ -1,6 +1,3 @@
-BINARY := limiar
-CMD    := ./cmd/limiar
-
 .PHONY: test vet race verify
 
 test:
