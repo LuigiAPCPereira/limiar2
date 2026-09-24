@@ -1,0 +1,35 @@
+# Build
+/limiar
+/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Runtime/local data
+.env
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+/tmp/
+
+# Go
+vendor/
+coverage.out
+
+# Editors/OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+
+# Local agent/tool state
+.omc/
+.claude/
+.qoder/
+.remember/
