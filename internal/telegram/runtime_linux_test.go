@@ -159,3 +159,44 @@ func TestIdentityDoesNotExposeCredentials(t *testing.T) {
 		t.Fatalf("Identity()=%+v", got)
 	}
 }
+
+func TestRunPreflightStopsBeforeClientOnMissingOrIncompatibleCredential(t *testing.T) {
+	var engineStarted bool
+	r := newRuntimeForTest(AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, time.Second,
+		func(ctx context.Context, f func(context.Context) error) error { engineStarted = true; return f(ctx) },
+		func(context.Context) (authorizationStatus, error) {
+			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
+		})
+	r.preflight = func(context.Context) error { return ErrRebootstrapRequired }
+	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, ErrRebootstrapRequired) {
+		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired", err)
+	}
+	if engineStarted {
+		t.Fatal("gotd engine started before credential preflight passed")
+	}
+}
+
+func TestRunPreflightPreservesStorageFailure(t *testing.T) {
+	sentinel := errors.New("read session: permission denied")
+	r := newRuntimeForTest(AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, time.Second,
+		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
+		func(context.Context) (authorizationStatus, error) {
+			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
+		})
+	r.preflight = func(context.Context) error { return sentinel }
+	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, sentinel) {
+		t.Fatalf("Run() error=%v, want storage failure", err)
+	}
+}
+
+func TestRunPreflightTimeoutIsBounded(t *testing.T) {
+	r := newRuntimeForTest(AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, 10*time.Millisecond,
+		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
+		func(context.Context) (authorizationStatus, error) {
+			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
+		})
+	r.preflight = func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
+	if err := r.Run(context.Background(), func(context.Context) error { return nil }); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error=%v, want preflight deadline", err)
+	}
+}
