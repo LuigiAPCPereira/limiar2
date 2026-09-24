@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	gotdtelegram "github.com/gotd/td/telegram"
@@ -24,6 +25,7 @@ var (
 	ErrBootstrapSignUpRequired     = errors.New("telegram bootstrap: account sign-up is not allowed")
 	ErrBootstrapUnauthorized       = errors.New("telegram bootstrap: authorization did not complete")
 	ErrBootstrapSessionMissing     = errors.New("telegram bootstrap: authenticated session snapshot missing")
+	ErrBootstrapAlreadyStarted     = errors.New("telegram bootstrap: already started")
 )
 
 // BootstrapConfig configures an explicit administrative authorization
@@ -45,6 +47,9 @@ func (c BootstrapConfig) validate() error {
 	}
 	if c.ExpectedSelfUserID < 0 {
 		return fmt.Errorf("%w: expected self user id cannot be negative", ErrInvalidBootstrapConfig)
+	}
+	if c.ReplaceExisting && c.ExpectedSelfUserID <= 0 {
+		return fmt.Errorf("%w: replacing an existing credential requires expected self user id", ErrInvalidBootstrapConfig)
 	}
 	if c.AppID <= 0 {
 		return fmt.Errorf("%w: app id must be positive", ErrInvalidBootstrapConfig)
@@ -97,7 +102,8 @@ type BootstrapResult struct {
 // separate from Runtime and must never run concurrently with the Runtime for
 // the same TelegramAuthorizationIdentity.
 type Bootstrapper struct {
-	cfg BootstrapConfig
+	cfg     BootstrapConfig
+	started atomic.Bool
 }
 
 func NewBootstrapper(cfg BootstrapConfig) (*Bootstrapper, error) {
@@ -117,6 +123,9 @@ func (b *Bootstrapper) QR(
 	}
 	if presenter == nil {
 		return BootstrapResult{}, fmt.Errorf("%w: qr presenter is required", ErrInvalidBootstrapConfig)
+	}
+	if !b.started.CompareAndSwap(false, true) {
+		return BootstrapResult{}, ErrBootstrapAlreadyStarted
 	}
 
 	staging, replaced, err := b.prepare(ctx)
@@ -189,6 +198,9 @@ func (b *Bootstrapper) Code(
 	}
 	if input == nil {
 		return BootstrapResult{}, fmt.Errorf("%w: code authenticator is required", ErrInvalidBootstrapConfig)
+	}
+	if !b.started.CompareAndSwap(false, true) {
+		return BootstrapResult{}, ErrBootstrapAlreadyStarted
 	}
 
 	staging, replaced, err := b.prepare(ctx)
