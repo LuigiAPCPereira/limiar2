@@ -189,6 +189,42 @@ func TestQueryValidatesLimitCursorAndPeer(t *testing.T) {
 	}
 }
 
+func TestQueryHistoryRespectsConfiguredPageLimit(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	q, err := newQueryClientWithFuncs(1, 2,
+		func(context.Context, string) (tg.InputPeerClass, error) {
+			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 7}, nil
+		},
+		func(context.Context, tg.InputPeerClass, int, int) ([]querymessages.Elem, error) {
+			called = true
+			return nil, nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desc, err := q.ResolvePeer(context.Background(), PeerRef{Value: "offers"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 3}); !errors.Is(err, ErrInvalidQuery) {
+		t.Fatalf("History() error=%v, want ErrInvalidQuery", err)
+	}
+	if called {
+		t.Fatal("history backend called for request above configured page limit")
+	}
+
+	if _, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 2}); err != nil {
+		t.Fatalf("History() at configured limit error=%v", err)
+	}
+	if !called {
+		t.Fatal("history backend was not called at configured page limit")
+	}
+}
+
 func TestQueryAdmissionIsBoundedAndCancelable(t *testing.T) {
 	t.Parallel()
 
