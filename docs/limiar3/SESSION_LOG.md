@@ -106,3 +106,17 @@ Achados de cautela: não usar upstream `session.FileStorage` como credential sto
 A stop condition da investigação ampla foi atingida. Não há blocker upstream encontrado para iniciar L3-002, mas L3-002 continua sem autorização automática. Restam Decisions/gates do projeto: pin final, credential storage/ADR 023 ou substituto, plataforma/deployment inicial, bootstrap surface, toolchain efetivo e autorização de implementação. Não abrir L3-001D sem nova incerteza material.
 
 Nenhum código, upgrade, login Telegram, ADR promotion, branch de implementação, PR, merge ou deploy foi executado nesta internalização.
+
+
+## Aceitação da fundação pré-L3-002 — ADRs próprios do Limiar 3
+
+Em 2026-09-23, após L3-001/A/B/C, o mantenedor concordou com o pacote de decisões de fundação e corrigiu a governança: como Limiar 3 é uma reconstrução, ADRs exclusivos dele não continuam em `025+`; o namespace `docs/limiar3/adr/` reinicia em `001`.
+
+A aceitação foi registrada de forma durável no commit `baa626b59ec21d36f0dbde9a8a1fb3bbb5a4a2a6`. Foram criados e marcados `Accepted`:
+
+- L3 ADR 001 — hardened Telegram credential/session storage em arquivo local, Linux/single-host/single-process;
+- L3 ADR 002 — `TelegramAuthorizationIdentity`, owner único do main gotd client, bootstrap separado, fail-closed steady-state, semantic readiness/self binding, primeira TelegramQuery e limites de retry/concurrency.
+
+O pacote também aceita Go 1.27.1 e `github.com/gotd/td v0.162.0` como baseline inicial de L3-002, sob `Current Stable First`. O ADR histórico 023 da rebaseline permanece `Proposed`; sua Evidence foi reaproveitada, mas ele não foi promovido retroativamente.
+
+A aceitação é arquitetural/documental. Não houve autorização implícita de código, login Telegram, OTP/2FA, credenciais, PR de implementação, merge ou deploy. O próximo estado é `L3-002 pronta para Implementation Gate`.
