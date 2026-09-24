@@ -116,6 +116,9 @@ func TestQueryHistoryMapsBoundedPageAndOpaqueCursor(t *testing.T) {
 	if first.ID != 11 || first.Text != "promo one" || first.Peer != desc.Key || first.Kind != MessageKindRegular {
 		t.Fatalf("first message=%+v", first)
 	}
+	if first.UpstreamType != "message" {
+		t.Fatalf("first upstream type=%q, want message", first.UpstreamType)
+	}
 	if first.GroupedID != 77 || first.EditedAt.IsZero() {
 		t.Fatalf("message optional metadata=%+v", first)
 	}
@@ -151,6 +154,9 @@ func TestQueryHistoryMapsServiceAndUnknownWithoutInventingText(t *testing.T) {
 	}
 	if len(page.Messages) != 1 || page.Messages[0].Kind != MessageKindService || page.Messages[0].Text != "" {
 		t.Fatalf("service mapping=%+v", page.Messages)
+	}
+	if page.Messages[0].UpstreamType != "messageService" {
+		t.Fatalf("service upstream type=%q", page.Messages[0].UpstreamType)
 	}
 }
 
@@ -262,6 +268,18 @@ func TestQueryAdmissionIsBoundedAndCancelable(t *testing.T) {
 	close(release)
 	if err := <-firstDone; err != nil {
 		t.Fatalf("first ResolvePeer error=%v", err)
+	}
+}
+
+func TestTelegramTimestampPreservesUnknownZero(t *testing.T) {
+	t.Parallel()
+
+	if got := telegramTimestamp(0); !got.IsZero() {
+		t.Fatalf("telegramTimestamp(0)=%v, want zero time", got)
+	}
+	got := telegramTimestamp(1_700_000_000)
+	if got.IsZero() || got.Location() != time.UTC || got.Unix() != 1_700_000_000 {
+		t.Fatalf("telegramTimestamp(valid)=%v", got)
 	}
 }
 
