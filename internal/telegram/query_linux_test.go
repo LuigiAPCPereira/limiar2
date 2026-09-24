@@ -15,11 +15,11 @@ import (
 func TestQueryResolveCachesOperationalPeerWithoutLeakingAccessHash(t *testing.T) {
 	t.Parallel()
 
-	q, err := newQueryClientWithFuncs(2, 100,
+	q, err := newQueryClientWithFuncs(2, 100, 8,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 999999}, nil
 		},
-		func(context.Context, tg.InputPeerClass, int, int) ([]querymessages.Elem, error) {
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) {
 			return nil, nil
 		},
 	)
@@ -47,11 +47,11 @@ func TestQueryResolveCachesOperationalPeerWithoutLeakingAccessHash(t *testing.T)
 func TestQueryHistoryRequiresPeerResolvedInThisRuntime(t *testing.T) {
 	t.Parallel()
 
-	q, err := newQueryClientWithFuncs(1, 100,
+	q, err := newQueryClientWithFuncs(1, 100, 8,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 7}, nil
 		},
-		func(context.Context, tg.InputPeerClass, int, int) ([]querymessages.Elem, error) {
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) {
 			return nil, nil
 		},
 	)
@@ -68,13 +68,14 @@ func TestQueryHistoryRequiresPeerResolvedInThisRuntime(t *testing.T) {
 func TestQueryHistoryMapsBoundedPageAndOpaqueCursor(t *testing.T) {
 	t.Parallel()
 
-	var gotLimit, gotOffset int
-	q, err := newQueryClientWithFuncs(2, 100,
+	var gotLimit int
+	var gotOffset historyOffset
+	q, err := newQueryClientWithFuncs(2, 100, 8,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 12345}, nil
 		},
-		func(_ context.Context, input tg.InputPeerClass, limit, offsetID int) ([]querymessages.Elem, error) {
-			gotLimit, gotOffset = limit, offsetID
+		func(_ context.Context, input tg.InputPeerClass, limit int, offset historyOffset) ([]querymessages.Elem, error) {
+			gotLimit, gotOffset = limit, offset
 			channel := input.(*tg.InputPeerChannel)
 			return []querymessages.Elem{
 				{
@@ -102,12 +103,12 @@ func TestQueryHistoryMapsBoundedPageAndOpaqueCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 2, Cursor: encodeHistoryCursor(12)})
+	page, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 2, Cursor: encodeHistoryCursor(12, time.Unix(1_700_000_200, 0).UTC())})
 	if err != nil {
 		t.Fatalf("History() error=%v", err)
 	}
-	if gotLimit != 2 || gotOffset != 12 {
-		t.Fatalf("history args limit=%d offset=%d", gotLimit, gotOffset)
+	if gotLimit != 2 || gotOffset.ID != 12 || gotOffset.Date != 1_700_000_200 {
+		t.Fatalf("history args limit=%d offset=%+v", gotLimit, gotOffset)
 	}
 	if len(page.Messages) != 2 {
 		t.Fatalf("messages=%d, want 2", len(page.Messages))
@@ -122,7 +123,7 @@ func TestQueryHistoryMapsBoundedPageAndOpaqueCursor(t *testing.T) {
 	if first.GroupedID != 77 || first.EditedAt.IsZero() {
 		t.Fatalf("message optional metadata=%+v", first)
 	}
-	if page.NextCursor != "tg-history-v1:10" {
+	if page.NextCursor != "tg-history-v1:10:1699999900" {
 		t.Fatalf("NextCursor=%q", page.NextCursor)
 	}
 }
@@ -131,11 +132,11 @@ func TestQueryHistoryMapsServiceAndUnknownWithoutInventingText(t *testing.T) {
 	t.Parallel()
 
 	key := PeerKey{Kind: PeerKindChat, ID: 5}
-	q, err := newQueryClientWithFuncs(1, 100,
+	q, err := newQueryClientWithFuncs(1, 100, 8,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChat{ChatID: 5}, nil
 		},
-		func(context.Context, tg.InputPeerClass, int, int) ([]querymessages.Elem, error) {
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) {
 			return []querymessages.Elem{{
 				Msg:  &tg.MessageService{ID: 3, Date: 100},
 				Peer: &tg.InputPeerChat{ChatID: 5},
@@ -163,11 +164,11 @@ func TestQueryHistoryMapsServiceAndUnknownWithoutInventingText(t *testing.T) {
 func TestQueryValidatesLimitCursorAndPeer(t *testing.T) {
 	t.Parallel()
 
-	q, err := newQueryClientWithFuncs(1, 100,
+	q, err := newQueryClientWithFuncs(1, 100, 8,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerUser{UserID: 7, AccessHash: 1}, nil
 		},
-		func(context.Context, tg.InputPeerClass, int, int) ([]querymessages.Elem, error) { return nil, nil },
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) { return nil, nil },
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +182,9 @@ func TestQueryValidatesLimitCursorAndPeer(t *testing.T) {
 		{Limit: 0},
 		{Limit: 101},
 		{Limit: 1, Cursor: "not-a-cursor"},
-		{Limit: 1, Cursor: "tg-history-v1:0"},
+		{Limit: 1, Cursor: "tg-history-v1:0:1700000000"},
+		{Limit: 1, Cursor: "tg-history-v1:10:0"},
+		{Limit: 1, Cursor: "tg-history-v1:10"},
 	} {
 		if _, err := q.History(context.Background(), desc.Key, req); err == nil {
 			t.Fatalf("History(%+v) error=nil, want validation error", req)
@@ -199,11 +202,11 @@ func TestQueryHistoryRespectsConfiguredPageLimit(t *testing.T) {
 	t.Parallel()
 
 	called := false
-	q, err := newQueryClientWithFuncs(1, 2,
+	q, err := newQueryClientWithFuncs(1, 2, 8,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 7}, nil
 		},
-		func(context.Context, tg.InputPeerClass, int, int) ([]querymessages.Elem, error) {
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) {
 			called = true
 			return nil, nil
 		},
@@ -236,7 +239,7 @@ func TestQueryAdmissionIsBoundedAndCancelable(t *testing.T) {
 
 	entered := make(chan struct{})
 	release := make(chan struct{})
-	q, err := newQueryClientWithFuncs(1, 100,
+	q, err := newQueryClientWithFuncs(1, 100, 8,
 		func(ctx context.Context, _ string) (tg.InputPeerClass, error) {
 			close(entered)
 			select {
@@ -246,7 +249,7 @@ func TestQueryAdmissionIsBoundedAndCancelable(t *testing.T) {
 				return &tg.InputPeerUser{UserID: 1, AccessHash: 2}, nil
 			}
 		},
-		func(context.Context, tg.InputPeerClass, int, int) ([]querymessages.Elem, error) { return nil, nil },
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) { return nil, nil },
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -302,5 +305,87 @@ func TestPeerKeySupportsSourceKindsWithoutAccessHash(t *testing.T) {
 		if got != tt.want {
 			t.Fatalf("peerKey(%T)=%+v want %+v", tt.input, got, tt.want)
 		}
+	}
+}
+
+
+func TestQueryResolvedPeerCacheIsBounded(t *testing.T) {
+	t.Parallel()
+
+	nextID := int64(0)
+	q, err := newQueryClientWithFuncs(1, 10, 2,
+		func(context.Context, string) (tg.InputPeerClass, error) {
+			nextID++
+			return &tg.InputPeerChannel{ChannelID: nextID, AccessHash: nextID * 10}, nil
+		},
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) {
+			return nil, nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := q.ResolvePeer(context.Background(), PeerRef{Value: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := q.ResolvePeer(context.Background(), PeerRef{Value: "two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, err := q.ResolvePeer(context.Background(), PeerRef{Value: "three"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if len(q.peers) != 2 || len(q.peerOrder) != 2 {
+		t.Fatalf("cache sizes peers=%d order=%d, want 2", len(q.peers), len(q.peerOrder))
+	}
+	if _, ok := q.peers[first.Key]; ok {
+		t.Fatalf("oldest peer %+v was not evicted", first.Key)
+	}
+	if _, ok := q.peers[second.Key]; !ok {
+		t.Fatalf("second peer %+v missing", second.Key)
+	}
+	if _, ok := q.peers[third.Key]; !ok {
+		t.Fatalf("third peer %+v missing", third.Key)
+	}
+}
+
+func TestQueryReResolveUpdatesPeerWithoutGrowingCache(t *testing.T) {
+	t.Parallel()
+
+	accessHash := int64(1)
+	q, err := newQueryClientWithFuncs(1, 10, 1,
+		func(context.Context, string) (tg.InputPeerClass, error) {
+			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: accessHash}, nil
+		},
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) {
+			return nil, nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desc, err := q.ResolvePeer(context.Background(), PeerRef{Value: "offers"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accessHash = 2
+	if _, err := q.ResolvePeer(context.Background(), PeerRef{Value: "offers"}); err != nil {
+		t.Fatal(err)
+	}
+
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if len(q.peers) != 1 || len(q.peerOrder) != 1 {
+		t.Fatalf("cache grew after re-resolve: peers=%d order=%d", len(q.peers), len(q.peerOrder))
+	}
+	got := q.peers[desc.Key].(*tg.InputPeerChannel)
+	if got.AccessHash != 2 {
+		t.Fatalf("access hash=%d, want refreshed value 2", got.AccessHash)
 	}
 }
