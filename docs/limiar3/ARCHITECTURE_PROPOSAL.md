@@ -2,7 +2,7 @@
 
 **Estado:** PROPOSTA PARA INVESTIGAÇÃO, não desenho final, ADR Accepted, autorização de código ou promessa de arquitetura pronta. Fonte de produto: [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md). Regras: `AGENTS.md`, protocolo v2, `docs/adr/README.md` e Accepted. Escopo expandido em conversa pelo mantenedor: reconstrução integral do agrupador de promoções com MCP. O legado não define estrutura obrigatória.
 
-A herança comprovada da Rebaseline 2026 está consolidada em [`REBASELINE_INHERITANCE.md`](REBASELINE_INHERITANCE.md). O princípio de desacoplamento de MTProto/MCP está em [`DETACHABLE_BOUNDARIES.md`](DETACHABLE_BOUNDARIES.md). A construção bottom-up está em [`BOTTOM_UP_REBUILD_PLAN.md`](BOTTOM_UP_REBUILD_PLAN.md). A investigação técnica MTProto/gotd v0.161.0 está em [`L3_001A_MTPROTO_GOTD_INVESTIGATION.md`](L3_001A_MTPROTO_GOTD_INVESTIGATION.md) e refina esta Proposal.
+A herança comprovada da Rebaseline 2026 está consolidada em [`REBASELINE_INHERITANCE.md`](REBASELINE_INHERITANCE.md). O princípio de desacoplamento de MTProto/MCP está em [`DETACHABLE_BOUNDARIES.md`](DETACHABLE_BOUNDARIES.md). A construção bottom-up está em [`BOTTOM_UP_REBUILD_PLAN.md`](BOTTOM_UP_REBUILD_PLAN.md). As investigações técnicas de fundação estão em [`L3_001A_MTPROTO_GOTD_INVESTIGATION.md`](L3_001A_MTPROTO_GOTD_INVESTIGATION.md), [`L3_001B_PRODUCTION_FOUNDATION_RESEARCH.md`](L3_001B_PRODUCTION_FOUNDATION_RESEARCH.md) e [`L3_001C_GOTD_UPSTREAM_AUDIT.md`](L3_001C_GOTD_UPSTREAM_AUDIT.md). L3-001C recomenda gotd v0.162.0 para o gate de L3-002, reforça o uso direto dos engines/helpers upstream e reduz a camada própria do Limiar; continua Proposal/Evidence.
 
 ## Alternativas de isolamento — direção documental; revalidar antes da branch de implementação
 
@@ -77,7 +77,7 @@ O MCP realtime é construído cedo para explorar o Telegram e ajudar a descobrir
 
 ## Plano incremental, de baixo para cima (sequência revisável)
 
-**M0 — investigações da fundação, `L3-001` + `L3-001A` — concluídas documentalmente:** ownership, sessão/autorização, MTProto e gotd foram investigados; o resultado permanece Proposal/Evidence. Antes de código, resolver apenas decisões que realmente bloqueiam L3-002 e confirmar a ref real.
+**M0 — investigações da fundação, `L3-001` + `L3-001A/B/C` — concluídas documentalmente:** ownership, sessão/autorização, MTProto, gotd, hardening, performance, supply chain e extension points foram investigados. A stop condition da pesquisa ampla foi atingida. Antes de código, resolver somente Decisions/gates que realmente bloqueiam L3-002; não abrir nova investigação geral sem dúvida material.
 
 **M1 — runtime + authorization lifecycle + restore/reuse (`L3-002`):** compor entrypoint isolado, storage privado do boundary Telegram, owner único do main `gotd/telegram.Client`, bootstrap explícito e steady-state fail-closed. Provar gotd real: login controlado -> persistência -> shutdown -> restart -> autorizado sem novo OTP. Só depois estabilizar `TelegramQuery` read-only (`ResolvePeer` + `History`) com types source-aware e erros semânticos.
 
@@ -102,3 +102,8 @@ Resultado proposto: entrypoint isolado com `TelegramAuthorizationIdentity`, owne
 ## Refinamento técnico L3-001A
 
 A investigação da versão real `gotd/td v0.161.0` sustenta a direção desta Proposal com ajustes. `MTProto session_id` não é a unidade de ownership; `session.ErrNotFound` upstream não pode ser interpretado automaticamente como arquivo ausente; peer cache é separado, porém authorization-scoped; history/backfill e update recovery são authorities distintas; e `updates.Manager` precisa de guards externos para satisfazer Evidence-before-progress. O relatório completo é a fonte de detalhe; nenhuma dessas conclusões promove ADR 023 ou autoriza código por si só.
+
+
+## Refinamento upstream-only L3-001C
+
+A auditoria do gotd como biblioteca independente recomenda reduzir a extensão L3 a cinco responsabilidades: hardened `session.Storage`, runtime ownership/readiness, `TelegramQuery` adapter, error translation e bounded admission. Reconnect, pools, DC migration, RPC/MTProto, pagination e media machinery permanecem no upstream. O relatório recomenda `gotd/td v0.162.0` como pin de L3-002, sujeito a decisão do mantenedor e Implementation Gate. Também recomenda evitar `session.FileStorage` production, `telegram/peers.Manager` na fundação e `gotd/contrib/middleware/floodwait.Waiter` global nas condições atuais; issues de updates ficam para o collector. Nenhuma dessas recomendações promove ADR ou autoriza código.
