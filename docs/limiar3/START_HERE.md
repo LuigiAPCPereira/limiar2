@@ -12,7 +12,7 @@
 6. `docs/limiar3/DETACHABLE_BOUNDARIES.md` — princípio de desacoplamento de sessão/Telegram/MTProto/MCP; desacoplável por contrato não significa distribuído.
 7. `docs/limiar3/BOTTOM_UP_REBUILD_PLAN.md` — construção de baixo para cima por authorities separadas, com MCP realtime antes da modelagem comercial.
 8. `docs/limiar3/adr/README.md` — registry próprio de Decisions do Limiar 3; a numeração reinicia em 001.
-9. `docs/limiar3/adr/001-hardened-telegram-session-storage.md` e `002-telegram-authorization-runtime.md` — Decisions Accepted que autorizam a arquitetura da fundação, mas não iniciam código por si sós.
+9. `docs/limiar3/adr/001-hardened-telegram-session-storage.md`, `002-telegram-authorization-runtime.md` e `003-repository-topology-and-legacy-containment.md` — Decisions Accepted da fundação e da topologia; cada implementação continua sujeita ao seu gate.
 10. `docs/limiar3/ARCHITECTURE_PROPOSAL.md` — documentação derivada/proposta; em conflito, prevalecem os ADRs Accepted.
 11. `docs/limiar3/L3_001_SESSION_BOUNDARY_INVESTIGATION.md` — Proposal inicial de L3-001; foi refinada por L3-001A.
 12. `docs/limiar3/L3_001A_MTPROTO_GOTD_INVESTIGATION.md` — investigação concluída de MTProto + `gotd/td v0.161.0`; fonte técnica posterior para o boundary Telegram, ainda não Decision.
