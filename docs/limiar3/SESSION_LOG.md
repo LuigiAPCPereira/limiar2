@@ -93,3 +93,16 @@ L3-001A e L3-001B usaram pesquisa externa upstream real sobre gotd, incluindo ve
 Foi criado [GOTD_UPSTREAM_ONLY_RESEARCH_BRIEF.md](GOTD_UPSTREAM_ONLY_RESEARCH_BRIEF.md) como tarefa recomendada L3-001C. Ela é limitada: não refaz MTProto nem produto; serve para fechar stable version, extension points, maturity, security, performance e known pitfalls do gotd.
 
 Nenhum upgrade, código, login Telegram, ADR promotion, PR, merge ou deploy foi executado por esta atualização.
+
+
+## Auditoria upstream-only do gotd — L3-001C
+
+Em 2026-09-24, o mantenedor forneceu o relatório final da auditoria upstream-only do `gotd/td`. O relatório revalidou a branch documental em `bd9e8f0c6ba8b9e7d1c856c7c3a6fd8f1ff41a70`, auditou a stable upstream atual sem usar o Limiar como lente na fase inicial e depois confrontou os achados com L3-002.
+
+Resultado internalizado em [L3_001C_GOTD_UPSTREAM_AUDIT.md](L3_001C_GOTD_UPSTREAM_AUDIT.md): recomenda `github.com/gotd/td v0.162.0` como pin para L3-002, sujeito à decisão do mantenedor e Implementation Gate; usa diretamente `telegram.Client`, lifecycle, reconnect/pools/migration, generated `tg.Client`, auth/query/media helpers; limita a extensão própria a hardened session storage, runtime ownership/readiness, TelegramQuery adapter, error translation e bounded admission.
+
+Achados de cautela: não usar upstream `session.FileStorage` como credential storage production; não adotar `telegram/peers.Manager` experimental/WIP como foundation; não instalar globalmente `gotd/contrib/middleware/floodwait.Waiter` nas condições atuais devido a relato upstream reproduzível de reentrancy/deadlock em DC migration; manter `updates.Manager` fora de L3-002 e revisar issues/limites na fatia collector; adicionar experimento estreito de clock-skew/lack-of-progress antes de production-ready.
+
+A stop condition da investigação ampla foi atingida. Não há blocker upstream encontrado para iniciar L3-002, mas L3-002 continua sem autorização automática. Restam Decisions/gates do projeto: pin final, credential storage/ADR 023 ou substituto, plataforma/deployment inicial, bootstrap surface, toolchain efetivo e autorização de implementação. Não abrir L3-001D sem nova incerteza material.
+
+Nenhum código, upgrade, login Telegram, ADR promotion, branch de implementação, PR, merge ou deploy foi executado nesta internalização.
