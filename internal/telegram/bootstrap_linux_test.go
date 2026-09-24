@@ -426,6 +426,14 @@ func TestBootstrapAndRuntimeShareExclusiveAuthorizationOwnership(t *testing.T) {
 	if _, err := b.QR(context.Background(), presenter, nil); !errors.Is(err, ErrAuthorizationInUse) {
 		t.Fatalf("QR() error=%v, want ErrAuthorizationInUse", err)
 	}
+
+	codeBootstrapper, err := NewBootstrapper(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := codeBootstrapper.Code(context.Background(), existingInputStub{}); !errors.Is(err, ErrAuthorizationInUse) {
+		t.Fatalf("Code() error=%v, want ErrAuthorizationInUse", err)
+	}
 }
 
 func TestBootstrapOwnershipLeaseIsReleasedOnPrepareFailure(t *testing.T) {
