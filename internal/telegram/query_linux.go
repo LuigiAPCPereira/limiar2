@@ -165,7 +165,7 @@ func (q *QueryClient) ResolvePeer(ctx context.Context, ref PeerRef) (PeerDescrip
 
 	input, err := q.resolve(ctx, value)
 	if err != nil {
-		return PeerDescriptor{}, fmt.Errorf("telegram query: resolve peer: %w", err)
+		return PeerDescriptor{}, classifyTelegramError("resolve_peer", err)
 	}
 	key, err := peerKey(input)
 	if err != nil {
@@ -208,7 +208,7 @@ func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryReque
 
 	elems, err := q.history(ctx, input, req.Limit, offsetID)
 	if err != nil {
-		return MessagePage{}, fmt.Errorf("telegram query: history: %w", err)
+		return MessagePage{}, classifyTelegramError("history", err)
 	}
 
 	out := make([]Message, 0, len(elems))
