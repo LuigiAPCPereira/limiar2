@@ -1,6 +1,6 @@
 # L3-001C — auditoria upstream-only do gotd/td
 
-**Estado:** recomendada / pendente.  
+**Estado:** concluída; resultado em [L3_001C_GOTD_UPSTREAM_AUDIT.md](L3_001C_GOTD_UPSTREAM_AUDIT.md).  
 **Tipo:** pesquisa externa de dependência estrutural.  
 **Não autoriza código, upgrade, login Telegram ou mudança de ADR.**
 
@@ -214,3 +214,8 @@ A pesquisa termina quando for possível responder:
 Não reabrir decisões de produto, Evidence DB, modelo comercial, MCP protocol ou frontend.
 
 Nenhum código deve ser implementado ao final.
+
+
+## Fechamento
+
+A stop condition foi atingida. A auditoria recomenda `gotd/td v0.162.0` como pin para L3-002, sujeito à decisão do mantenedor e Implementation Gate; reduz a extensão L3 a hardened session storage, runtime ownership/readiness, query adapter, error translation e bounded admission. Não recomenda nova pesquisa ampla antes de L3-002.
