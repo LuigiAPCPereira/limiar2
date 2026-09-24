@@ -279,7 +279,7 @@ func newRuntimeForTest(identity AuthorizationIdentity, readinessTimeout time.Dur
 		readinessTimeout: readinessTimeout,
 		run:              run,
 		status:           status,
-		preflight:        func(context.Context, Capabilities) error { return nil },
+		preflight:        func(context.Context) error { return nil },
 		query:            testQuery{},
 	}
 }
