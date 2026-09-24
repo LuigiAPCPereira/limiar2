@@ -167,3 +167,16 @@ Checks estáticos:
 O CI novo foi disparado no run GitHub Actions `35948099372`. Attempts 1 e 2 terminaram em failure antes de qualquer step, ambos com `runner_id=0`, `runner_name=""` e `steps=[]`. Portanto a causa exata de infraestrutura/conta do Actions permanece UNKNOWN e **nenhum build/vet/test/race/govulncheck chegou a executar**. A tarefa não deve ser marcada como plenamente validada enquanto esse gate não rodar.
 
 O ambiente container local disponível usa Go 1.23.2 e não foi usado para fingir validação do baseline Go 1.27.1.
+
+
+## Início da implementação L3-002 — hardened session storage
+
+Em 2026-09-24 o mantenedor informou que a cota de horas do GitHub Actions está indisponível e autorizou continuar o desenvolvimento sem esperar por esse canal de CI. A limitação foi mantida como Evidence externa reportada, sem transformar jobs que não receberam runner em falha do código.
+
+Foi criada a branch `feat/limiar3-l3-002-telegram-foundation` a partir de `refactor/limiar3-repository-rebaseline@afd81238e8f9e66a17c8bb30978978daeb6006ca`.
+
+O Implementation Gate de L3-002 foi considerado satisfeito para a primeira fatia: L3 ADR 001/002 estão Accepted, Go 1.27.1 e gotd v0.162.0 foram revalidados como versões atuais aplicáveis, owner/riscos/limites estão documentados e existe harness local proporcional.
+
+Foi implementado `internal/telegram/sessionstore` para o escopo Linux/single-host/single-process. O storage possui o mesmo method set de `gotd/session.Storage` sem criar interface espelho, trata ausência física separadamente de corrupção/I/O, publica por temp privado + write completo + fsync + rename + dir fsync, valida owner/perms, rejeita symlink/non-regular e coordena writers intra-processo por canonical path.
+
+Validação observada no harness local: `go test -count=10 ./...` PASS, `go vet ./...` PASS e `go test -race -count=1 ./...` PASS. O ambiente local usa Go 1.23.2 e não possui rede para baixar Go 1.27.1/gotd; portanto integração exata com o pin real e govulncheck continuam UNKNOWN. Os blobs remotos dos dois arquivos são idênticos aos blobs dos arquivos testados localmente.
