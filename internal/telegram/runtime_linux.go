@@ -238,14 +238,14 @@ func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilit
 	if serve == nil {
 		return fmt.Errorf("%w: nil serve callback", ErrInvalidRuntimeConfig)
 	}
-	if !r.started.CompareAndSwap(false, true) {
-		return ErrAlreadyStarted
-	}
 	release, err := r.coordinator.acquire(r.identity.Key)
 	if err != nil {
 		return err
 	}
 	defer release()
+	if !r.started.CompareAndSwap(false, true) {
+		return ErrAlreadyStarted
+	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, r.readinessTimeout)
 	preflightErr := r.preflight(preflightCtx)
