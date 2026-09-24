@@ -24,7 +24,7 @@
 18. `docs/limiar3/TASKLIST.md` — inventário próprio da frente Limiar 3.0.
 19. `docs/limiar3/PROJECT_STATE.md` — checkpoint e próxima ação.
 20. `docs/limiar3/INIT_REPORT.md` e `docs/limiar3/SESSION_LOG.md` — matriz das nove funções, lacunas e histórico real.
-21. `docs/BASELINE.md`, `docs/adr/README.md` e ADRs Accepted/Proposed pertinentes; verificar ref e estados vigentes antes de qualquer código.
+21. `docs/BASELINE.md`, `docs/ARCHITECTURE.md` e `docs/limiar3/adr/README.md`; material histórico anterior está sob `legacy/limiar2/`.
 
 ## Regra de herança da rebaseline
 
@@ -48,3 +48,7 @@
 - Imagens: falha funcional relatada pelo mantenedor, causa não demonstrada neste trabalho; ADR 011 `DEFER / REVALIDATE`, ADR 012 `RETIRE`.
 
 **Critério de sucesso da preparação documental:** arquivos reabertos na branch correta, referências coerentes, escopo e tarefas recuperáveis, nenhuma pretensão de produto validado. O checkpoint informa o que foi efetivamente conferido.
+
+## Repository rebaseline / legacy containment
+
+Por L3 ADR 003, o root agora representa exclusivamente Limiar 3. A implementação anterior está preservada em `legacy/limiar2/`; não importar packages legacy no código L3. A fatia estrutural correspondente é `L3-BASE-001`.
