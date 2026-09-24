@@ -1,6 +1,6 @@
 # TASKLIST — Limiar 3.0
 
-**Tracker canônico somente da frente Limiar 3.0:** reconstrução integral, MCP + API/frontend. O tracker histórico anterior foi preservado em `legacy/limiar2/docs/TASKLIST.md` e não duplica tarefas desta frente. Fonte de visão [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md); plano [`ARCHITECTURE_PROPOSAL.md`](ARCHITECTURE_PROPOSAL.md); evidências e matriz [`INIT_REPORT.md`](INIT_REPORT.md); checkpoint [`PROJECT_STATE.md`](PROJECT_STATE.md). Estados distinguem documentação, implementação, validação e integração. Sem código ou testes Limiar 3.0 nesta preparação.
+**Tracker canônico somente da frente Limiar 3.0:** reconstrução integral, MCP + API/frontend. O tracker histórico anterior foi preservado em `legacy/limiar2/docs/TASKLIST.md` e não duplica tarefas desta frente. Fonte de visão [`PRODUCT_AND_SCOPE.md`](PRODUCT_AND_SCOPE.md); plano [`ARCHITECTURE_PROPOSAL.md`](ARCHITECTURE_PROPOSAL.md); evidências e matriz [`INIT_REPORT.md`](INIT_REPORT.md); checkpoint [`PROJECT_STATE.md`](PROJECT_STATE.md). Estados distinguem documentação, implementação, validação e integração. O root já contém apenas scaffold/CI estrutural do Limiar 3; nenhuma capability funcional de produto foi implementada.
 
 | ID | Resultado verificável | Estado | Dependências | Aceite e evidência / lacuna | Branch / PR |
 | --- | --- | --- | --- | --- | --- |
