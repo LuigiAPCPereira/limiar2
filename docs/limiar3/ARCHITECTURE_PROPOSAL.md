@@ -107,3 +107,8 @@ A investigação da versão real `gotd/td v0.161.0` sustenta a direção desta P
 ## Refinamento upstream-only L3-001C
 
 A auditoria do gotd como biblioteca independente recomenda reduzir a extensão L3 a cinco responsabilidades: hardened `session.Storage`, runtime ownership/readiness, `TelegramQuery` adapter, error translation e bounded admission. Reconnect, pools, DC migration, RPC/MTProto, pagination e media machinery permanecem no upstream. O mantenedor posteriormente **aceitou** `gotd/td v0.162.0` como pin inicial de L3-002 no L3 ADR 002, ainda sujeito ao Implementation Gate. Também recomenda evitar `session.FileStorage` production, `telegram/peers.Manager` na fundação e `gotd/contrib/middleware/floodwait.Waiter` global nas condições atuais; issues de updates ficam para o collector. Nenhuma dessas recomendações promove ADR ou autoriza código.
+
+
+## Repository topology — L3 ADR 003
+
+O root do repositório é a superfície corrente do Limiar 3. A implementação anterior fica sob `legacy/limiar2/` e não pode ser importada pelo código L3. Reuso do legado é consulta de Evidence/comportamento, não dependência de packages. A repository rebaseline é uma fatia estrutural separada de L3-002.
