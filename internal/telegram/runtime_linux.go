@@ -19,7 +19,9 @@ var (
 	ErrInvalidRuntimeConfig = errors.New("telegram runtime: invalid config")
 	ErrAlreadyStarted       = errors.New("telegram runtime: already started")
 	ErrRebootstrapRequired  = errors.New("telegram runtime: rebootstrap required")
-	ErrIncompatibleSession = errors.New("telegram runtime: incompatible persisted session")
+	ErrSessionAbsent        = errors.New("telegram runtime: persisted session absent")
+	ErrAuthorizationRejected = errors.New("telegram runtime: persisted authorization rejected")
+	ErrIncompatibleSession  = errors.New("telegram runtime: incompatible persisted session")
 	ErrSelfMismatch         = errors.New("telegram runtime: authorization identity mismatch")
 	ErrInvalidAuthStatus    = errors.New("telegram runtime: invalid authorization status")
 )
@@ -48,6 +50,7 @@ type RuntimeConfig struct {
 	AppID            int
 	AppHash          string
 	SessionStorage        gotdtelegram.SessionStorage
+	Coordinator           *AuthorizationCoordinator
 	ReadinessTimeout      time.Duration
 	MaxConcurrentQueries  int
 	MaxHistoryPageSize    int
@@ -65,6 +68,9 @@ func (c RuntimeConfig) validate() error {
 	}
 	if c.SessionStorage == nil {
 		return fmt.Errorf("%w: session storage is required", ErrInvalidRuntimeConfig)
+	}
+	if c.Coordinator == nil {
+		return fmt.Errorf("%w: authorization coordinator is required", ErrInvalidRuntimeConfig)
 	}
 	if c.ReadinessTimeout <= 0 {
 		return fmt.Errorf("%w: readiness timeout must be positive", ErrInvalidRuntimeConfig)
@@ -96,6 +102,7 @@ type Capabilities struct {
 // identity. The client is intentionally not exposed to consumers.
 type Runtime struct {
 	identity         AuthorizationIdentity
+	coordinator      *AuthorizationCoordinator
 	client           *gotdtelegram.Client
 	readinessTimeout time.Duration
 	run              runFunc
@@ -122,6 +129,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 
 	return &Runtime{
 		identity:         cfg.Identity,
+		coordinator:      cfg.Coordinator,
 		client:           client,
 		readinessTimeout: cfg.ReadinessTimeout,
 		run:              client.Run,
@@ -156,7 +164,7 @@ func preflightPersistedSession(ctx context.Context, storage gotdtelegram.Session
 		return fmt.Errorf("telegram runtime: load persisted authorization: %w", err)
 	}
 	if len(raw) == 0 {
-		return ErrRebootstrapRequired
+		return newRebootstrapError(ErrSessionAbsent)
 	}
 
 	loader := gotdsession.Loader{Storage: staticSessionStorage{data: raw}}
@@ -164,11 +172,40 @@ func preflightPersistedSession(ctx context.Context, storage gotdtelegram.Session
 		if errors.Is(err, gotdsession.ErrNotFound) {
 			// At this point physical storage was present and non-empty, so gotd's
 			// ErrNotFound can only represent an incompatible serialized version.
-			return fmt.Errorf("%w: %v", ErrIncompatibleSession, err)
+			return newRebootstrapError(fmt.Errorf("%w: %v", ErrIncompatibleSession, err))
 		}
 		return fmt.Errorf("telegram runtime: decode persisted authorization: %w", err)
 	}
 	return nil
+}
+
+type rebootstrapError struct {
+	reason error
+}
+
+func (e *rebootstrapError) Error() string {
+	if e == nil || e.reason == nil {
+		return ErrRebootstrapRequired.Error()
+	}
+	return fmt.Sprintf("%s: %s", ErrRebootstrapRequired, e.reason)
+}
+
+func (e *rebootstrapError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.reason
+}
+
+func (e *rebootstrapError) Is(target error) bool {
+	if target == ErrRebootstrapRequired {
+		return true
+	}
+	return e != nil && errors.Is(e.reason, target)
+}
+
+func newRebootstrapError(reason error) error {
+	return &rebootstrapError{reason: reason}
 }
 
 type staticSessionStorage struct {
@@ -195,7 +232,7 @@ func (r *Runtime) Identity() AuthorizationIdentity {
 // gotd client. A Runtime is intentionally one-shot; construct a new one after
 // shutdown/restart.
 func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilities) error) error {
-	if r == nil || r.run == nil || r.status == nil || r.preflight == nil || r.query == nil || r.readinessTimeout <= 0 {
+	if r == nil || r.run == nil || r.status == nil || r.preflight == nil || r.query == nil || r.coordinator == nil || r.readinessTimeout <= 0 {
 		return fmt.Errorf("%w: invalid runtime", ErrInvalidRuntimeConfig)
 	}
 	if serve == nil {
@@ -204,6 +241,11 @@ func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilit
 	if !r.started.CompareAndSwap(false, true) {
 		return ErrAlreadyStarted
 	}
+	release, err := r.coordinator.acquire(r.identity.Key)
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	preflightCtx, cancel := context.WithTimeout(ctx, r.readinessTimeout)
 	preflightErr := r.preflight(preflightCtx)
@@ -244,7 +286,7 @@ func (r *Runtime) runReady(ctx context.Context, serve func(context.Context, Capa
 		return err
 	}
 	if !status.Authorized {
-		return ErrRebootstrapRequired
+		return newRebootstrapError(ErrAuthorizationRejected)
 	}
 	if status.SelfUserID <= 0 {
 		return ErrInvalidAuthStatus
