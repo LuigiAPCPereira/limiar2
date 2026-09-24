@@ -1,6 +1,6 @@
 # Limiar 3.0 — visão, escopo e critérios iniciais
 
-**Natureza:** requisitos expressos pelo mantenedor nos diálogos de 2026-09-22 e neste pedido; não implica implementação/aceitação automática de mecanismos técnicos. Esta é a fonte de escopo **da frente Limiar 3.0** nesta branch. `docs/REBASELINE_SCOPE.md` registra escopo anterior (reconstrução integral da fundação de ingestão) e permanece preservado como história. Não confundir versões ou declarar que foi atualizado na `main`.
+**Natureza:** requisitos expressos pelo mantenedor nos diálogos de 2026-09-22 e neste pedido; não implica implementação/aceitação automática de mecanismos técnicos. Esta é a fonte de escopo **da frente Limiar 3.0** nesta branch. `legacy/limiar2/docs/REBASELINE_SCOPE.md` registra escopo anterior (reconstrução integral da fundação de ingestão) e permanece preservado como história. Não confundir versões ou declarar que foi atualizado na `main`.
 
 ## Produto e problema
 
@@ -30,7 +30,7 @@ O MCP realtime entra **antes da modelagem comercial** para exploração do domí
 
 ## Reaproveitamento classificado por autoridade
 
-- **Accepted:** ADRs 016–020 para Source Evidence, recovery, Source Admission, SQLite local side-by-side, schema de Evidence; ver registry `docs/adr/README.md` para outras transições. ADR 004 preserva princípio de sessão MTProto durável, não escolha perpétua de Tursogo.
+- **Accepted:** ADRs 016–020 para Source Evidence, recovery, Source Admission, SQLite local side-by-side, schema de Evidence; ver registry `legacy/limiar2/docs/adr/README.md` para outras transições. ADR 004 preserva princípio de sessão MTProto durável, não escolha perpétua de Tursogo.
 - **Implementado em parte:** `internal/storage/sqlite` com Evidence, guards/schema reabertura; PR #211 integrada; reutilização depende compatibilidade do novo wiring e revalidação, não de cópia cega.
 - **Evidência experimental:** EXP-LIMIAR-011–017 durabilidade/portabilidade no escopo testado, macOS inconclusivo; EXP-LIMIAR-018 rejeita `gotd.FileStorage` as-is; EXP-LIMIAR-019 Supported para arquivo hardened Unix/intra-processo, PR #202 integrada, apenas `_test.go`, sem mecanismo produtivo ou suporte Windows demonstrado.
 - **Proposto, não decidido:** ADR 021 schema SourceSyncState; ADR 022 BackfillProgress; ADR 023 armazenamento hardened da sessão; ADR 024 identidade `subscription_id`. Não colocar proposta em produção sem aceite formal; não converter fixture `telegram:test` em identidade de produção.
