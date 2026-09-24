@@ -64,7 +64,7 @@ Somente depois de workload e profiling considerar PGO, pooling customizado, sche
 
 ## Go
 
-Na data desta decisão, Go 1.27.1 é o baseline preferencial a ser verificado para L3-002. Go 1.26.x passa a ser fallback somente se incompatibilidade/regressão concreta for demonstrada.
+Por Decision aceita do mantenedor (L3 ADR 002), **Go 1.27.1 é o baseline inicial de L3-002**. Go 1.26.x é fallback somente se incompatibilidade/regressão concreta for demonstrada.
 
 A Evidence de L3-002 deve ser produzida no toolchain que pretendemos usar, evitando validar toda a fundação numa versão antiga para depois trocar o runtime.
 
@@ -72,17 +72,14 @@ A Evidence de L3-002 deve ser produzida no toolchain que pretendemos usar, evita
 
 A mesma regra vale para `github.com/gotd/td`.
 
-A versão stable atual deve ser auditada e testada como baseline preferencial. A versão v0.161.0 continua valiosa porque foi investigada profundamente em L3-001A, mas isso não a torna automaticamente a versão a ser usada por L3-002.
+A auditoria upstream-only foi concluída e, por Decision aceita do mantenedor (L3 ADR 002), **`github.com/gotd/td v0.162.0` é o pin inicial de L3-002**. v0.161.0 permanece Evidence histórica de L3-001A.
 
-Antes de pinning final:
+Para upgrades futuros:
 
-- comparar stable atual vs v0.161.0;
-- revisar schema/layer;
-- auth/session/runtime;
-- fixes e regressões;
-- open issues relevantes;
-- build/test/race;
-- experimento de lifecycle na versão escolhida.
+- identificar stable atual e comparar com o pin vigente;
+- revisar schema/layer, auth/session/runtime, fixes/regressões e issues relevantes;
+- executar build/test/race/vuln e experimentos proporcionais quando material;
+- manter pin exato; nunca `latest` dinâmico.
 
 ## Regra final
 
