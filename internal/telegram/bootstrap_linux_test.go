@@ -341,3 +341,40 @@ func TestStagingSnapshotIsLatestCompleteWrite(t *testing.T) {
 		t.Fatalf("snapshot=%q", got)
 	}
 }
+
+
+func TestBootstrapFinalizeRequiresVerifiedSelfBeforeDurableCommit(t *testing.T) {
+	t.Parallel()
+
+	base := &memoryBootstrapStorage{data: []byte("old-session")}
+	storage := bootstrapStorageAdapter{base}
+	cfg := goodBootstrapConfig(storage)
+	cfg.ReplaceExisting = true
+	b, err := NewBootstrapper(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staging := &stagingSessionStorage{}
+	if err := staging.StoreSession(context.Background(), []byte("new-session")); err != nil {
+		t.Fatal(err)
+	}
+
+	err = b.finalize(context.Background(), BootstrapResult{}, staging)
+	if !errors.Is(err, ErrBootstrapUnauthorized) {
+		t.Fatalf("finalize() error=%v, want ErrBootstrapUnauthorized", err)
+	}
+	if got := string(base.data); got != "old-session" {
+		t.Fatalf("durable credential changed without verified self: %q", got)
+	}
+	if base.stores != 0 {
+		t.Fatalf("StoreSession calls=%d, want 0", base.stores)
+	}
+
+	result := BootstrapResult{IdentityKey: "primary", SelfUserID: 42, ReplacedExisting: true}
+	if err := b.finalize(context.Background(), result, staging); err != nil {
+		t.Fatalf("finalize(valid) error=%v", err)
+	}
+	if got := string(base.data); got != "new-session" {
+		t.Fatalf("durable credential=%q, want new-session", got)
+	}
+}
