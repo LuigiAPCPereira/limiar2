@@ -3,6 +3,7 @@
 package telegram
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -69,10 +70,10 @@ func eventOutcome(err error) (EventOutcome, ErrorKind, time.Duration) {
 	if err == nil {
 		return EventOutcomeOK, "", 0
 	}
-	if errors.Is(err, contextCanceled) {
+	if errors.Is(err, context.Canceled) {
 		return EventOutcomeCanceled, "", 0
 	}
-	if errors.Is(err, contextDeadlineExceeded) {
+	if errors.Is(err, context.DeadlineExceeded) {
 		return EventOutcomeDeadline, "", 0
 	}
 
