@@ -19,8 +19,9 @@ import (
 var (
 	ErrInvalidQuery      = errors.New("telegram query: invalid request")
 	ErrPeerNotResolved   = errors.New("telegram query: peer not resolved in this runtime")
-	ErrUnsupportedPeer   = errors.New("telegram query: unsupported peer")
-	ErrInvalidCursor     = errors.New("telegram query: invalid cursor")
+	ErrUnsupportedPeer       = errors.New("telegram query: unsupported peer")
+	ErrInvalidCursor         = errors.New("telegram query: invalid cursor")
+	ErrInvalidUpstreamMessage = errors.New("telegram query: invalid upstream message")
 )
 
 type PeerKind string
@@ -242,7 +243,10 @@ func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryReque
 
 	out := make([]Message, 0, len(elems))
 	for _, elem := range elems {
-		msg := messageFromElem(elem, key)
+		msg, err := messageFromElem(elem, key)
+		if err != nil {
+			return MessagePage{}, err
+		}
 		out = append(out, msg)
 	}
 
@@ -353,9 +357,17 @@ func decodeHistoryCursor(cursor string) (historyOffset, error) {
 	return historyOffset{ID: int(id), Date: int(date)}, nil
 }
 
-func messageFromElem(elem querymessages.Elem, fallback PeerKey) Message {
+func messageFromElem(elem querymessages.Elem, fallback PeerKey) (Message, error) {
+	if elem.Msg == nil {
+		return Message{}, fmt.Errorf("%w: nil message", ErrInvalidUpstreamMessage)
+	}
+	id := int64(elem.Msg.GetID())
+	if id <= 0 {
+		return Message{}, fmt.Errorf("%w: non-positive message id", ErrInvalidUpstreamMessage)
+	}
+
 	result := Message{
-		ID:           int64(elem.Msg.GetID()),
+		ID:           id,
 		Peer:         fallback,
 		Date:         telegramTimestamp(elem.Msg.GetDate()),
 		Kind:         MessageKindUnknown,
@@ -382,7 +394,7 @@ func messageFromElem(elem querymessages.Elem, fallback PeerKey) Message {
 			result.ServiceAction = m.Action.TypeName()
 		}
 	}
-	return result
+	return result, nil
 }
 
 func telegramTimestamp(value int) time.Time {
