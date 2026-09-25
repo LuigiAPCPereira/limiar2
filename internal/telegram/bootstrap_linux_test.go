@@ -459,3 +459,45 @@ func TestBootstrapOwnershipLeaseIsReleasedOnPrepareFailure(t *testing.T) {
 	}
 	release()
 }
+
+
+func TestBootstrapOwnershipConflictDoesNotConsumeOneShot(t *testing.T) {
+	t.Parallel()
+
+	coordinator := NewAuthorizationCoordinator()
+	release, err := coordinator.acquire("primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := goodBootstrapConfig(bootstrapStorageAdapter{&memoryBootstrapStorage{}})
+	cfg.Coordinator = coordinator
+
+	qrBootstrapper, err := NewBootstrapper(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	presenter := QRPresenterFunc(func(context.Context, QRChallenge) error { return nil })
+	if _, err := qrBootstrapper.QR(context.Background(), presenter, nil); !errors.Is(err, ErrAuthorizationInUse) {
+		t.Fatalf("QR() error=%v, want ErrAuthorizationInUse", err)
+	}
+	if qrBootstrapper.started.Load() {
+		t.Fatal("QR bootstrapper consumed one-shot state after ownership conflict")
+	}
+
+	codeBootstrapper, err := NewBootstrapper(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := codeBootstrapper.Code(context.Background(), existingInputStub{}); !errors.Is(err, ErrAuthorizationInUse) {
+		t.Fatalf("Code() error=%v, want ErrAuthorizationInUse", err)
+	}
+	if codeBootstrapper.started.Load() {
+		t.Fatal("Code bootstrapper consumed one-shot state after ownership conflict")
+	}
+
+	release()
+	if _, err := coordinator.acquire("primary"); err != nil {
+		t.Fatalf("ownership not reusable after release: %v", err)
+	}
+}
