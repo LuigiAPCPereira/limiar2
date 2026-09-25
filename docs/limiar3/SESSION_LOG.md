@@ -223,3 +223,8 @@ A revisão estática final encontrou e corrigiu quatro detalhes concretos sem am
 Foram adicionados testes de regressão para esses casos. A justificativa do teto de 100 foi confrontada com a documentação oficial de paginação do Telegram e com o alerta upstream do gotd de que batch sizes excessivos podem produzir resultados incorretos sem erro.
 
 Nenhum desses hardenings altera as Decisions L3 ADR 001/002. O estado permanece **IMPLEMENTADA NO CÓDIGO / NÃO VALIDADA EM INTEGRAÇÃO REAL** porque Go 1.27.1 + build/vet/test/race/govulncheck e os experimentos Telegram reais ainda não puderam ser executados.
+
+
+## Revisão estática final adicional — 2026-09-25
+
+A revisão do boundary de history encontrou uma inconsistência local entre o cursor `ID+date` e o mapper: uma mensagem upstream com ID positivo, mas `Date <= 0`, poderia ser materializada e fazer uma página cheia terminar sem cursor seguinte. O mapper agora classifica esse caso como `ErrInvalidUpstreamMessage`, com teste de regressão. A mudança é correção local do contrato já decidido; não amplia arquitetura nem muda os gates reais de L3-002.
