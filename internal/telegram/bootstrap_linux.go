@@ -129,14 +129,14 @@ func (b *Bootstrapper) QR(
 	if presenter == nil {
 		return BootstrapResult{}, fmt.Errorf("%w: qr presenter is required", ErrInvalidBootstrapConfig)
 	}
-	if !b.started.CompareAndSwap(false, true) {
-		return BootstrapResult{}, ErrBootstrapAlreadyStarted
-	}
 	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
 	if err != nil {
 		return BootstrapResult{}, err
 	}
 	defer release()
+	if !b.started.CompareAndSwap(false, true) {
+		return BootstrapResult{}, ErrBootstrapAlreadyStarted
+	}
 
 	staging, replaced, err := b.prepare(ctx)
 	if err != nil {
@@ -209,14 +209,14 @@ func (b *Bootstrapper) Code(
 	if input == nil {
 		return BootstrapResult{}, fmt.Errorf("%w: code authenticator is required", ErrInvalidBootstrapConfig)
 	}
-	if !b.started.CompareAndSwap(false, true) {
-		return BootstrapResult{}, ErrBootstrapAlreadyStarted
-	}
 	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
 	if err != nil {
 		return BootstrapResult{}, err
 	}
 	defer release()
+	if !b.started.CompareAndSwap(false, true) {
+		return BootstrapResult{}, ErrBootstrapAlreadyStarted
+	}
 
 	staging, replaced, err := b.prepare(ctx)
 	if err != nil {
