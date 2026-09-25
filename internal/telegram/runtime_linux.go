@@ -80,8 +80,8 @@ func (c RuntimeConfig) validate() error {
 	if c.MaxConcurrentQueries <= 0 {
 		return fmt.Errorf("%w: max concurrent queries must be positive", ErrInvalidRuntimeConfig)
 	}
-	if c.MaxHistoryPageSize <= 0 {
-		return fmt.Errorf("%w: max history page size must be positive", ErrInvalidRuntimeConfig)
+	if c.MaxHistoryPageSize <= 0 || c.MaxHistoryPageSize > maxTelegramHistoryPageSize {
+		return fmt.Errorf("%w: max history page size must be between 1 and %d", ErrInvalidRuntimeConfig, maxTelegramHistoryPageSize)
 	}
 	if c.MaxResolvedPeers <= 0 {
 		return fmt.Errorf("%w: max resolved peers must be positive", ErrInvalidRuntimeConfig)
