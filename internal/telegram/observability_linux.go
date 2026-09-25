@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	gotdtelegram "github.com/gotd/td/telegram"
 )
 
 // EventType is a low-cardinality observability category.
@@ -86,4 +88,54 @@ func eventOutcome(err error) (EventOutcome, ErrorKind, time.Duration) {
 		return EventOutcomeError, opErr.Kind, opErr.RetryAfter
 	}
 	return EventOutcomeError, "", 0
+}
+
+
+type observedSessionStorage struct {
+	delegate    gotdtelegram.SessionStorage
+	identityKey string
+	observer    Observer
+}
+
+func observeSessionStorage(storage gotdtelegram.SessionStorage, identityKey string, observer Observer) gotdtelegram.SessionStorage {
+	if storage == nil || observer == nil {
+		return storage
+	}
+	return &observedSessionStorage{
+		delegate:    storage,
+		identityKey: identityKey,
+		observer:    observer,
+	}
+}
+
+func (s *observedSessionStorage) LoadSession(ctx context.Context) (data []byte, retErr error) {
+	startedAt := time.Now()
+	defer func() {
+		s.observeStorageOperation("session_load", startedAt, retErr)
+	}()
+	return s.delegate.LoadSession(ctx)
+}
+
+func (s *observedSessionStorage) StoreSession(ctx context.Context, data []byte) (retErr error) {
+	startedAt := time.Now()
+	defer func() {
+		s.observeStorageOperation("session_store", startedAt, retErr)
+	}()
+	return s.delegate.StoreSession(ctx, data)
+}
+
+func (s *observedSessionStorage) observeStorageOperation(operation string, startedAt time.Time, err error) {
+	if s == nil {
+		return
+	}
+	outcome, kind, retryAfter := eventOutcome(err)
+	observe(s.observer, Event{
+		Type:        EventTypeOperation,
+		IdentityKey: s.identityKey,
+		Operation:   operation,
+		Outcome:     outcome,
+		ErrorKind:   kind,
+		Duration:    time.Since(startedAt),
+		RetryAfter:  retryAfter,
+	})
 }
