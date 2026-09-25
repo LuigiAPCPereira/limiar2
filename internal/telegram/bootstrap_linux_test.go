@@ -497,7 +497,9 @@ func TestBootstrapOwnershipConflictDoesNotConsumeOneShot(t *testing.T) {
 	}
 
 	release()
-	if _, err := coordinator.acquire("primary"); err != nil {
+	reacquired, err := coordinator.acquire("primary")
+	if err != nil {
 		t.Fatalf("ownership not reusable after release: %v", err)
 	}
+	reacquired()
 }
