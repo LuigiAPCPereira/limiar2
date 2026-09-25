@@ -200,3 +200,12 @@ Runtime e bootstrap agora podem observar o storage por wrapper interno que prese
 Foi criado `internal/telegram/runtime_real_linux_test.go` com build tag `linux && telegram_real`. Esse gate é **opt-in** e nunca roda no CI normal. Ele não faz bootstrap nem solicita credencial: exige uma sessão de teste/disposable já provisionada via environment do operador, inicia **dois subprocessos distintos** sobre o mesmo hardened session file e verifica semantic readiness/same-self; quando `LIMIAR_TELEGRAM_PEER_REF` está configurado, cada subprocesso também executa `ResolvePeer + History`. Saídas de erro são sanitizadas e nenhum segredo é colocado em fixture.
 
 Com isso, a implementação de código prevista para a fundação L3-002 está substancialmente fechada. Permanecem como Evidence **UNKNOWN**, não PASS: compilação/testes/race/vuln no Go 1.27.1, bootstrap real, restart/reuse real, first RPC real, reconnect, clock-skew e cross-DC. Não houve login Telegram, OTP/2FA real, credencial, merge ou deploy nesta execução.
+
+
+## 2026-09-24 — L3-003 Decision Gate / MCP realtime
+
+Foi revalidada a direção documental de MCP detachable e feita pesquisa externa atual somente sobre o gate necessário para a primeira superfície realtime. A stable oficial observada do Go MCP SDK é `modelcontextprotocol/go-sdk v1.8.0` (2026-09-14), compatível com o baseline Go 1.27.1 e com suporte à revisão MCP `2026-07-28`. A revisão corrente usa core stateless/sessionless; o SDK oferece Streamable HTTP stateless e tools tipadas. A documentação atual da OpenAI oferece Secure MCP Tunnel para reachability de MCP privado por HTTP/stdio sem listener público.
+
+Foi criado L3 ADR 004 como **Proposed**, não Accepted. A Proposal define: SDK oficial; private Streamable HTTP stateless; tunnel opcional/externo; read scope por targets nomeados separado da TelegramAuthorizationIdentity e de acquisition subscription; primeira tool history read-only; mensagem Telegram tratada como dado não confiável; sem OAuth próprio, endpoint público, write tool ou SQLite/Evidence no primeiro slice.
+
+Nenhuma dependência MCP foi adicionada e nenhum server/tool/tunnel/app foi criado. A implementação L3-003 aguarda autoridade explícita do mantenedor para promover/revisar L3 ADR 004.
