@@ -20,6 +20,20 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 **Próxima ação:** **não ampliar mais a arquitetura de L3-002 por default**. Quando houver canal executável, rodar `go build/vet/test/race/govulncheck` com Go 1.27.1 + gotd v0.162.0. Em ambiente Telegram explicitamente autorizado, usar o harness `telegram_real` e bootstrap administrativo para provar: persistência → shutdown → **novo processo** → restore/same-self → first `ResolvePeer+History`, depois smokes estreitos de reconnect, clock-skew/lack-of-progress e cross-DC. Até esses gates, L3-002 não é `validada` nem `production-ready`. PFS, persistent peer state, updates/recovery e media continuam deferred.
 
+## Gate paralelo L3-003 — MCP Telegram realtime
+
+Em 2026-09-24 foi feita uma investigação estreita da superfície MCP atual, sem reabrir pesquisa ampla de fundação. Evidence externa verificada:
+
+- `modelcontextprotocol/go-sdk v1.8.0` é a latest stable upstream observada; declara Go 1.25.0 e suporta MCP `2026-07-28`;
+- MCP `2026-07-28` usa core stateless/sessionless; o SDK Go serve essa revisão sobre Streamable HTTP com `Stateless: true`;
+- a stable v1.8.0 adiciona hardening de transporte/resource exhaustion e correções de lifecycle;
+- OpenAI Secure MCP Tunnel permite conectar MCP privado a produtos suportados sem inbound público, encaminhando para servidor local por HTTP ou stdio;
+- permissões do tunnel e ChatGPT developer mode são externas/separadas e **não foram presumidas**.
+
+Foi criado [L3 ADR 004](adr/004-mcp-telegram-realtime-boundary.md) com status **Proposed**. A Proposal usa SDK oficial v1.8.0, Streamable HTTP stateless/private e um read scope de targets nomeados; a primeira tool é history read-only e não aceita peer arbitrário. Tunnel é opção operacional, não credential/auth Telegram. Não há OAuth próprio no primeiro single-operator/private slice; exposição pública/multi-user/write actions exigem nova Decision.
+
+**Gate:** enquanto L3 ADR 004 permanecer Proposed, não adicionar a dependência MCP nem implementar server/tool/tunnel. L3-002 continua EM ANDAMENTO/UNKNOWN nos gates reais já registrados. Após aceite explícito do ADR 004, L3-003 pode ser implementada e testada contra uma `TelegramQuery` fake mesmo antes da integração Telegram real; o E2E com ChatGPT/Telegram continua dependente dos gates/permissões correspondentes.
+
 ## Restrições e desconhecidos
 
 ADRs históricos 021–024 permanecem conforme registry da rebaseline e não foram promovidos; os ADRs exclusivos do Limiar 3 têm registry próprio em `docs/limiar3/adr/`, com L3 ADR 001/002 Accepted; EXP-019 só prova harness Unix/intra-processo, não runtime; `legacy/limiar2/internal/storage/sqlite` + PR #211 são implementação parcial herdada, não Limiar 3.0 integrado. Imagens têm falha relatada, causa não reproduzida. O root já contém a fundação funcional L3-002 sob `internal/telegram/`: `sessionstore`, ownership, bootstrap, runtime, query, errors, observability e o teste opt-in `runtime_real_linux_test.go` com build tag `telegram_real`. O ambiente local disponível possui Go 1.23.2; tentativa de obter Go 1.27.1 via toolchain automático falhou por bloqueio de rede, portanto a validação exata permanece UNKNOWN. Para a fatia de storage, um módulo de harness equivalente em Go 1.23.2 executou `go test -count=10`, `go vet` e `go test -race` com PASS; os Git blob SHAs dos arquivos testados coincidem com os blobs remotos. As APIs usadas por runtime/bootstrap/query foram confrontadas com as fontes upstream de gotd v0.162.0 (`session.Storage`, `auth.Flow`, `PasswordHashProvider`/`PasswordWith`, `qrlogin.OnLoginToken`/`QR.Auth`, `telegram/message/peer`, `telegram/query/messages`, `Client.API`). Isso é verificação estática de compatibilidade, não build nem integração. Telegram/MCP não foram conectados; não houve credenciais, PR, merge ou deploy. Decisão final de diretórios, processo, sessão, identidade do consumidor e integração ChatGPT fica para investigação/autoridade apropriada; sem esquema/ID fictício.
