@@ -112,6 +112,9 @@ type QueryClient struct {
 	mu        sync.RWMutex
 	peers     map[PeerKey]tg.InputPeerClass
 	peerOrder []PeerKey
+
+	observer    Observer
+	identityKey string
 }
 
 var _ TelegramQuery = (*QueryClient)(nil)
@@ -170,7 +173,11 @@ func newQueryClientWithFuncs(maxConcurrent, maxPageSize, maxResolvedPeers int, r
 	}, nil
 }
 
-func (q *QueryClient) ResolvePeer(ctx context.Context, ref PeerRef) (PeerDescriptor, error) {
+func (q *QueryClient) ResolvePeer(ctx context.Context, ref PeerRef) (result PeerDescriptor, retErr error) {
+	startedAt := time.Now()
+	defer func() {
+		q.observeOperation("resolve_peer", startedAt, retErr)
+	}()
 	if q == nil || q.resolve == nil {
 		return PeerDescriptor{}, fmt.Errorf("%w: invalid query adapter", ErrInvalidQuery)
 	}
@@ -197,7 +204,11 @@ func (q *QueryClient) ResolvePeer(ctx context.Context, ref PeerRef) (PeerDescrip
 	return PeerDescriptor{Key: key}, nil
 }
 
-func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryRequest) (MessagePage, error) {
+func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryRequest) (result MessagePage, retErr error) {
+	startedAt := time.Now()
+	defer func() {
+		q.observeOperation("history", startedAt, retErr)
+	}()
 	if q == nil || q.history == nil {
 		return MessagePage{}, fmt.Errorf("%w: invalid query adapter", ErrInvalidQuery)
 	}
@@ -243,6 +254,22 @@ func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryReque
 		}
 	}
 	return page, nil
+}
+
+func (q *QueryClient) observeOperation(operation string, startedAt time.Time, err error) {
+	if q == nil {
+		return
+	}
+	outcome, kind, retryAfter := eventOutcome(err)
+	observe(q.observer, Event{
+		Type:        EventTypeOperation,
+		IdentityKey: q.identityKey,
+		Operation:   operation,
+		Outcome:     outcome,
+		ErrorKind:   kind,
+		Duration:    time.Since(startedAt),
+		RetryAfter:  retryAfter,
+	})
 }
 
 func (q *QueryClient) acquire(ctx context.Context) error {
