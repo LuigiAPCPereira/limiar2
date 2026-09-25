@@ -40,6 +40,7 @@ type BootstrapConfig struct {
 	Coordinator        *AuthorizationCoordinator
 	ReplaceExisting    bool
 	CommitTimeout      time.Duration
+	Observer           Observer
 }
 
 func (c BootstrapConfig) validate() error {
@@ -267,7 +268,7 @@ func (b *Bootstrapper) Code(
 }
 
 func (b *Bootstrapper) prepare(ctx context.Context) (*stagingSessionStorage, bool, error) {
-	raw, err := b.cfg.SessionStorage.LoadSession(ctx)
+	raw, err := b.storage().LoadSession(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("telegram bootstrap: inspect existing credential: %w", err)
 	}
@@ -307,10 +308,14 @@ func (b *Bootstrapper) commit(ctx context.Context, staging *stagingSessionStorag
 
 	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), b.cfg.CommitTimeout)
 	defer cancel()
-	if err := b.cfg.SessionStorage.StoreSession(commitCtx, data); err != nil {
+	if err := b.storage().StoreSession(commitCtx, data); err != nil {
 		return fmt.Errorf("telegram bootstrap: commit authenticated session: %w", err)
 	}
 	return nil
+}
+
+func (b *Bootstrapper) storage() gotdtelegram.SessionStorage {
+	return observeSessionStorage(b.cfg.SessionStorage, b.cfg.IdentityKey, b.cfg.Observer)
 }
 
 type existingAccountAuthAdapter struct {
