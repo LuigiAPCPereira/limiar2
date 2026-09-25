@@ -54,7 +54,8 @@ type Event struct {
 
 // Observer receives synchronous, low-cardinality events.
 //
-// Implementations must be fast and non-blocking. The Telegram boundary does not
+// Implementations must be fast and non-blocking. Observer panics are isolated
+// so telemetry cannot take down the Telegram boundary. The boundary does not
 // expose raw errors through this hook to prevent accidental secret/payload
 // logging.
 type Observer func(Event)
@@ -63,6 +64,9 @@ func observe(observer Observer, event Event) {
 	if observer == nil {
 		return
 	}
+	defer func() {
+		_ = recover()
+	}()
 	observer(event)
 }
 
