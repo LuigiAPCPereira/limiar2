@@ -180,3 +180,12 @@ O Implementation Gate de L3-002 foi considerado satisfeito para a primeira fatia
 Foi implementado `internal/telegram/sessionstore` para o escopo Linux/single-host/single-process. O storage possui o mesmo method set de `gotd/session.Storage` sem criar interface espelho, trata ausência física separadamente de corrupção/I/O, publica por temp privado + write completo + fsync + rename + dir fsync, valida owner/perms, rejeita symlink/non-regular e coordena writers intra-processo por canonical path.
 
 Validação observada no harness local: `go test -count=10 ./...` PASS, `go vet ./...` PASS e `go test -race -count=1 ./...` PASS. O ambiente local usa Go 1.23.2 e não possui rede para baixar Go 1.27.1/gotd; portanto integração exata com o pin real e govulncheck continuam UNKNOWN. Os blobs remotos dos dois arquivos são idênticos aos blobs dos arquivos testados localmente.
+
+
+## 2026-09-24/25 — Continuação L3-002: runtime, bootstrap, query e observabilidade
+
+A branch `feat/limiar3-l3-002-telegram-foundation` foi reconciliada no HEAD observado `65a7e42d87ec2db8b6346800a42324ffefde219e` antes desta entrada. Além do hardened session storage já registrado, a implementação agora inclui owner único por `TelegramAuthorizationIdentity`, bootstrap administrativo staged (QR-first e code/2FA hash fallback), runtime steady-state fail-closed com semantic readiness/same-self, `TelegramQuery` read-only bounded (`ResolvePeer` + `History`), cache de peers memory-only bounded, cursor history com message ID + date, error taxonomy/FLOOD_WAIT e observabilidade low-cardinality sem payload/raw error.
+
+Foi feita verificação estática das APIs efetivamente usadas contra a tag upstream `gotd/td v0.162.0`: `session.Storage`, `auth.Flow`, `PasswordHashProvider`/`PasswordWith`, `qrlogin.OnLoginToken`/`QR.Auth`, `telegram/message/peer`, `telegram/query/messages` e `Client.API`. Nenhuma incompatibilidade material foi encontrada nessa auditoria estática.
+
+O gate exato de toolchain continua **UNKNOWN**: o GitHub Actions permanece indisponível por horas conforme informado pelo mantenedor e a tentativa local de obter Go 1.27.1 falhou por bloqueio de rede. Não foram executados `go build/vet/test/race/govulncheck` no Go 1.27.1, nem login Telegram real, OTP/2FA, bootstrap/restart, first RPC, reconnect, clock-skew ou cross-DC. Portanto L3-002 permanece **EM ANDAMENTO**, sem merge/deploy e sem declaração de production-ready.
