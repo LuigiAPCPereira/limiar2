@@ -189,3 +189,14 @@ A branch `feat/limiar3-l3-002-telegram-foundation` foi reconciliada no HEAD obse
 Foi feita verificação estática das APIs efetivamente usadas contra a tag upstream `gotd/td v0.162.0`: `session.Storage`, `auth.Flow`, `PasswordHashProvider`/`PasswordWith`, `qrlogin.OnLoginToken`/`QR.Auth`, `telegram/message/peer`, `telegram/query/messages` e `Client.API`. Nenhuma incompatibilidade material foi encontrada nessa auditoria estática.
 
 O gate exato de toolchain continua **UNKNOWN**: o GitHub Actions permanece indisponível por horas conforme informado pelo mantenedor e a tentativa local de obter Go 1.27.1 falhou por bloqueio de rede. Não foram executados `go build/vet/test/race/govulncheck` no Go 1.27.1, nem login Telegram real, OTP/2FA, bootstrap/restart, first RPC, reconnect, clock-skew ou cross-DC. Portanto L3-002 permanece **EM ANDAMENTO**, sem merge/deploy e sem declaração de production-ready.
+
+
+## 2026-09-24 — L3-002: observabilidade segura e harness real de restart/reuse
+
+A implementação foi refinada sem ampliar o boundary arquitetural. Foram adicionados eventos low-cardinality opcionais para lifecycle do runtime, operações `ResolvePeer`/`History` e `session_load`/`session_store`. Os eventos contêm somente alias local da authorization identity, operação/state, outcome, classe semântica, duração e `retry_after`; não carregam `error` bruto, PeerRef, self user ID, payload de mensagem, session bytes, phone, OTP, 2FA ou API hash. Panic do observer é isolado para não derrubar o Telegram boundary.
+
+Runtime e bootstrap agora podem observar o storage por wrapper interno que preserva o contract `gotd/session.Storage`; nenhuma nova authority/storage foi criada.
+
+Foi criado `internal/telegram/runtime_real_linux_test.go` com build tag `linux && telegram_real`. Esse gate é **opt-in** e nunca roda no CI normal. Ele não faz bootstrap nem solicita credencial: exige uma sessão de teste/disposable já provisionada via environment do operador, inicia **dois subprocessos distintos** sobre o mesmo hardened session file e verifica semantic readiness/same-self; quando `LIMIAR_TELEGRAM_PEER_REF` está configurado, cada subprocesso também executa `ResolvePeer + History`. Saídas de erro são sanitizadas e nenhum segredo é colocado em fixture.
+
+Com isso, a implementação de código prevista para a fundação L3-002 está substancialmente fechada. Permanecem como Evidence **UNKNOWN**, não PASS: compilação/testes/race/vuln no Go 1.27.1, bootstrap real, restart/reuse real, first RPC real, reconnect, clock-skew e cross-DC. Não houve login Telegram, OTP/2FA real, credencial, merge ou deploy nesta execução.
