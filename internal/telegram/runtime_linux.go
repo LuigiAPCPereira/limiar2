@@ -173,6 +173,9 @@ func preflightPersistedSession(ctx context.Context, storage gotdtelegram.Session
 	if err != nil {
 		return fmt.Errorf("telegram runtime: load persisted authorization: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if len(raw) == 0 {
 		return newRebootstrapError(ErrSessionAbsent)
 	}
@@ -222,8 +225,11 @@ type staticSessionStorage struct {
 	data []byte
 }
 
-func (s staticSessionStorage) LoadSession(context.Context) ([]byte, error) {
-	return s.data, nil
+func (s staticSessionStorage) LoadSession(ctx context.Context) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return append([]byte(nil), s.data...), nil
 }
 
 func (staticSessionStorage) StoreSession(context.Context, []byte) error {
