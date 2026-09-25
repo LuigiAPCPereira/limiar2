@@ -209,3 +209,17 @@ Foi revalidada a direção documental de MCP detachable e feita pesquisa externa
 Foi criado L3 ADR 004 como **Proposed**, não Accepted. A Proposal define: SDK oficial; private Streamable HTTP stateless; tunnel opcional/externo; read scope por targets nomeados separado da TelegramAuthorizationIdentity e de acquisition subscription; primeira tool history read-only; mensagem Telegram tratada como dado não confiável; sem OAuth próprio, endpoint público, write tool ou SQLite/Evidence no primeiro slice.
 
 Nenhuma dependência MCP foi adicionada e nenhum server/tool/tunnel/app foi criado. A implementação L3-003 aguarda autoridade explícita do mantenedor para promover/revisar L3 ADR 004.
+
+
+## 2026-09-24 — L3-002: revisão final de hardening antes dos gates reais
+
+A revisão estática final encontrou e corrigiu quatro detalhes concretos sem ampliar a arquitetura:
+
+- conflito de ownership agora **não consome** o estado one-shot do Bootstrapper; a ordem é acquire lease → CAS started → operação, permitindo retry administrativo após `ErrAuthorizationInUse`;
+- o preflight de sessão verifica cancellation após o load e o storage estático usado pelo `session.Loader` devolve cópia dos bytes, preservando ownership local;
+- `TelegramQuery` falha fechado em `query/messages.Elem` com mensagem nil ou message ID não positivo, em vez de panicar ou materializar um DTO inválido;
+- history possui teto técnico `100`: tanto o query adapter quanto `RuntimeConfig` rejeitam configuração maior, além do limite específico escolhido pelo deployment.
+
+Foram adicionados testes de regressão para esses casos. A justificativa do teto de 100 foi confrontada com a documentação oficial de paginação do Telegram e com o alerta upstream do gotd de que batch sizes excessivos podem produzir resultados incorretos sem erro.
+
+Nenhum desses hardenings altera as Decisions L3 ADR 001/002. O estado permanece **IMPLEMENTADA NO CÓDIGO / NÃO VALIDADA EM INTEGRAÇÃO REAL** porque Go 1.27.1 + build/vet/test/race/govulncheck e os experimentos Telegram reais ainda não puderam ser executados.
