@@ -187,3 +187,86 @@ func TestObserverPanicDoesNotBreakTelegramBoundary(t *testing.T) {
 		panic("telemetry backend failed")
 	}, Event{Type: EventTypeRuntimeState, State: RuntimeStateStarting})
 }
+
+
+type observerSessionStorage struct {
+	data     []byte
+	loadErr  error
+	storeErr error
+}
+
+func (s *observerSessionStorage) LoadSession(context.Context) ([]byte, error) {
+	if s.loadErr != nil {
+		return nil, s.loadErr
+	}
+	return append([]byte(nil), s.data...), nil
+}
+
+func (s *observerSessionStorage) StoreSession(_ context.Context, data []byte) error {
+	if s.storeErr != nil {
+		return s.storeErr
+	}
+	s.data = append(s.data[:0], data...)
+	return nil
+}
+
+func TestObservedSessionStorageNeverExposesBytesOrRawError(t *testing.T) {
+	t.Parallel()
+
+	const (
+		sessionSecret = "opaque-auth-key-material"
+		rawError      = "filesystem-path-and-sensitive-details"
+	)
+	base := &observerSessionStorage{data: []byte(sessionSecret)}
+	var events []Event
+	storage := observeSessionStorage(base, "primary", func(event Event) {
+		events = append(events, event)
+	})
+
+	got, err := storage.LoadSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != sessionSecret {
+		t.Fatalf("LoadSession()=%q", got)
+	}
+	if err := storage.StoreSession(context.Background(), []byte(sessionSecret+"-new")); err != nil {
+		t.Fatal(err)
+	}
+
+	base.loadErr = errors.New(rawError)
+	if _, err := storage.LoadSession(context.Background()); err == nil {
+		t.Fatal("LoadSession() error=nil, want failure")
+	}
+
+	if len(events) != 3 {
+		t.Fatalf("events=%+v, want load/store/failed-load", events)
+	}
+	if events[0].Operation != "session_load" ||
+		events[1].Operation != "session_store" ||
+		events[2].Operation != "session_load" {
+		t.Fatalf("operations=%+v", events)
+	}
+	if events[2].Outcome != EventOutcomeError {
+		t.Fatalf("failed load outcome=%q, want error", events[2].Outcome)
+	}
+	for _, event := range events {
+		rendered := fmt.Sprintf("%+v", event)
+		if strings.Contains(rendered, sessionSecret) || strings.Contains(rendered, rawError) {
+			t.Fatalf("session observer leaked sensitive material: %s", rendered)
+		}
+	}
+}
+
+func TestEventOutcomePreservesCancellationCategories(t *testing.T) {
+	t.Parallel()
+
+	outcome, kind, retry := eventOutcome(context.Canceled)
+	if outcome != EventOutcomeCanceled || kind != "" || retry != 0 {
+		t.Fatalf("canceled=(%q,%q,%s)", outcome, kind, retry)
+	}
+	outcome, kind, retry = eventOutcome(context.DeadlineExceeded)
+	if outcome != EventOutcomeDeadline || kind != "" || retry != 0 {
+		t.Fatalf("deadline=(%q,%q,%s)", outcome, kind, retry)
+	}
+}
