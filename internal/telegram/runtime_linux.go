@@ -55,6 +55,7 @@ type RuntimeConfig struct {
 	MaxConcurrentQueries int
 	MaxHistoryPageSize   int
 	MaxResolvedPeers     int
+	Observer             Observer
 }
 
 func (c RuntimeConfig) validate() error {
@@ -113,6 +114,7 @@ type Runtime struct {
 	status           statusFunc
 	preflight        preflightFunc
 	query            TelegramQuery
+	observer         Observer
 	started          atomic.Bool
 }
 
@@ -130,6 +132,8 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("telegram runtime: construct query capability: %w", err)
 	}
+	queryClient.observer = cfg.Observer
+	queryClient.identityKey = cfg.Identity.Key
 
 	return &Runtime{
 		identity:         cfg.Identity,
@@ -140,7 +144,8 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		preflight: func(ctx context.Context) error {
 			return preflightPersistedSession(ctx, cfg.SessionStorage)
 		},
-		query: queryClient,
+		query:    queryClient,
+		observer: cfg.Observer,
 		status: func(ctx context.Context) (authorizationStatus, error) {
 			status, err := client.Auth().Status(ctx)
 			if err != nil {
@@ -235,7 +240,7 @@ func (r *Runtime) Identity() AuthorizationIdentity {
 // serve while the client lifecycle is active. Returning from serve stops the
 // gotd client. A Runtime is intentionally one-shot; construct a new one after
 // shutdown/restart.
-func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilities) error) error {
+func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilities) error) (retErr error) {
 	if r == nil || r.run == nil || r.status == nil || r.preflight == nil || r.query == nil || r.coordinator == nil || r.readinessTimeout <= 0 {
 		return fmt.Errorf("%w: invalid runtime", ErrInvalidRuntimeConfig)
 	}
@@ -251,6 +256,29 @@ func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilit
 		return ErrAlreadyStarted
 	}
 
+	startedAt := time.Now()
+	observe(r.observer, Event{
+		Type:        EventTypeRuntimeState,
+		IdentityKey: r.identity.Key,
+		State:       RuntimeStateStarting,
+	})
+	defer func() {
+		state := RuntimeStateStopped
+		if retErr != nil {
+			state = RuntimeStateFailed
+		}
+		outcome, kind, retryAfter := eventOutcome(retErr)
+		observe(r.observer, Event{
+			Type:        EventTypeRuntimeState,
+			IdentityKey: r.identity.Key,
+			State:       state,
+			Outcome:     outcome,
+			ErrorKind:   kind,
+			Duration:    time.Since(startedAt),
+			RetryAfter:  retryAfter,
+		})
+	}()
+
 	preflightCtx, cancel := context.WithTimeout(ctx, r.readinessTimeout)
 	preflightErr := r.preflight(preflightCtx)
 	cancel()
@@ -260,7 +288,7 @@ func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilit
 
 	callbackResult := make(chan error, 1)
 	runErr := r.run(ctx, func(runCtx context.Context) error {
-		err := r.runReady(runCtx, serve)
+		err := r.runReady(runCtx, startedAt, serve)
 		callbackResult <- err
 		return err
 	})
@@ -281,7 +309,7 @@ func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilit
 	return nil
 }
 
-func (r *Runtime) runReady(ctx context.Context, serve func(context.Context, Capabilities) error) error {
+func (r *Runtime) runReady(ctx context.Context, startedAt time.Time, serve func(context.Context, Capabilities) error) error {
 	verifyCtx, cancel := context.WithTimeout(ctx, r.readinessTimeout)
 	defer cancel()
 
@@ -298,6 +326,13 @@ func (r *Runtime) runReady(ctx context.Context, serve func(context.Context, Capa
 	if status.SelfUserID != r.identity.ExpectedSelfUserID {
 		return fmt.Errorf("%w: expected user id %d, got %d", ErrSelfMismatch, r.identity.ExpectedSelfUserID, status.SelfUserID)
 	}
+	observe(r.observer, Event{
+		Type:        EventTypeRuntimeState,
+		IdentityKey: r.identity.Key,
+		State:       RuntimeStateReady,
+		Outcome:     EventOutcomeOK,
+		Duration:    time.Since(startedAt),
+	})
 	if err := serve(ctx, Capabilities{Query: r.query}); err != nil {
 		return fmt.Errorf("telegram runtime: serve ready runtime: %w", err)
 	}
