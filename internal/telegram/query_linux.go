@@ -372,11 +372,15 @@ func messageFromElem(elem querymessages.Elem, fallback PeerKey) (Message, error)
 	if id <= 0 {
 		return Message{}, fmt.Errorf("%w: non-positive message id", ErrInvalidUpstreamMessage)
 	}
+	date := elem.Msg.GetDate()
+	if date <= 0 {
+		return Message{}, fmt.Errorf("%w: non-positive message date", ErrInvalidUpstreamMessage)
+	}
 
 	result := Message{
 		ID:           id,
 		Peer:         fallback,
-		Date:         telegramTimestamp(elem.Msg.GetDate()),
+		Date:         telegramTimestamp(date),
 		Kind:         MessageKindUnknown,
 		UpstreamType: elem.Msg.TypeName(),
 	}
