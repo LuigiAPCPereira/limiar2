@@ -29,6 +29,7 @@ func TestNewRuntimeValidatesConfig(t *testing.T) {
 		{"timeout", func(c *RuntimeConfig) { c.ReadinessTimeout = 0 }},
 		{"query concurrency", func(c *RuntimeConfig) { c.MaxConcurrentQueries = 0 }},
 		{"history page size", func(c *RuntimeConfig) { c.MaxHistoryPageSize = 0 }},
+		{"history page size above Telegram limit", func(c *RuntimeConfig) { c.MaxHistoryPageSize = maxTelegramHistoryPageSize + 1 }},
 		{"resolved peers", func(c *RuntimeConfig) { c.MaxResolvedPeers = 0 }},
 	}
 	for _, tt := range tests {
