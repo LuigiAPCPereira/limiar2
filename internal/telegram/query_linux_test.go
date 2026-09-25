@@ -389,3 +389,45 @@ func TestQueryReResolveUpdatesPeerWithoutGrowingCache(t *testing.T) {
 		t.Fatalf("access hash=%d, want refreshed value 2", got.AccessHash)
 	}
 }
+
+
+func TestQueryHistoryRejectsInvalidUpstreamMessages(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		msg  tg.NotEmptyMessage
+	}{
+		{name: "nil message", msg: nil},
+		{name: "non-positive id", msg: &tg.Message{ID: 0, Date: 1_700_000_000}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := newQueryClientWithFuncs(
+				1,
+				10,
+				8,
+				func(context.Context, string) (tg.InputPeerClass, error) {
+					return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 77}, nil
+				},
+				func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) {
+					return []querymessages.Elem{{
+						Msg:  tt.msg,
+						Peer: &tg.InputPeerChannel{ChannelID: 42, AccessHash: 77},
+					}}, nil
+				},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			desc, err := q.ResolvePeer(context.Background(), PeerRef{Value: "offers"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 1}); !errors.Is(err, ErrInvalidUpstreamMessage) {
+				t.Fatalf("History() error=%v, want ErrInvalidUpstreamMessage", err)
+			}
+		})
+	}
+}
