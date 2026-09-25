@@ -400,6 +400,7 @@ func TestQueryHistoryRejectsInvalidUpstreamMessages(t *testing.T) {
 	}{
 		{name: "nil message", msg: nil},
 		{name: "non-positive id", msg: &tg.Message{ID: 0, Date: 1_700_000_000}},
+		{name: "non-positive date", msg: &tg.Message{ID: 1, Date: 0}},
 	}
 
 	for _, tt := range tests {
