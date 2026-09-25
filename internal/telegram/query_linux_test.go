@@ -431,3 +431,23 @@ func TestQueryHistoryRejectsInvalidUpstreamMessages(t *testing.T) {
 		})
 	}
 }
+
+
+func TestQueryConstructorRejectsPageSizeAboveTelegramLimit(t *testing.T) {
+	t.Parallel()
+
+	_, err := newQueryClientWithFuncs(
+		1,
+		maxTelegramHistoryPageSize+1,
+		8,
+		func(context.Context, string) (tg.InputPeerClass, error) {
+			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 7}, nil
+		},
+		func(context.Context, tg.InputPeerClass, int, historyOffset) ([]querymessages.Elem, error) {
+			return nil, nil
+		},
+	)
+	if !errors.Is(err, ErrInvalidQuery) {
+		t.Fatalf("newQueryClientWithFuncs() error=%v, want ErrInvalidQuery", err)
+	}
+}
