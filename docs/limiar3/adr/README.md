@@ -26,6 +26,7 @@ Aplicam-se integralmente `AGENTS.md` e `docs/DOCUMENTATION_AND_CONTINUITY.md`:
 | [001](001-hardened-telegram-session-storage.md) | Credential/session storage hardened em arquivo local | **Accepted** | `baa626b59ec21d36f0dbde9a8a1fb3bbb5a4a2a6` |
 | [002](002-telegram-authorization-runtime.md) | Telegram authorization identity, runtime ownership e lifecycle | **Accepted** | `baa626b59ec21d36f0dbde9a8a1fb3bbb5a4a2a6` |
 | [003](003-repository-topology-and-legacy-containment.md) | Repository topology and legacy containment | **Accepted** | `70dcd4982b90a26fa6eb7f722a679537f54bb1e0` |
+| [004](004-mcp-telegram-realtime-boundary.md) | MCP Telegram realtime: SDK oficial, transporte privado e read scope | **Proposed** | — |
 
 ## Relação com ADRs históricos
 
