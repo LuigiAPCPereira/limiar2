@@ -20,11 +20,11 @@ func TestRuntimeObserverEmitsLifecycleWithoutSecrets(t *testing.T) {
 
 	var events []Event
 	r := newRuntimeForTest(
-		AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42},
+		AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 998877665544},
 		time.Second,
 		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
 		func(context.Context) (authorizationStatus, error) {
-			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
+			return authorizationStatus{Authorized: true, SelfUserID: 998877665544}, nil
 		},
 	)
 	r.observer = func(event Event) {
@@ -48,7 +48,7 @@ func TestRuntimeObserverEmitsLifecycleWithoutSecrets(t *testing.T) {
 			t.Fatalf("IdentityKey=%q, want primary", event.IdentityKey)
 		}
 		rendered := fmt.Sprintf("%+v", event)
-		if strings.Contains(rendered, "42") {
+		if strings.Contains(rendered, "998877665544") {
 			t.Fatalf("event leaked Telegram self user id: %s", rendered)
 		}
 	}
