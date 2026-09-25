@@ -124,8 +124,9 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		return nil, err
 	}
 
+	sessionStorage := observeSessionStorage(cfg.SessionStorage, cfg.Identity.Key, cfg.Observer)
 	client := gotdtelegram.NewClient(cfg.AppID, cfg.AppHash, gotdtelegram.Options{
-		SessionStorage: cfg.SessionStorage,
+		SessionStorage: sessionStorage,
 		NoUpdates:      true,
 	})
 	queryClient, err := newQueryClient(client.API(), cfg.MaxConcurrentQueries, cfg.MaxHistoryPageSize, cfg.MaxResolvedPeers)
@@ -142,7 +143,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		readinessTimeout: cfg.ReadinessTimeout,
 		run:              client.Run,
 		preflight: func(ctx context.Context) error {
-			return preflightPersistedSession(ctx, cfg.SessionStorage)
+			return preflightPersistedSession(ctx, sessionStorage)
 		},
 		query:    queryClient,
 		observer: cfg.Observer,
