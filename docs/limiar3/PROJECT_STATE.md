@@ -8,7 +8,7 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 ## Tarefas e estado
 
-**Tarefa ativa:** `L3-002` — Telegram authorization/session/runtime foundation. Em 2026-09-24 o mantenedor autorizou continuar apesar da indisponibilidade conhecida de horas do GitHub Actions. O Implementation Gate foi satisfeito: escopo/Decisions/dependências/ownership/riscos estão identificados e existe caminho de verificação local proporcional. A primeira fatia funcional implementa o hardened session storage do L3 ADR 001 em `internal/telegram/sessionstore`.
+**Tarefa ativa:** `L3-002` — Telegram authorization/session/runtime foundation. Em 2026-09-24 o mantenedor autorizou continuar apesar da indisponibilidade conhecida de horas do GitHub Actions. O Implementation Gate foi satisfeito. A branch já contém a fundação funcional decidida pelos L3 ADR 001/002: hardened session storage, ownership por authorization identity, bootstrap administrativo staged, runtime fail-closed/semantic readiness, primeira `TelegramQuery`, tradução semântica de erros, bounded admission/cache e observabilidade segura. O estado continua **EM ANDAMENTO** porque os gates exatos Go 1.27.1 e os experimentos com Telegram real não foram executados.
 
 **Evidência do DNA:** na execução de L3-BASE-001, a fonte integral disponível no Project foi verificada localmente: 37.531 bytes, 2.171 LF e SHA-256 `c19c5d97f8e42b311d6c15440e2e9f58cec64fadf1a48b9575e1f2e4dba0e373`, exatamente o hash esperado documentado. O arquivo arquivado na branch permanece `docs/limiar3/ENGINEERING_DNA_ORIGINAL.md.gz.b64`, Git blob `ceafec243be87ae28ee2d9658e3912831fc55368`. Isso confirma a cópia do Project contra a identidade canônica conhecida; não implica sincronização automática em outros ambientes. `ENGINEERING_GUIDE.md` e root `ENGINEERING_DNA.md` continuam resumos/entradas. Protocol Project SHA-256 `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`, confirmado novamente nesta execução em 33.162 bytes / 247 LF; a branch mantém o blob Git `78b2e86564fb287886f9df065fdb727b20c52727`; branch herda `AGENTS.md` e protocolo v2 do PR #214, cujo Adoption Gate permanece **PARCIAL**.
 
@@ -18,11 +18,11 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 **L3-001C — stop condition atingida:** [L3_001C_GOTD_UPSTREAM_AUDIT.md](L3_001C_GOTD_UPSTREAM_AUDIT.md) conclui que não há blocker upstream para iniciar L3-002 e que não é necessária nova pesquisa ampla de fundação. A extensão mínima proposta é hardened `session.Storage`, runtime ownership/readiness, TelegramQuery adapter, error translation e bounded admission; gotd permanece owner de reconnect/pools/migration/RPC/MTProto/query/media machinery.
 
-**Próxima ação:** continuar `L3-002` na mesma branch empilhada sobre o repository rebaseline: adicionar o pin/integração real de `github.com/gotd/td v0.162.0`, `TelegramAuthorizationIdentity` e owner/lifecycle mínimo do runtime, sem login real. GitHub Actions permanece um canal de validação indisponível por limite de horas reportado pelo mantenedor; não bloquear desenvolvimento por isso e não declarar os gates exatos Go 1.27.1/govulncheck como executados. Login Telegram, OTP/2FA, credenciais e deploy continuam fora do escopo. PFS, peer persistence, FLOOD_WAIT UX, updates/recovery e media ficam para suas fatias. Não abrir L3-001D sem dúvida material nova.
+**Próxima ação:** fechar os gates restantes de `L3-002` quando existir um canal executável: `go build/vet/test/race/govulncheck` com Go 1.27.1 + gotd v0.162.0 e, em ambiente explicitamente autorizado, bootstrap → persist → shutdown → novo processo → restore/same-self → primeira query, seguido dos smokes estreitos de reconnect, clock-skew/lack-of-progress e cross-DC. Até esses gates existirem, não declarar L3-002 `validada` nem `production-ready`. Não abrir L3-001D sem nova dúvida material; PFS, persistent peer state, updates/recovery e media continuam deferred.
 
 ## Restrições e desconhecidos
 
-ADRs históricos 021–024 permanecem conforme registry da rebaseline e não foram promovidos; os ADRs exclusivos do Limiar 3 têm registry próprio em `docs/limiar3/adr/`, com L3 ADR 001/002 Accepted; EXP-019 só prova harness Unix/intra-processo, não runtime; `legacy/limiar2/internal/storage/sqlite` + PR #211 são implementação parcial herdada, não Limiar 3.0 integrado. Imagens têm falha relatada, causa não reproduzida. O root já contém a primeira implementação funcional L3: `internal/telegram/sessionstore`. O ambiente local disponível possui Go 1.23.2, então a validação exata no toolchain 1.27.1 permanece UNKNOWN. Para a fatia de storage, um módulo de harness equivalente em Go 1.23.2 executou `go test -count=10`, `go vet` e `go test -race` com PASS; os Git blob SHAs dos arquivos testados coincidem com os blobs remotos. Telegram/MCP não foram conectados; não houve credenciais, PR, merge ou deploy. Decisão final de diretórios, processo, sessão, identidade do consumidor e integração ChatGPT fica para investigação/autoridade apropriada; sem esquema/ID fictício.
+ADRs históricos 021–024 permanecem conforme registry da rebaseline e não foram promovidos; os ADRs exclusivos do Limiar 3 têm registry próprio em `docs/limiar3/adr/`, com L3 ADR 001/002 Accepted; EXP-019 só prova harness Unix/intra-processo, não runtime; `legacy/limiar2/internal/storage/sqlite` + PR #211 são implementação parcial herdada, não Limiar 3.0 integrado. Imagens têm falha relatada, causa não reproduzida. O root já contém a fundação funcional L3-002 sob `internal/telegram/`: `sessionstore`, ownership, bootstrap, runtime, query, errors e observability. O ambiente local disponível possui Go 1.23.2; tentativa de obter Go 1.27.1 via toolchain automático falhou por bloqueio de rede, portanto a validação exata permanece UNKNOWN. Para a fatia de storage, um módulo de harness equivalente em Go 1.23.2 executou `go test -count=10`, `go vet` e `go test -race` com PASS; os Git blob SHAs dos arquivos testados coincidem com os blobs remotos. As APIs usadas por runtime/bootstrap/query foram confrontadas com as fontes upstream de gotd v0.162.0 (`session.Storage`, `auth.Flow`, `PasswordHashProvider`/`PasswordWith`, `qrlogin.OnLoginToken`/`QR.Auth`, `telegram/message/peer`, `telegram/query/messages`, `Client.API`). Isso é verificação estática de compatibilidade, não build nem integração. Telegram/MCP não foram conectados; não houve credenciais, PR, merge ou deploy. Decisão final de diretórios, processo, sessão, identidade do consumidor e integração ChatGPT fica para investigação/autoridade apropriada; sem esquema/ID fictício.
 
 **Estado editorial:** arquivos documentais criados; conferir reflinks, presença e compare final da branch antes de declarar L3-DOC-001 validada. Engineering DNA integral compactado e blob verificados, formato Markdown integral na raiz permanece não disponibilizado. A inicialização do Limiar 3.0 não conclui adoção v2 do legado. Atualizar checkpoint apenas com fatos e task IDs, não com inferências de CI antigo.
 
@@ -101,3 +101,25 @@ Primeira fatia implementada:
 - bytes da sessão nunca entram em erros.
 
 Validação local proporcional: `go test -count=10 ./...`, `go vet ./...` e `go test -race -count=1 ./...` PASS em harness Go 1.23.2 sem dependência externa. Isso valida a lógica stdlib e concorrência, mas **não** substitui o gate exato Go 1.27.1 + gotd real + govulncheck.
+
+
+## Checkpoint L3-002 — fundação Telegram implementada
+
+**HEAD observado antes deste checkpoint:** `399f2465af38b64ea6505f0386982c4faf19ddef`. O SHA muda com os próprios commits documentais deste checkpoint; revalidar a ref antes de usar como base de implementação.
+
+| Gate / componente | Estado | Evidência atual |
+| --- | --- | --- |
+| Go 1.27.1 + gotd v0.162.0 pinados | **Implementado** | root `go.mod` / `go.sum` |
+| Hardened credential/session storage | **Implementado; validação local parcial PASS** | testes/fault injection; harness Go 1.23.2 com test/vet/race PASS |
+| Owner único por authorization identity | **Implementado** | `AuthorizationCoordinator`; runtime e bootstrap compartilham lease |
+| Bootstrap explícito | **Implementado, não integrado com conta real** | QR-first; code/2FA fallback via SRP hash; staging antes do commit; replacement exige self binding |
+| Runtime steady-state | **Implementado, não integrado com Telegram real** | preflight; razões de rebootstrap; `Auth().Status`; same-self; capability só após readiness |
+| `TelegramQuery` read-only | **Implementado, não integrado com Telegram real** | `ResolvePeer` + `History`; limits explícitos; cache de peers bounded/memory-only; cursor ID+date; sem `tg.*` no contract |
+| Error taxonomy / FLOOD_WAIT | **Implementado** | cancellation preservada; unauthorized/peer/access/flood/transient/internal |
+| Observabilidade segura | **Implementado** | eventos low-cardinality; sem session/OTP/password/API hash/payload/raw error; panic do observer isolado |
+| API upstream v0.162.0 usada pelo código | **Verificação estática PASS** | signatures confrontadas diretamente com a tag v0.162.0 |
+| Build/vet/test/race/govulncheck em Go 1.27.1 | **UNKNOWN** | Actions sem horas; download local do toolchain bloqueado por rede |
+| Bootstrap → restart/reuse → same-self → first RPC | **UNKNOWN** | requer ambiente/credenciais explicitamente autorizados |
+| Reconnect / clock-skew / cross-DC | **UNKNOWN** | experimentos estreitos ainda não executados |
+
+**Leitura operacional:** a fundação está codificada, mas L3-002 não está encerrada. O bloqueio restante é de validação/integração, não uma justificativa para adicionar mais framework ao Telegram boundary sem Evidence.
