@@ -57,6 +57,8 @@ type PeerDescriptor struct {
 	Key PeerKey
 }
 
+const maxTelegramHistoryPageSize = 100
+
 type HistoryRequest struct {
 	Limit  int
 	Cursor string
@@ -127,8 +129,8 @@ func newQueryClient(raw *tg.Client, maxConcurrent, maxPageSize, maxResolvedPeers
 	if maxConcurrent <= 0 {
 		return nil, fmt.Errorf("%w: max concurrent queries must be positive", ErrInvalidQuery)
 	}
-	if maxPageSize <= 0 {
-		return nil, fmt.Errorf("%w: max history page size must be positive", ErrInvalidQuery)
+	if maxPageSize <= 0 || maxPageSize > maxTelegramHistoryPageSize {
+		return nil, fmt.Errorf("%w: max history page size must be between 1 and %d", ErrInvalidQuery, maxTelegramHistoryPageSize)
 	}
 	if maxResolvedPeers <= 0 {
 		return nil, fmt.Errorf("%w: max resolved peers must be positive", ErrInvalidQuery)
@@ -160,7 +162,12 @@ func newQueryClient(raw *tg.Client, maxConcurrent, maxPageSize, maxResolvedPeers
 }
 
 func newQueryClientWithFuncs(maxConcurrent, maxPageSize, maxResolvedPeers int, resolve resolvePeerFunc, history historyFunc) (*QueryClient, error) {
-	if maxConcurrent <= 0 || maxPageSize <= 0 || maxResolvedPeers <= 0 || resolve == nil || history == nil {
+	if maxConcurrent <= 0 ||
+		maxPageSize <= 0 ||
+		maxPageSize > maxTelegramHistoryPageSize ||
+		maxResolvedPeers <= 0 ||
+		resolve == nil ||
+		history == nil {
 		return nil, fmt.Errorf("%w: invalid query adapter configuration", ErrInvalidQuery)
 	}
 	return &QueryClient{
