@@ -52,6 +52,7 @@ func Open(ctx context.Context, dbPath string, log logger.Logger) (*DB, error) {
 		return nil, fmt.Errorf("storage: chmod %q: %w", dbPath, err)
 	}
 
+
 	log.Info("🔌 Abrindo banco", "caminho", dbPath, "driver", driverName)
 	conn, err := sql.Open(driverName, dbPath)
 	if err != nil {
