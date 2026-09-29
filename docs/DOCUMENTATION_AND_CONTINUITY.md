@@ -1,4 +1,4 @@
-# Documentation & Continuity Protocol
+# Protocolo de Documentação e Continuidade
 
 **Versão:** 2.0 — especificação documental; implantação em cada projeto exige verificação separada  
 **Estado:** especificação documental aprovada para edição; adoção em repositórios e agendamentos exige ação separada.  
@@ -227,7 +227,7 @@ Desativar ou modificar tarefa agendada apenas com autorização e ferramenta dis
 
 Para adotar este protocolo em um projeto, comparar instruções/documentos existentes, definir fonte canônica/versionamento, ajustar entradas relevantes, estabelecer checkpoint e verificar acesso. Entregar arquivos em um pacote local **não** significa implantá-los no repositório nem configurar Projects ou agendamentos.
 
-## 16. Definition of Done e encerramento honesto
+## 16. Definição de concluído e encerramento honesto
 
 Distinguir o status da **edição documental do kit** (arquivos criados e verificados), da **adoção por projeto** (Adoption Gate v2 passado) e da **operação integrada** (acesso real de cada ambiente, CI e eventual merge/deploy verificados). Nenhum desses estados implica automaticamente os demais. Para trabalho de produto, critérios do escopo aprovado, validação e integração exigida precisam estar confirmados; interromper o loop quando concluído, sem inventar novas funcionalidades.
 
