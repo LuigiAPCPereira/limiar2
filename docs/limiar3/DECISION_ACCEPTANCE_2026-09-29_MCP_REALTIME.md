@@ -2,7 +2,7 @@
 
 **Data local do mantenedor:** 2026-09-29  
 **Escopo:** Limiar 3.0 — L3-003 / MCP Telegram realtime.  
-**Decision candidata aceita:** `docs/limiar3/adr/004-mcp-telegram-realtime-boundary.md` na revisão `eb432bc34a88c84dbbd25e1fd1424305203b37b2`.
+**Decision aceita:** `docs/limiar3/adr/004-mcp-telegram-realtime-boundary.md`, incluindo a correção posterior de responsabilidade entre ChatGPT e MCP registrada neste mesmo artefato.
 
 ## Aceitação do mantenedor
 
@@ -22,17 +22,19 @@ A aceitação cobre a Proposal endurecida de transporte/read scope e estabelece 
    - texto/caption, entities, IDs, timestamps, edição, relações de reply/forward/thread/group, metadata de mídia, contadores/flags e outros campos úteis podem ser preservados quando disponíveis;
    - isso **não** autoriza expor session bytes, auth key, OTP/password, API hash, access hashes, `tg.*`, `InputPeer` ou internals MTProto ao consumidor MCP.
 
-3. **Busca nos canais cadastrados**
-   - ChatGPT deve poder buscar termos como "Samsung" dentro do conjunto de targets autorizados;
-   - busca multi-target permanece limitada aos canais cadastrados e não ganha acesso global ao Telegram por conveniência;
-   - interpretação de preço, comparação e resumo podem ser feitos pelo ChatGPT sobre as mensagens encontradas, sem transformar essa inferência em Evidence/Finding canônico automaticamente.
+3. **Busca e análise ficam no ChatGPT, não no MCP**
+   - perguntas como "procure Samsung e compare os menores preços" são dirigidas ao ChatGPT;
+   - o MCP fornece as operações read-only necessárias para o ChatGPT listar targets, obter informações, ler/paginar históricos e recuperar mensagens;
+   - o ChatGPT percorre o corpus autorizado e faz busca textual/semântica, filtragem, interpretação de preço, comparação e resumo;
+   - esta aceitação **não exige uma tool `telegram.search` nem uma engine de busca/comparação comercial dentro do MCP**;
+   - a análise do ChatGPT não se transforma em Evidence/Finding canônico automaticamente.
 
 4. **Perguntas cotidianas pelo ChatGPT**
    - casos de uso aceitos incluem procurar produtos, comparar valores aparentes, recuperar a mensagem original e responder perguntas com base no corpus Telegram acessível via MCP;
    - o MCP Telegram realtime é parte da experiência normal do produto, além de servir à descoberta/modelagem durante o desenvolvimento.
 
 5. **Uso recorrente / monitoramento**
-   - solicitações como "ficar de olho em promoções de celular" podem ser atendidas por chamadas repetidas/polling do consumidor autorizado quando o ambiente ChatGPT/automação conseguir acessar o MCP;
+   - solicitações como "ficar de olho em promoções de celular" podem ser atendidas por chamadas repetidas/polling do ChatGPT/consumidor autorizado sobre as operações read-only quando o ambiente de automação conseguir acessar o MCP;
    - o MCP stateless não ganha scheduler, watch state ou alerting persistente server-side por implicação;
    - watch state server-side futuro exige Decision proporcional porque adiciona estado/lifecycle próprio.
 
@@ -53,7 +55,7 @@ A revisão aceita mantém:
 - ausência de SQLite/Evidence no MCP realtime;
 - ausência de write tools e OAuth próprio na primeira fatia.
 
-A auditoria do `gotd/td v0.162.0` confirmou suporte de busca por peer via `telegram/query/messages.Search(peer)`, com query textual, datas, filtros e paginação. O desenho aceito usa essa direção por target autorizado em vez de busca global irrestrita.
+A correção posterior do mantenedor tornou explícito que busca/filtragem/comparação pertencem ao ChatGPT. O desenho aceito não depende de uma tool MCP de busca semântica/comercial: o MCP fornece acesso read-only fiel e paginável; o consumidor realiza o raciocínio da pergunta.
 
 ## Limites da aceitação
 

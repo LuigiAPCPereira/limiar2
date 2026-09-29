@@ -17,7 +17,6 @@ A superfície MCP é uma boundary estrutural: introduz protocolo/dependência ex
 - Na tag v1.8.0, `StreamableHTTPOptions` mantém proteção de localhost/DNS rebinding habilitada por default, limita request body a 4 MiB por default e exige opt-in explícito de `PropagateRequestCancellation` para vincular o handler ao lifecycle do request HTTP em `2026-07-28`.
 - Na mesma tag, `ServerOptions.Capabilities == nil` preserva por compatibilidade uma capability `logging` default; como logging está deprecated em MCP `2026-07-28`, a primeira superfície Limiar deve anunciar capabilities mínimas explicitamente em vez de herdar esse default histórico.
 - O SDK oficial fornece `mcp.NewServer`, `mcp.AddTool` tipado e `mcp.NewStreamableHTTPHandler`; não há motivo para o Limiar reimplementar JSON-RPC, SSE ou schema generation.
-- O `gotd/td v0.162.0` pinado já fornece `telegram/query/messages.Search(peer)` com query textual, intervalos de data, filtros, paginação e iterator. Para preservar o read scope, busca MCP sobre múltiplos canais cadastrados deve fazer fan-out pelos peers autorizados; `SearchGlobal`/busca fora do conjunto cadastrado não é o default desta Decision.
 - A documentação atual da OpenAI permite conectar MCP privado a ChatGPT/Codex/API através de Secure MCP Tunnel. O `tunnel-client` inicia conexão HTTPS outbound e pode encaminhar para MCP local por HTTP ou stdio; o servidor privado não precisa ganhar listener público.
 - Permissões de tunnel e acesso a developer mode são authorities externas e separadas. Esta Proposal **não assume** que o mantenedor ou um workspace específico já possua essas permissões.
 
@@ -108,12 +107,11 @@ A superfície conceitual pode crescer por slices sem novo ADR enquanto preservar
 - `telegram.targets` — listar targets cadastrados e metadata segura;
 - `telegram.target_info(target)` — informações atuais do target;
 - `telegram.history(target, limit, cursor)` — histórico paginado;
-- `telegram.message(target, message_id)` — detalhe de uma mensagem quando necessário;
-- `telegram.search(query, targets?, limit, cursor, time_range?)` — buscar texto nos targets autorizados, com default "todos os cadastrados".
+- `telegram.message(target, message_id)` — detalhe de uma mensagem quando necessário.
 
 Os nomes finais podem mudar sem novo ADR se a semântica e o scope permanecerem equivalentes.
 
-Para busca multi-target, o adapter valida os targets antes de I/O e faz fan-out bounded por target autorizado usando busca por peer do Telegram/gotd. Não usar busca global irrestrita como atalho que ultrapasse o conjunto cadastrado.
+O MCP não ganha uma operação semântica de busca/comparação comercial por esta Decision. Quando o usuário pede ao ChatGPT algo como "ache Samsung", o **ChatGPT** escolhe os targets cadastrados, percorre/pagina as mensagens necessárias através das operações read-only e faz localmente a filtragem, correlação, comparação e síntese. O MCP permanece responsável por acesso fiel, bounded e autorizado aos dados Telegram — não pelo raciocínio da pergunta.
 
 Fluxo típico:
 
@@ -129,25 +127,25 @@ MCP call
 
 O resultado identifica explicitamente que é **Telegram realtime observation / not Source Evidence**. O adapter não grava SQLite, não chama Source Admission e não faz side effect Telegram.
 
-### 4.1 Consultas analíticas ficam no consumidor
+### 4.1 Busca, filtragem e análise pertencem ao ChatGPT
 
-O MCP retorna dados Telegram; ele não vira engine de regras comerciais.
+O MCP retorna dados Telegram; ele não vira engine de busca semântica nem de regras comerciais.
 
-Exemplos aceitos de uso pelo ChatGPT:
+Exemplos aceitos de perguntas ao ChatGPT:
 
 - "mostre as mensagens recentes de cada canal cadastrado";
 - "procure Samsung nos canais cadastrados";
-- "entre os resultados encontrados, quais aparentam ter os menores preços?";
-- "compare ofertas de celular encontradas recentemente";
+- "entre as mensagens que você encontrou, quais aparentam ter os menores preços?";
+- "compare ofertas de celular recentes";
 - "me mostre a mensagem original e seus metadados".
 
-A busca recupera candidatos; interpretação de preço, comparação, resumo e raciocínio podem ser feitos pelo ChatGPT sobre os dados retornados. Isso não cria Finding/Evidence canônico do Limiar automaticamente.
+Nesses casos, o ChatGPT usa as operações read-only do MCP para obter/paginar o corpus necessário e realiza a busca textual/semântica, filtragem, interpretação de preço, comparação, resumo e raciocínio. O MCP não interpreta a intenção comercial da consulta e não converte a análise do ChatGPT em Finding/Evidence canônico automaticamente.
 
 ### 4.2 Uso recorrente / 'ficar de olho'
 
 O mesmo read surface deve suportar chamadas repetidas por um consumidor autorizado, inclusive automações do ChatGPT quando esse ambiente realmente puder acessar o MCP.
 
-O MCP stateless **não mantém watch state, scheduler ou alerta persistente por conta própria** nesta Decision. Uma solicitação como "ficar de olho em promoções de celular" pode ser executada por polling/orquestração do consumidor sobre `search/history`. Se no futuro o Limiar precisar de subscriptions/watch state server-side, isso introduz lifecycle/estado novo e exige Decision proporcional.
+O MCP stateless **não mantém watch state, scheduler ou alerta persistente por conta própria** nesta Decision. Uma solicitação como "ficar de olho em promoções de celular" pode ser executada por polling/orquestração do ChatGPT/consumidor, que chama `targets/history/message` conforme necessário e mantém sua própria lógica de busca/filtragem. Se no futuro o Limiar precisar de subscriptions/watch state server-side, isso introduz lifecycle/estado novo e exige Decision proporcional.
 
 ### 5. Mensagens são dados não confiáveis
 
@@ -198,16 +196,17 @@ Antes de marcar a primeira fatia L3-003 como validada:
 8. somente tools read-only esperadas aparecem em discovery/list;
 9. target ausente/desabilitado falha antes de invocar `TelegramQuery`;
 10. input não permite peer arbitrário nem access hash;
-11. busca multi-target nunca escapa do conjunto cadastrado e possui fan-out/admission bounded;
-12. history/search/message preservam limit/cursor/time-range/cancellation end-to-end;
-13. erros Telegram são traduzidos sem vazar raw error/payload;
-14. DTOs preservam conteúdo/metadata Telegram necessários ao consumidor sem expor session/auth/access hash/`tg.*`;
-15. mensagens continuam marcadas semanticamente como realtime/not-Evidence;
-16. nenhum import/acesso a SQLite/Evidence no MCP realtime adapter;
-17. teste de payload hostil confirma que conteúdo Telegram não vira comando do servidor;
-18. teste de request cross-origin hostil confirma rejeição antes da tool;
-19. teste de teardown/cancelamento do HTTP adapter;
-20. integração ChatGPT/tunnel somente quando houver autorização/permissões reais; não assumir `tunnel_id`, developer mode ou credenciais.
+11. operações de leitura nunca escapam do conjunto cadastrado/autorizado e possuem admission bounded;
+12. history/message preservam limit/cursor/cancellation end-to-end;
+13. testes demonstram que busca/filtragem/comparação comercial não foram embutidas no MCP como regra de domínio;
+14. erros Telegram são traduzidos sem vazar raw error/payload;
+15. DTOs preservam conteúdo/metadata Telegram necessários ao consumidor sem expor session/auth/access hash/`tg.*`;
+16. mensagens continuam marcadas semanticamente como realtime/not-Evidence;
+17. nenhum import/acesso a SQLite/Evidence no MCP realtime adapter;
+18. teste de payload hostil confirma que conteúdo Telegram não vira comando do servidor;
+19. teste de request cross-origin hostil confirma rejeição antes da tool;
+20. teste de teardown/cancelamento do HTTP adapter;
+21. integração ChatGPT/tunnel somente quando houver autorização/permissões reais; não assumir `tunnel_id`, developer mode ou credenciais.
 
 ## Fora do escopo
 
