@@ -1,6 +1,6 @@
 # AGENTS.md — Constituição de desenvolvimento do Limiar
 
-Authority: Constitutional
+Autoridade: Constitucional
 
 Este arquivo define as regras duráveis para agentes de IA e contribuidores do Limiar.
 Ele não define sozinho a arquitetura concreta, a stack completa, o schema do banco ou
@@ -197,7 +197,7 @@ ADR por padrão. Governança deve ser proporcional ao risco.
 
 ---
 
-## 7. Lifecycle de ADR
+## 7. Ciclo de vida de ADR
 
 Estados permitidos:
 
@@ -412,7 +412,7 @@ Preserve a verdade observável e torne a evolução auditável.
 
 ## 18. Entrada operacional — Agent Development Protocol v2.0
 
-Para desenvolvimento multissessão, ler primeiro este `AGENTS.md` e a fonte do protocolo [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md), na **mesma ref Git** do trabalho. O protocolo v2.0 governa recuperação, adoção, inventário, checkpoint, validação e handoff, sem mudar a ordem de autoridade da seção 2, aceitar ADRs ou conceder permissões. Em 2026-09-29, a fonte canônica na branch foi atualizada com a política explícita de idioma humano pt-BR; o blob atual do protocolo é `5b1cc7900b212ad21a916d30d68ebaacfa06c3f7` (commit `a87398e10d18aee7b3d91c084ec84538ac2a75c4`). A cópia anterior anexada ao ChatGPT Project, cujo SHA-256 medido era `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`, **não deve mais ser presumida idêntica** até nova verificação/sincronização. Não afirmar sincronização automática com Project, Codex ou tarefas agendadas.
+Para desenvolvimento multissessão, ler primeiro este `AGENTS.md` e a fonte do protocolo [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md), na **mesma ref Git** do trabalho. O protocolo v2.0 governa recuperação, adoção, inventário, checkpoint, validação e handoff, sem mudar a ordem de autoridade da seção 2, aceitar ADRs ou conceder permissões. Em 2026-09-29, a fonte canônica na branch foi atualizada com a política explícita de idioma humano pt-BR; o blob atual do protocolo é `7a5e4a39bb13b5e0bb750caba9acc5377ffefc62` (commit `a87398e10d18aee7b3d91c084ec84538ac2a75c4`). A cópia anterior anexada ao ChatGPT Project, cujo SHA-256 medido era `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`, **não deve mais ser presumida idêntica** até nova verificação/sincronização. Não afirmar sincronização automática com Project, Codex ou tarefas agendadas.
 
 ### Mapa documental das nove funções
 
