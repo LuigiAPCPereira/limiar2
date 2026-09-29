@@ -1,6 +1,6 @@
 # AGENTS.md — Constituição de desenvolvimento do Limiar
 
-Authority: Constitutional
+Autoridade: Constitucional
 
 Este arquivo define as regras duráveis para agentes de IA e contribuidores do Limiar.
 Ele não define sozinho a arquitetura concreta, a stack completa, o schema do banco ou
@@ -14,9 +14,23 @@ agente, código existente ou documentação histórica sejam confundidos com aut
 
 ## 1. Idioma
 
-Documentação permanente, ADRs, EvolutionDocs, comentários explicativos e comunicação
-de produto devem ser escritos em Português do Brasil (PT-BR), salvo quando um nome de
-API, identificador técnico ou termo externo exigir sua grafia original.
+Salvo instrução explícita e autorizada do mantenedor em contrário, o idioma humano padrão
+do Limiar é **Português do Brasil (pt-BR)**.
+
+Devem ser produzidos em pt-BR: documentação permanente, ADRs, EvolutionDocs, TASKLIST,
+ROADMAP, checkpoints e relatórios; títulos e descrições de issues/commits/PRs escritos
+pelo agente; comentários e docstrings; textos de interface/CLI; validações, notificações,
+mensagens operacionais e erros destinados ao usuário; logs destinados à leitura humana;
+e textos de testes/fixtures que representem conteúdo exibido pelo produto.
+
+Não traduzir contratos técnicos por estética. Identificadores Go/TypeScript, nomes de
+bibliotecas/frameworks, APIs, campos de payload/schema externo, comandos, flags e nomes
+públicos compatíveis permanecem na grafia exigida pelo código, ecossistema ou contrato.
+**Código idiomático não implica texto humano em inglês.**
+
+Texto legado em outro idioma deve ser migrado por fatias verificáveis quando a área for
+tocada e a mudança puder ser feita sem alterar semântica ou compatibilidade. Não executar
+renomeações massivas de identificadores ou contratos apenas para localizar texto.
 
 ---
 
@@ -183,7 +197,7 @@ ADR por padrão. Governança deve ser proporcional ao risco.
 
 ---
 
-## 7. Lifecycle de ADR
+## 7. Ciclo de vida de ADR
 
 Estados permitidos:
 
@@ -393,3 +407,25 @@ Não confunda Proposal com Decision.
 Não complique antes de demonstrar a necessidade.
 
 Preserve a verdade observável e torne a evolução auditável.
+
+---
+
+## 18. Entrada operacional — Agent Development Protocol v2.0
+
+Para desenvolvimento multissessão, ler primeiro este `AGENTS.md` e a fonte do protocolo [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md), na **mesma ref Git** do trabalho. O protocolo v2.0 governa recuperação, adoção, inventário, checkpoint, validação e handoff, sem mudar a ordem de autoridade da seção 2, aceitar ADRs ou conceder permissões. Em 2026-09-29, a fonte canônica na branch foi atualizada com a política explícita de idioma humano pt-BR; o blob atual do protocolo é `7a5e4a39bb13b5e0bb750caba9acc5377ffefc62` (commit `a87398e10d18aee7b3d91c084ec84538ac2a75c4`). A cópia anterior anexada ao ChatGPT Project, cujo SHA-256 medido era `d078e0b3d4a8f9d4bd21cb0c7c8a3e417cba484981566d801ff8453ac7be1dab`, **não deve mais ser presumida idêntica** até nova verificação/sincronização. Não afirmar sincronização automática com Project, Codex ou tarefas agendadas.
+
+### Mapa documental das nove funções
+
+| Função | Fonte neste repositório | Estado na adoção |
+| --- | --- | --- |
+| Identidade, público e limites | `README.md`, `docs/PRODUCT_BRIEF.md`, `docs/BASELINE.md` | parcial; reconciliar fonte vigente |
+| Requisitos e aceites | `docs/PRODUCT_BRIEF.md`, `docs/CONTEXT.md`, `docs/specs/` e ADRs aplicáveis | parcial; cobertura do escopo ativo a conferir |
+| Arquitetura e contratos | `docs/BASELINE.md`, `docs/ARCHITECTURE.md`, ADRs Accepted | parcial; ADR 018/BASELINE reconciliados, demais contratos por conferir |
+| Decisões duráveis | `docs/adr/README.md`, ADRs Accepted; proposals não são decisões | verificada quanto ao registro |
+| Inventário de tarefas | [`docs/TASKLIST.md`](docs/TASKLIST.md) | inventário de adoção, escopo do produto ainda incompleto |
+| Planejamento e marcos | [`docs/ROADMAP.md`](docs/ROADMAP.md), `docs/CONTEXT.md`, `docs/BASELINE.md` | roadmap de adoção verificado; planejamento global a conferir |
+| Histórico recuperável | `docs/evolution/`, ADRs, PRs e commits | equivalência completa a conferir |
+| Checkpoint/ação | [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) | checkpoint de adoção criado; reconciliar HEAD |
+| Instruções/versão | Este arquivo e [`docs/DOCUMENTATION_AND_CONTINUITY.md`](docs/DOCUMENTATION_AND_CONTINUITY.md) | fonte acessível na branch, integridade comprovada; outros ambientes não verificados |
+
+O relatório com evidências e lacunas é [`docs/ADOPTION_REPORT.md`](docs/ADOPTION_REPORT.md). Nenhum desses links confirma leitura de Codex ou agendamentos; verificar disponibilidade real em cada execução. `docs/TASKLIST.md` não substitui um inventário de todo o escopo ativo enquanto os itens de produto estiverem incompletos. Manter as permissões reais e os gates constitucionais desta Constituição.
