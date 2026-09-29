@@ -27,6 +27,7 @@ Aplicam-se integralmente `AGENTS.md` e `docs/DOCUMENTATION_AND_CONTINUITY.md`:
 | [002](002-telegram-authorization-runtime.md) | Telegram authorization identity, runtime ownership e lifecycle | **Accepted** | `baa626b59ec21d36f0dbde9a8a1fb3bbb5a4a2a6` |
 | [003](003-repository-topology-and-legacy-containment.md) | Repository topology and legacy containment | **Accepted** | `70dcd4982b90a26fa6eb7f722a679537f54bb1e0` |
 | [004](004-mcp-telegram-realtime-boundary.md) | MCP Telegram realtime: SDK oficial, transporte privado e read scope | **Accepted** | `f24c55535560102c3184d0752bf5f78dc2104bdc` |
+| [005](005-platform-agnostic-runtime-and-storage.md) | Runtime, Telegram, MCP e armazenamento agnósticos à plataforma por padrão | **Accepted** | `c940373f46d2a522e3f3c0d74ab72ecaa0f28d1f` |
 
 ## Relação com ADRs históricos
 
