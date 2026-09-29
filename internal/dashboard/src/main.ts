@@ -10,7 +10,7 @@ declare global {
   }
 }
 
-// Make Alpine globally available
+// Disponibiliza o Alpine globalmente.
 window.Alpine = Alpine;
 
 const formatPrice = (cents: number) => {
@@ -26,9 +26,9 @@ const formatDate = (isoStr: string) => {
 const decodePayloadPreview = (payload: string) => {
   try {
     const json = JSON.parse(atob(payload));
-    return json.Message || (json.Updates && json.Updates[0]?.Message?.Message) || 'No preview available';
+    return json.Message || (json.Updates && json.Updates[0]?.Message?.Message) || 'Prévia indisponível';
   } catch (e) {
-    return 'Invalid payload';
+    return 'Payload inválido';
   }
 };
 const getBadgeColor = (type: string) => {
@@ -70,7 +70,7 @@ document.addEventListener('alpine:init', () => {
         this.channels = channels;
         this.processedStats = stats;
       } catch (err) {
-        console.error('Initial fetch error', err);
+        console.error('Erro na carga inicial', err);
       }
     },
 
@@ -81,8 +81,8 @@ document.addEventListener('alpine:init', () => {
           this.connectionStatus = 'connected';
         };
         evSource.onmessage = (event) => {
-          // generic update trigger
-          this.fetchInitialData(); // simple trigger to refresh stats
+          // Dispara uma atualização genérica.
+          this.fetchInitialData(); // Atualização simples das estatísticas.
         };
         evSource.onerror = (err) => {
           this.connectionStatus = 'polling';
@@ -150,7 +150,7 @@ document.addEventListener('alpine:init', () => {
         }
         this.messages = data;
       } catch (e) {
-        this.error = 'Erro ao carregar raw messages';
+        this.error = 'Erro ao carregar mensagens brutas';
       } finally {
         this.loading = false;
       }
@@ -219,7 +219,7 @@ document.addEventListener('alpine:init', () => {
        try {
          return JSON.stringify(JSON.parse(atob(this.detailMessage.Payload)), null, 2);
        } catch (e) {
-         return 'Invalid base64/json payload';
+         return 'Payload Base64/JSON inválido';
        }
     },
 
@@ -238,11 +238,11 @@ document.addEventListener('alpine:init', () => {
 
 Alpine.start();
 
-// Initialize Icons
+// Inicializa os ícones.
 document.addEventListener('DOMContentLoaded', () => {
-  // Lucide requires us to call createIcons to replace i-lucide tags, 
-  // but since we are using Alpine which creates DOM elements dynamically,
-  // we need a mutation observer or a helper.
+  // O Lucide exige createIcons para substituir as tags i-lucide,
+  // mas o Alpine cria elementos do DOM dinamicamente; por isso,
+  // precisamos de um observador de mutações ou helper equivalente.
   const observer = new MutationObserver(() => {
     createIcons({ icons, nameAttr: 'data-lucide' });
   });
