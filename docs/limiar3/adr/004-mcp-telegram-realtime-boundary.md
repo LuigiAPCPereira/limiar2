@@ -112,6 +112,8 @@ A superfície conceitual pode crescer por slices sem novo ADR enquanto preservar
 - `telegram.history(target, limit, cursor)` — histórico paginado;
 - `telegram.message(target, message_id)` — detalhe de uma mensagem quando necessário.
 
+**Semântica de quantidade:** `limit` define o tamanho de **uma página**, não um limite total da investigação do ChatGPT. A primeira implementação usa default 20 e respeita o teto técnico do Telegram boundary de 100 mensagens por página. Se o ChatGPT precisar de 500, 2.000 ou mais mensagens, continua chamando `telegram.history` com o `next_cursor` até obter material suficiente ou até a origem não retornar novo cursor. O MCP não acumula uma consulta ilimitada numa única chamada e não impõe, por esta Decision, um teto artificial sobre o total que o consumidor pode percorrer ao longo de várias páginas.
+
 Os nomes finais podem mudar sem novo ADR se a semântica e o scope permanecerem equivalentes.
 
 O MCP não ganha uma operação semântica de busca/comparação comercial por esta Decision. Quando o usuário pede ao ChatGPT algo como "ache Samsung", o **ChatGPT** escolhe os targets cadastrados, percorre/pagina as mensagens necessárias através das operações read-only e faz localmente a filtragem, correlação, comparação e síntese. O MCP permanece responsável por acesso fiel, bounded e autorizado aos dados Telegram — não pelo raciocínio da pergunta.
