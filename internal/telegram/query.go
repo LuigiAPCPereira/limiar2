@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -17,11 +15,11 @@ import (
 )
 
 var (
-	ErrInvalidQuery      = errors.New("telegram query: invalid request")
-	ErrPeerNotResolved   = errors.New("telegram query: peer not resolved in this runtime")
-	ErrUnsupportedPeer       = errors.New("telegram query: unsupported peer")
-	ErrInvalidCursor         = errors.New("telegram query: invalid cursor")
-	ErrInvalidUpstreamMessage = errors.New("telegram query: invalid upstream message")
+	ErrInvalidQuery      = errors.New("consulta Telegram: requisição inválida")
+	ErrPeerNotResolved   = errors.New("consulta Telegram: peer não resolvido neste runtime")
+	ErrUnsupportedPeer       = errors.New("consulta Telegram: peer não suportado")
+	ErrInvalidCursor         = errors.New("consulta Telegram: cursor inválido")
+	ErrInvalidUpstreamMessage = errors.New("consulta Telegram: mensagem upstream inválida")
 )
 
 type PeerKind string
@@ -45,10 +43,10 @@ func (k PeerKey) validate() error {
 	switch k.Kind {
 	case PeerKindUser, PeerKindChat, PeerKindChannel:
 	default:
-		return fmt.Errorf("%w: unknown peer kind %q", ErrInvalidQuery, k.Kind)
+		return fmt.Errorf("%w: tipo de peer desconhecido %q", ErrInvalidQuery, k.Kind)
 	}
 	if k.ID <= 0 {
-		return fmt.Errorf("%w: peer id must be positive", ErrInvalidQuery)
+		return fmt.Errorf("%w: ID do peer deve ser positivo", ErrInvalidQuery)
 	}
 	return nil
 }
@@ -124,16 +122,16 @@ var _ TelegramQuery = (*QueryClient)(nil)
 
 func newQueryClient(raw *tg.Client, maxConcurrent, maxPageSize, maxResolvedPeers int) (*QueryClient, error) {
 	if raw == nil {
-		return nil, fmt.Errorf("%w: nil gotd API client", ErrInvalidQuery)
+		return nil, fmt.Errorf("%w: client da API gotd ausente", ErrInvalidQuery)
 	}
 	if maxConcurrent <= 0 {
-		return nil, fmt.Errorf("%w: max concurrent queries must be positive", ErrInvalidQuery)
+		return nil, fmt.Errorf("%w: máximo de consultas concorrentes deve ser positivo", ErrInvalidQuery)
 	}
 	if maxPageSize <= 0 || maxPageSize > MaxHistoryPageSize {
-		return nil, fmt.Errorf("%w: max history page size must be between 1 and %d", ErrInvalidQuery, MaxHistoryPageSize)
+		return nil, fmt.Errorf("%w: tamanho máximo da página de histórico deve ficar entre 1 e %d", ErrInvalidQuery, MaxHistoryPageSize)
 	}
 	if maxResolvedPeers <= 0 {
-		return nil, fmt.Errorf("%w: max resolved peers must be positive", ErrInvalidQuery)
+		return nil, fmt.Errorf("%w: máximo de peers resolvidos deve ser positivo", ErrInvalidQuery)
 	}
 
 	resolver := peer.DefaultResolver(raw)
@@ -168,7 +166,7 @@ func newQueryClientWithFuncs(maxConcurrent, maxPageSize, maxResolvedPeers int, r
 		maxResolvedPeers <= 0 ||
 		resolve == nil ||
 		history == nil {
-		return nil, fmt.Errorf("%w: invalid query adapter configuration", ErrInvalidQuery)
+		return nil, fmt.Errorf("%w: configuração inválida do adapter de consulta", ErrInvalidQuery)
 	}
 	return &QueryClient{
 		resolve:     resolve,
@@ -187,11 +185,11 @@ func (q *QueryClient) ResolvePeer(ctx context.Context, ref PeerRef) (result Peer
 		q.observeOperation("resolve_peer", startedAt, retErr)
 	}()
 	if q == nil || q.resolve == nil {
-		return PeerDescriptor{}, fmt.Errorf("%w: invalid query adapter", ErrInvalidQuery)
+		return PeerDescriptor{}, fmt.Errorf("%w: adapter de consulta inválido", ErrInvalidQuery)
 	}
 	value := strings.TrimSpace(ref.Value)
 	if value == "" {
-		return PeerDescriptor{}, fmt.Errorf("%w: empty peer reference", ErrInvalidQuery)
+		return PeerDescriptor{}, fmt.Errorf("%w: referência de peer vazia", ErrInvalidQuery)
 	}
 	if err := q.acquire(ctx); err != nil {
 		return PeerDescriptor{}, err
@@ -218,13 +216,13 @@ func (q *QueryClient) History(ctx context.Context, key PeerKey, req HistoryReque
 		q.observeOperation("history", startedAt, retErr)
 	}()
 	if q == nil || q.history == nil {
-		return MessagePage{}, fmt.Errorf("%w: invalid query adapter", ErrInvalidQuery)
+		return MessagePage{}, fmt.Errorf("%w: adapter de consulta inválido", ErrInvalidQuery)
 	}
 	if err := key.validate(); err != nil {
 		return MessagePage{}, err
 	}
 	if req.Limit < 1 || req.Limit > q.maxPageSize {
-		return MessagePage{}, fmt.Errorf("%w: history limit must be between 1 and %d", ErrInvalidQuery, q.maxPageSize)
+		return MessagePage{}, fmt.Errorf("%w: limite do histórico deve ficar entre 1 e %d", ErrInvalidQuery, q.maxPageSize)
 	}
 	offset, err := decodeHistoryCursor(req.Cursor)
 	if err != nil {
@@ -366,15 +364,15 @@ func decodeHistoryCursor(cursor string) (historyOffset, error) {
 
 func messageFromElem(elem querymessages.Elem, fallback PeerKey) (Message, error) {
 	if elem.Msg == nil {
-		return Message{}, fmt.Errorf("%w: nil message", ErrInvalidUpstreamMessage)
+		return Message{}, fmt.Errorf("%w: mensagem ausente", ErrInvalidUpstreamMessage)
 	}
 	id := int64(elem.Msg.GetID())
 	if id <= 0 {
-		return Message{}, fmt.Errorf("%w: non-positive message id", ErrInvalidUpstreamMessage)
+		return Message{}, fmt.Errorf("%w: ID da mensagem deve ser positivo", ErrInvalidUpstreamMessage)
 	}
 	date := elem.Msg.GetDate()
 	if date <= 0 {
-		return Message{}, fmt.Errorf("%w: non-positive message date", ErrInvalidUpstreamMessage)
+		return Message{}, fmt.Errorf("%w: data da mensagem deve ser positiva", ErrInvalidUpstreamMessage)
 	}
 
 	result := Message{

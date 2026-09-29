@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -19,18 +17,18 @@ import (
 )
 
 var (
-	ErrInvalidBootstrapConfig      = errors.New("telegram bootstrap: invalid config")
-	ErrBootstrapAlreadyProvisioned = errors.New("telegram bootstrap: credential already provisioned")
-	ErrBootstrapTwoFARequired      = errors.New("telegram bootstrap: 2fa password hash provider required")
-	ErrBootstrapSignUpRequired     = errors.New("telegram bootstrap: account sign-up is not allowed")
-	ErrBootstrapUnauthorized       = errors.New("telegram bootstrap: authorization did not complete")
-	ErrBootstrapSessionMissing     = errors.New("telegram bootstrap: authenticated session snapshot missing")
-	ErrBootstrapAlreadyStarted     = errors.New("telegram bootstrap: already started")
+	ErrInvalidBootstrapConfig      = errors.New("bootstrap do Telegram: configuração inválida")
+	ErrBootstrapAlreadyProvisioned = errors.New("bootstrap do Telegram: credencial já provisionada")
+	ErrBootstrapTwoFARequired      = errors.New("bootstrap do Telegram: provider do hash da senha 2FA é obrigatório")
+	ErrBootstrapSignUpRequired     = errors.New("bootstrap do Telegram: cadastro de nova conta não é permitido")
+	ErrBootstrapUnauthorized       = errors.New("bootstrap do Telegram: autorização não foi concluída")
+	ErrBootstrapSessionMissing     = errors.New("bootstrap do Telegram: snapshot da sessão autenticada ausente")
+	ErrBootstrapAlreadyStarted     = errors.New("bootstrap do Telegram: já iniciado")
 )
 
-// BootstrapConfig configures an explicit administrative authorization
-// operation. ExpectedSelfUserID may be zero on first bootstrap; the returned
-// SelfUserID must then be persisted as the future runtime binding.
+// BootstrapConfig configura uma operação administrativa explícita de autorização.
+// ExpectedSelfUserID pode ser zero no primeiro bootstrap; o SelfUserID retornado
+// deve então ser persistido como vínculo futuro do runtime.
 type BootstrapConfig struct {
 	IdentityKey        string
 	ExpectedSelfUserID int64
@@ -45,34 +43,34 @@ type BootstrapConfig struct {
 
 func (c BootstrapConfig) validate() error {
 	if strings.TrimSpace(c.IdentityKey) == "" {
-		return fmt.Errorf("%w: empty authorization identity key", ErrInvalidBootstrapConfig)
+		return fmt.Errorf("%w: chave da identidade de autorização vazia", ErrInvalidBootstrapConfig)
 	}
 	if c.ExpectedSelfUserID < 0 {
-		return fmt.Errorf("%w: expected self user id cannot be negative", ErrInvalidBootstrapConfig)
+		return fmt.Errorf("%w: ID esperado do próprio usuário não pode ser negativo", ErrInvalidBootstrapConfig)
 	}
 	if c.ReplaceExisting && c.ExpectedSelfUserID <= 0 {
-		return fmt.Errorf("%w: replacing an existing credential requires expected self user id", ErrInvalidBootstrapConfig)
+		return fmt.Errorf("%w: substituir uma credencial existente exige o ID esperado do próprio usuário", ErrInvalidBootstrapConfig)
 	}
 	if c.AppID <= 0 {
-		return fmt.Errorf("%w: app id must be positive", ErrInvalidBootstrapConfig)
+		return fmt.Errorf("%w: app ID deve ser positivo", ErrInvalidBootstrapConfig)
 	}
 	if strings.TrimSpace(c.AppHash) == "" {
-		return fmt.Errorf("%w: app hash is required", ErrInvalidBootstrapConfig)
+		return fmt.Errorf("%w: app hash é obrigatório", ErrInvalidBootstrapConfig)
 	}
 	if c.SessionStorage == nil {
-		return fmt.Errorf("%w: session storage is required", ErrInvalidBootstrapConfig)
+		return fmt.Errorf("%w: armazenamento de sessão é obrigatório", ErrInvalidBootstrapConfig)
 	}
 	if c.Coordinator == nil {
-		return fmt.Errorf("%w: authorization coordinator is required", ErrInvalidBootstrapConfig)
+		return fmt.Errorf("%w: coordenador de autorização é obrigatório", ErrInvalidBootstrapConfig)
 	}
 	if c.CommitTimeout <= 0 {
-		return fmt.Errorf("%w: commit timeout must be positive", ErrInvalidBootstrapConfig)
+		return fmt.Errorf("%w: timeout de commit deve ser positivo", ErrInvalidBootstrapConfig)
 	}
 	return nil
 }
 
-// QRChallenge is transient sensitive bootstrap material. Callers may render it
-// to the operator but must not send URL to logs, metrics or durable storage.
+// QRChallenge contém material sensível e transitório do bootstrap. Chamadores podem exibi-lo
+// ao operador, mas não devem enviar a URL para logs, métricas ou armazenamento durável.
 type QRChallenge struct {
 	URL       string
 	ExpiresAt time.Time
@@ -88,9 +86,9 @@ func (f QRPresenterFunc) PresentQR(ctx context.Context, challenge QRChallenge) e
 	return f(ctx, challenge)
 }
 
-// ExistingAccountAuthenticator supplies only credentials for an existing
-// Telegram account. PasswordHash is invoked only if Telegram requires 2FA and
-// can be backed by auth/srpguard so plaintext never needs to enter this package.
+// ExistingAccountAuthenticator fornece somente credenciais de uma conta Telegram existente.
+// PasswordHash é chamado apenas quando o Telegram exige 2FA e pode usar auth/srpguard,
+// evitando que senha em texto puro precise entrar neste package.
 type ExistingAccountAuthenticator interface {
 	Phone(ctx context.Context) (string, error)
 	Code(ctx context.Context, sentCode *tg.AuthSentCode) (string, error)
@@ -103,9 +101,9 @@ type BootstrapResult struct {
 	ReplacedExisting bool
 }
 
-// Bootstrapper owns a one-shot administrative gotd client. It is deliberately
-// separate from Runtime and must never run concurrently with the Runtime for
-// the same TelegramAuthorizationIdentity.
+// Bootstrapper possui um client administrativo de uso único do gotd. Ele é deliberadamente
+// separado de Runtime e nunca deve executar concorrentemente com o Runtime da mesma
+// TelegramAuthorizationIdentity.
 type Bootstrapper struct {
 	cfg     BootstrapConfig
 	started atomic.Bool
@@ -124,10 +122,10 @@ func (b *Bootstrapper) QR(
 	passwordHash auth.PasswordHashFunc,
 ) (BootstrapResult, error) {
 	if b == nil {
-		return BootstrapResult{}, fmt.Errorf("%w: nil bootstrapper", ErrInvalidBootstrapConfig)
+		return BootstrapResult{}, fmt.Errorf("%w: bootstrapper ausente", ErrInvalidBootstrapConfig)
 	}
 	if presenter == nil {
-		return BootstrapResult{}, fmt.Errorf("%w: qr presenter is required", ErrInvalidBootstrapConfig)
+		return BootstrapResult{}, fmt.Errorf("%w: apresentador de QR é obrigatório", ErrInvalidBootstrapConfig)
 	}
 	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
 	if err != nil {
@@ -204,10 +202,10 @@ func (b *Bootstrapper) Code(
 	input ExistingAccountAuthenticator,
 ) (BootstrapResult, error) {
 	if b == nil {
-		return BootstrapResult{}, fmt.Errorf("%w: nil bootstrapper", ErrInvalidBootstrapConfig)
+		return BootstrapResult{}, fmt.Errorf("%w: bootstrapper ausente", ErrInvalidBootstrapConfig)
 	}
 	if input == nil {
-		return BootstrapResult{}, fmt.Errorf("%w: code authenticator is required", ErrInvalidBootstrapConfig)
+		return BootstrapResult{}, fmt.Errorf("%w: autenticador por código é obrigatório", ErrInvalidBootstrapConfig)
 	}
 	release, err := b.cfg.Coordinator.acquire(b.cfg.IdentityKey)
 	if err != nil {
@@ -270,7 +268,7 @@ func (b *Bootstrapper) Code(
 func (b *Bootstrapper) prepare(ctx context.Context) (*stagingSessionStorage, bool, error) {
 	raw, err := b.storage().LoadSession(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf("telegram bootstrap: inspect existing credential: %w", err)
+		return nil, false, fmt.Errorf("bootstrap do Telegram: inspecionar credencial existente: %w", err)
 	}
 	exists := len(raw) > 0
 	if exists && !b.cfg.ReplaceExisting {
@@ -288,7 +286,7 @@ func (b *Bootstrapper) verifySelf(ctx context.Context, client *gotdtelegram.Clie
 		return 0, ErrBootstrapUnauthorized
 	}
 	if b.cfg.ExpectedSelfUserID > 0 && status.User.ID != b.cfg.ExpectedSelfUserID {
-		return 0, fmt.Errorf("%w: expected user id %d, got %d", ErrSelfMismatch, b.cfg.ExpectedSelfUserID, status.User.ID)
+		return 0, fmt.Errorf("%w: ID de usuário esperado %d; obtido %d", ErrSelfMismatch, b.cfg.ExpectedSelfUserID, status.User.ID)
 	}
 	return status.User.ID, nil
 }
@@ -309,7 +307,7 @@ func (b *Bootstrapper) commit(ctx context.Context, staging *stagingSessionStorag
 	commitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), b.cfg.CommitTimeout)
 	defer cancel()
 	if err := b.storage().StoreSession(commitCtx, data); err != nil {
-		return fmt.Errorf("telegram bootstrap: commit authenticated session: %w", err)
+		return fmt.Errorf("bootstrap do Telegram: persistir sessão autenticada: %w", err)
 	}
 	return nil
 }
@@ -331,7 +329,7 @@ func (a existingAccountAuthAdapter) Code(ctx context.Context, sentCode *tg.AuthS
 }
 
 func (a existingAccountAuthAdapter) Password(context.Context) (string, error) {
-	return "", errors.New("telegram bootstrap: plaintext 2fa password path disabled")
+	return "", errors.New("bootstrap do Telegram: caminho de senha 2FA em texto puro desabilitado")
 }
 
 func (a existingAccountAuthAdapter) PasswordHash(ctx context.Context, p *tg.AccountPassword) (*tg.InputCheckPasswordSRP, error) {

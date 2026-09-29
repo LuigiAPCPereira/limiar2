@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -93,7 +91,7 @@ func TestNewBootstrapperValidatesConfig(t *testing.T) {
 			cfg := good
 			tt.mutate(&cfg)
 			if _, err := NewBootstrapper(cfg); !errors.Is(err, ErrInvalidBootstrapConfig) {
-				t.Fatalf("NewBootstrapper() error=%v, want ErrInvalidBootstrapConfig", err)
+				t.Fatalf("NewBootstrapper() error=%v, esperado ErrInvalidBootstrapConfig", err)
 			}
 		})
 	}
@@ -113,10 +111,10 @@ func TestBootstrapperIsOneShotAcrossBootstrapModes(t *testing.T) {
 
 	presenter := QRPresenterFunc(func(context.Context, QRChallenge) error { return nil })
 	if _, err := b.QR(context.Background(), presenter, nil); !errors.Is(err, ErrBootstrapAlreadyStarted) {
-		t.Fatalf("QR() error=%v, want ErrBootstrapAlreadyStarted", err)
+		t.Fatalf("QR() error=%v, esperado ErrBootstrapAlreadyStarted", err)
 	}
 	if _, err := b.Code(context.Background(), existingInputStub{}); !errors.Is(err, ErrBootstrapAlreadyStarted) {
-		t.Fatalf("Code() error=%v, want ErrBootstrapAlreadyStarted", err)
+		t.Fatalf("Code() error=%v, esperado ErrBootstrapAlreadyStarted", err)
 	}
 }
 
@@ -138,7 +136,7 @@ func TestBootstrapPrepareFreshDoesNotPersistAnything(t *testing.T) {
 		t.Fatal("fresh bootstrap unexpectedly marked as replacement")
 	}
 	if got := staging.snapshot(); len(got) != 0 {
-		t.Fatalf("staging snapshot=%q, want empty", got)
+		t.Fatalf("staging snapshot=%q, esperado empty", got)
 	}
 	if base.stores != 0 || len(base.data) != 0 {
 		t.Fatalf("underlying storage changed during prepare: stores=%d data=%q", base.stores, base.data)
@@ -157,7 +155,7 @@ func TestBootstrapExistingCredentialRequiresExplicitReplacement(t *testing.T) {
 	}
 
 	if _, _, err := b.prepare(context.Background()); !errors.Is(err, ErrBootstrapAlreadyProvisioned) {
-		t.Fatalf("prepare() error=%v, want ErrBootstrapAlreadyProvisioned", err)
+		t.Fatalf("prepare() error=%v, esperado ErrBootstrapAlreadyProvisioned", err)
 	}
 	if got := string(base.data); got != "old-session" {
 		t.Fatalf("existing credential changed: %q", got)
@@ -228,10 +226,10 @@ func TestBootstrapCommitPublishesOnlyFinalStagedSnapshot(t *testing.T) {
 		t.Fatalf("commit() error=%v", err)
 	}
 	if got := string(base.data); got != "final-session" {
-		t.Fatalf("durable data=%q, want final-session", got)
+		t.Fatalf("durable data=%q, esperado final-session", got)
 	}
 	if base.stores != 1 {
-		t.Fatalf("durable StoreSession calls=%d, want 1", base.stores)
+		t.Fatalf("durable StoreSession calls=%d, esperado 1", base.stores)
 	}
 }
 
@@ -279,7 +277,7 @@ func TestBootstrapCommitFailureDoesNotMutateMemoryStorage(t *testing.T) {
 
 	err = b.commit(context.Background(), staging)
 	if !errors.Is(err, sentinel) {
-		t.Fatalf("commit() error=%v, want sentinel", err)
+		t.Fatalf("commit() error=%v, esperado sentinel", err)
 	}
 	if got := string(base.data); got != "old-session" {
 		t.Fatalf("old credential changed after failed durable commit: %q", got)
@@ -348,7 +346,7 @@ func TestBootstrapPreparePreservesStorageFailure(t *testing.T) {
 	}
 	_, _, err = b.prepare(context.Background())
 	if !errors.Is(err, sentinel) {
-		t.Fatalf("prepare() error=%v, want sentinel", err)
+		t.Fatalf("prepare() error=%v, esperado sentinel", err)
 	}
 }
 
@@ -386,13 +384,13 @@ func TestBootstrapFinalizeRequiresVerifiedSelfBeforeDurableCommit(t *testing.T) 
 
 	err = b.finalize(context.Background(), BootstrapResult{}, staging)
 	if !errors.Is(err, ErrBootstrapUnauthorized) {
-		t.Fatalf("finalize() error=%v, want ErrBootstrapUnauthorized", err)
+		t.Fatalf("finalize() error=%v, esperado ErrBootstrapUnauthorized", err)
 	}
 	if got := string(base.data); got != "old-session" {
 		t.Fatalf("durable credential changed without verified self: %q", got)
 	}
 	if base.stores != 0 {
-		t.Fatalf("StoreSession calls=%d, want 0", base.stores)
+		t.Fatalf("StoreSession calls=%d, esperado 0", base.stores)
 	}
 
 	result := BootstrapResult{IdentityKey: "primary", SelfUserID: 42, ReplacedExisting: true}
@@ -400,7 +398,7 @@ func TestBootstrapFinalizeRequiresVerifiedSelfBeforeDurableCommit(t *testing.T) 
 		t.Fatalf("finalize(valid) error=%v", err)
 	}
 	if got := string(base.data); got != "new-session" {
-		t.Fatalf("durable credential=%q, want new-session", got)
+		t.Fatalf("durable credential=%q, esperado new-session", got)
 	}
 }
 
@@ -424,7 +422,7 @@ func TestBootstrapAndRuntimeShareExclusiveAuthorizationOwnership(t *testing.T) {
 
 	presenter := QRPresenterFunc(func(context.Context, QRChallenge) error { return nil })
 	if _, err := b.QR(context.Background(), presenter, nil); !errors.Is(err, ErrAuthorizationInUse) {
-		t.Fatalf("QR() error=%v, want ErrAuthorizationInUse", err)
+		t.Fatalf("QR() error=%v, esperado ErrAuthorizationInUse", err)
 	}
 
 	codeBootstrapper, err := NewBootstrapper(cfg)
@@ -432,7 +430,7 @@ func TestBootstrapAndRuntimeShareExclusiveAuthorizationOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := codeBootstrapper.Code(context.Background(), existingInputStub{}); !errors.Is(err, ErrAuthorizationInUse) {
-		t.Fatalf("Code() error=%v, want ErrAuthorizationInUse", err)
+		t.Fatalf("Code() error=%v, esperado ErrAuthorizationInUse", err)
 	}
 }
 
@@ -440,7 +438,7 @@ func TestBootstrapOwnershipLeaseIsReleasedOnPrepareFailure(t *testing.T) {
 	t.Parallel()
 
 	coordinator := NewAuthorizationCoordinator()
-	sentinel := errors.New("read session failed")
+	sentinel := errors.New("falha ao ler sessão")
 	cfg := goodBootstrapConfig(bootstrapStorageAdapter{&memoryBootstrapStorage{loadErr: sentinel}})
 	cfg.Coordinator = coordinator
 	b, err := NewBootstrapper(cfg)
@@ -450,7 +448,7 @@ func TestBootstrapOwnershipLeaseIsReleasedOnPrepareFailure(t *testing.T) {
 	presenter := QRPresenterFunc(func(context.Context, QRChallenge) error { return nil })
 
 	if _, err := b.QR(context.Background(), presenter, nil); !errors.Is(err, sentinel) {
-		t.Fatalf("QR() error=%v, want sentinel", err)
+		t.Fatalf("QR() error=%v, esperado sentinel", err)
 	}
 
 	release, err := coordinator.acquire("primary")
@@ -479,7 +477,7 @@ func TestBootstrapOwnershipConflictDoesNotConsumeOneShot(t *testing.T) {
 	}
 	presenter := QRPresenterFunc(func(context.Context, QRChallenge) error { return nil })
 	if _, err := qrBootstrapper.QR(context.Background(), presenter, nil); !errors.Is(err, ErrAuthorizationInUse) {
-		t.Fatalf("QR() error=%v, want ErrAuthorizationInUse", err)
+		t.Fatalf("QR() error=%v, esperado ErrAuthorizationInUse", err)
 	}
 	if qrBootstrapper.started.Load() {
 		t.Fatal("QR bootstrapper consumed one-shot state after ownership conflict")
@@ -490,7 +488,7 @@ func TestBootstrapOwnershipConflictDoesNotConsumeOneShot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := codeBootstrapper.Code(context.Background(), existingInputStub{}); !errors.Is(err, ErrAuthorizationInUse) {
-		t.Fatalf("Code() error=%v, want ErrAuthorizationInUse", err)
+		t.Fatalf("Code() error=%v, esperado ErrAuthorizationInUse", err)
 	}
 	if codeBootstrapper.started.Load() {
 		t.Fatal("Code bootstrapper consumed one-shot state after ownership conflict")

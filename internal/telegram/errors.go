@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -23,8 +21,8 @@ const (
 	ErrorKindInternal        ErrorKind = "internal"
 )
 
-// OperationError is the stable semantic error surface exposed by the Telegram
-// boundary. The wrapped upstream error remains available through errors.Is/As.
+// OperationError é a superfície semântica estável de erro exposta pelo boundary do Telegram.
+// O erro upstream encapsulado continua disponível por errors.Is/As.
 type OperationError struct {
 	Operation  string
 	Kind       ErrorKind

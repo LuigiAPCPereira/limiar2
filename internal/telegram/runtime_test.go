@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -37,7 +35,7 @@ func TestNewRuntimeValidatesConfig(t *testing.T) {
 			cfg := good
 			tt.mutate(&cfg)
 			if _, err := NewRuntime(cfg); !errors.Is(err, ErrInvalidRuntimeConfig) {
-				t.Fatalf("error=%v, want ErrInvalidRuntimeConfig", err)
+				t.Fatalf("error=%v, esperado ErrInvalidRuntimeConfig", err)
 			}
 		})
 	}
@@ -57,7 +55,7 @@ func TestRunServesOnlyAfterAuthorizedMatchingSelf(t *testing.T) {
 		t.Fatalf("Run() error=%v", err)
 	}
 	if !served {
-		t.Fatal("serve callback not called")
+		t.Fatal("callback serve não foi chamado")
 	}
 }
 
@@ -68,10 +66,10 @@ func TestRunUnauthorizedRequiresExplicitRebootstrap(t *testing.T) {
 		func(context.Context) (authorizationStatus, error) { return authorizationStatus{}, nil })
 	err := r.Run(context.Background(), func(context.Context, Capabilities) error { served = true; return nil })
 	if !errors.Is(err, ErrRebootstrapRequired) || !errors.Is(err, ErrAuthorizationRejected) {
-		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired + ErrAuthorizationRejected", err)
+		t.Fatalf("Run() error=%v, esperado ErrRebootstrapRequired + ErrAuthorizationRejected", err)
 	}
 	if served {
-		t.Fatal("serve called for unauthorized runtime")
+		t.Fatal("serve foi chamado para runtime não autorizado")
 	}
 }
 
@@ -82,17 +80,17 @@ func TestRunRejectsSelfMismatch(t *testing.T) {
 			return authorizationStatus{Authorized: true, SelfUserID: 99}, nil
 		})
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, ErrSelfMismatch) {
-		t.Fatalf("Run() error=%v, want ErrSelfMismatch", err)
+		t.Fatalf("Run() error=%v, esperado ErrSelfMismatch", err)
 	}
 }
 
 func TestRunPreservesStatusError(t *testing.T) {
-	sentinel := errors.New("status failed")
+	sentinel := errors.New("falha ao consultar status")
 	r := newRuntimeForTest(AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, time.Second,
 		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
 		func(context.Context) (authorizationStatus, error) { return authorizationStatus{}, sentinel })
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, sentinel) {
-		t.Fatalf("Run() error=%v, want sentinel", err)
+		t.Fatalf("Run() error=%v, esperado sentinel", err)
 	}
 }
 
@@ -104,7 +102,7 @@ func TestRunReadinessTimeoutIsBounded(t *testing.T) {
 			return authorizationStatus{}, ctx.Err()
 		})
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Run() error=%v, want deadline", err)
+		t.Fatalf("Run() error=%v, esperado deadline", err)
 	}
 }
 
@@ -118,7 +116,7 @@ func TestRuntimeIsOneShot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, ErrAlreadyStarted) {
-		t.Fatalf("second Run error=%v, want ErrAlreadyStarted", err)
+		t.Fatalf("second Run error=%v, esperado ErrAlreadyStarted", err)
 	}
 }
 
@@ -129,7 +127,7 @@ func TestRunPreservesServeCancellationEvenIfEngineSwallowsIt(t *testing.T) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return context.Canceled }); !errors.Is(err, context.Canceled) {
-		t.Fatalf("Run() error=%v, want context.Canceled", err)
+		t.Fatalf("Run() error=%v, esperado context.Canceled", err)
 	}
 }
 
@@ -141,19 +139,19 @@ func TestRunPreservesCallerCancellationWhenEngineReturnsNil(t *testing.T) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
 	if err := r.Run(ctx, func(context.Context, Capabilities) error { return nil }); !errors.Is(err, context.Canceled) {
-		t.Fatalf("Run() error=%v, want context.Canceled", err)
+		t.Fatalf("Run() error=%v, esperado context.Canceled", err)
 	}
 }
 
 func TestRunPreservesEngineFailureWhenCallbackNeverRuns(t *testing.T) {
-	sentinel := errors.New("transport failed")
+	sentinel := errors.New("falha de transporte")
 	r := newRuntimeForTest(AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, time.Second,
 		func(context.Context, func(context.Context) error) error { return sentinel },
 		func(context.Context) (authorizationStatus, error) {
 			return authorizationStatus{Authorized: true, SelfUserID: 42}, nil
 		})
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, sentinel) {
-		t.Fatalf("Run() error=%v, want sentinel", err)
+		t.Fatalf("Run() error=%v, esperado sentinel", err)
 	}
 }
 
@@ -174,15 +172,15 @@ func TestRunPreflightStopsBeforeClientOnMissingOrIncompatibleCredential(t *testi
 		})
 	r.preflight = func(context.Context) error { return ErrRebootstrapRequired }
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, ErrRebootstrapRequired) {
-		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired", err)
+		t.Fatalf("Run() error=%v, esperado ErrRebootstrapRequired", err)
 	}
 	if engineStarted {
-		t.Fatal("gotd engine started before credential preflight passed")
+		t.Fatal("engine do gotd iniciou antes do preflight da credencial")
 	}
 }
 
 func TestRunPreflightPreservesStorageFailure(t *testing.T) {
-	sentinel := errors.New("read session: permission denied")
+	sentinel := errors.New("ler sessão: permissão negada")
 	r := newRuntimeForTest(AuthorizationIdentity{Key: "primary", ExpectedSelfUserID: 42}, time.Second,
 		func(ctx context.Context, f func(context.Context) error) error { return f(ctx) },
 		func(context.Context) (authorizationStatus, error) {
@@ -190,7 +188,7 @@ func TestRunPreflightPreservesStorageFailure(t *testing.T) {
 		})
 	r.preflight = func(context.Context) error { return sentinel }
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, sentinel) {
-		t.Fatalf("Run() error=%v, want storage failure", err)
+		t.Fatalf("Run() error=%v, esperado storage failure", err)
 	}
 }
 
@@ -202,7 +200,7 @@ func TestRunPreflightTimeoutIsBounded(t *testing.T) {
 		})
 	r.preflight = func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Run() error=%v, want preflight deadline", err)
+		t.Fatalf("Run() error=%v, esperado preflight deadline", err)
 	}
 }
 
@@ -225,13 +223,13 @@ func TestPreflightDistinguishesPhysicalAbsenceFromIncompatibleBlob(t *testing.T)
 	t.Parallel()
 
 	if err := preflightPersistedSession(context.Background(), fixedSessionStorage{}); !errors.Is(err, ErrRebootstrapRequired) || !errors.Is(err, ErrSessionAbsent) {
-		t.Fatalf("absent session error=%v, want ErrRebootstrapRequired + ErrSessionAbsent", err)
+		t.Fatalf("absent session error=%v, esperado ErrRebootstrapRequired + ErrSessionAbsent", err)
 	}
 
 	incompatible := []byte(`{"Version":2,"Data":{}}`)
 	err := preflightPersistedSession(context.Background(), fixedSessionStorage{data: incompatible})
 	if !errors.Is(err, ErrIncompatibleSession) || !errors.Is(err, ErrRebootstrapRequired) {
-		t.Fatalf("incompatible session error=%v, want ErrIncompatibleSession + ErrRebootstrapRequired", err)
+		t.Fatalf("incompatible session error=%v, esperado ErrIncompatibleSession + ErrRebootstrapRequired", err)
 	}
 	if errors.Is(err, ErrSessionAbsent) {
 		t.Fatalf("incompatible session misclassified as physical absence: %v", err)
@@ -244,7 +242,7 @@ func TestPreflightPreservesMalformedAndStorageFailures(t *testing.T) {
 	malformed := []byte("{not-json")
 	err := preflightPersistedSession(context.Background(), fixedSessionStorage{data: malformed})
 	if err == nil {
-		t.Fatal("malformed session error=nil, want decode failure")
+		t.Fatal("malformed session error=nil, esperado decode failure")
 	}
 	if errors.Is(err, ErrRebootstrapRequired) || errors.Is(err, ErrIncompatibleSession) {
 		t.Fatalf("malformed session misclassified: %v", err)
@@ -253,7 +251,7 @@ func TestPreflightPreservesMalformedAndStorageFailures(t *testing.T) {
 	sentinel := errors.New("permission denied")
 	err = preflightPersistedSession(context.Background(), fixedSessionStorage{err: sentinel})
 	if !errors.Is(err, sentinel) {
-		t.Fatalf("storage failure error=%v, want sentinel", err)
+		t.Fatalf("storage failure error=%v, esperado sentinel", err)
 	}
 }
 
@@ -308,7 +306,7 @@ func TestRunExposesQueryOnlyAfterSemanticReadiness(t *testing.T) {
 		t.Fatalf("Run() error=%v", err)
 	}
 	if got == nil {
-		t.Fatal("ready capabilities did not expose TelegramQuery")
+		t.Fatal("capabilities prontas não expuseram TelegramQuery")
 	}
 }
 
@@ -329,10 +327,10 @@ func TestRunDoesNotExposeCapabilitiesBeforeReadiness(t *testing.T) {
 		return nil
 	})
 	if !errors.Is(err, ErrRebootstrapRequired) {
-		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired", err)
+		t.Fatalf("Run() error=%v, esperado ErrRebootstrapRequired", err)
 	}
 	if served {
-		t.Fatal("capabilities callback ran before semantic readiness")
+		t.Fatal("callback de capabilities executou antes da prontidão semântica")
 	}
 }
 
@@ -369,7 +367,7 @@ func TestRuntimeOwnershipRejectsConcurrentSameIdentity(t *testing.T) {
 		})
 	second.coordinator = coordinator
 	if err := second.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); !errors.Is(err, ErrAuthorizationInUse) {
-		t.Fatalf("second runtime error=%v, want ErrAuthorizationInUse", err)
+		t.Fatalf("second runtime error=%v, esperado ErrAuthorizationInUse", err)
 	}
 
 	close(releaseServe)

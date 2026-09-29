@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -36,7 +34,7 @@ func TestRuntimeObserverEmitsLifecycleWithoutSecrets(t *testing.T) {
 	}
 
 	if len(events) != 3 {
-		t.Fatalf("events=%+v, want starting/ready/stopped", events)
+		t.Fatalf("events=%+v, esperado starting/ready/stopped", events)
 	}
 	if events[0].State != RuntimeStateStarting ||
 		events[1].State != RuntimeStateReady ||
@@ -45,7 +43,7 @@ func TestRuntimeObserverEmitsLifecycleWithoutSecrets(t *testing.T) {
 	}
 	for _, event := range events {
 		if event.IdentityKey != "primary" {
-			t.Fatalf("IdentityKey=%q, want primary", event.IdentityKey)
+			t.Fatalf("IdentityKey=%q, esperado primary", event.IdentityKey)
 		}
 		rendered := fmt.Sprintf("%+v", event)
 		if strings.Contains(rendered, "998877665544") {
@@ -53,7 +51,7 @@ func TestRuntimeObserverEmitsLifecycleWithoutSecrets(t *testing.T) {
 		}
 	}
 	if events[2].Outcome != EventOutcomeOK {
-		t.Fatalf("stopped outcome=%q, want ok", events[2].Outcome)
+		t.Fatalf("stopped outcome=%q, esperado ok", events[2].Outcome)
 	}
 }
 
@@ -75,16 +73,16 @@ func TestRuntimeObserverEmitsFailedOnReadinessFailure(t *testing.T) {
 
 	err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil })
 	if !errors.Is(err, ErrRebootstrapRequired) {
-		t.Fatalf("Run() error=%v, want ErrRebootstrapRequired", err)
+		t.Fatalf("Run() error=%v, esperado ErrRebootstrapRequired", err)
 	}
 	if len(events) != 2 {
-		t.Fatalf("events=%+v, want starting/failed", events)
+		t.Fatalf("events=%+v, esperado starting/failed", events)
 	}
 	if events[0].State != RuntimeStateStarting || events[1].State != RuntimeStateFailed {
 		t.Fatalf("unexpected events=%+v", events)
 	}
 	if events[1].Outcome != EventOutcomeError {
-		t.Fatalf("failed outcome=%q, want error", events[1].Outcome)
+		t.Fatalf("failed outcome=%q, esperado error", events[1].Outcome)
 	}
 }
 
@@ -117,10 +115,10 @@ func TestQueryObserverDoesNotExposeReferenceOrRawError(t *testing.T) {
 	}
 
 	if _, err := q.ResolvePeer(context.Background(), PeerRef{Value: sensitiveRef}); err == nil {
-		t.Fatal("ResolvePeer() error=nil, want failure")
+		t.Fatal("ResolvePeer() error=nil, esperado failure")
 	}
 	if len(events) != 1 {
-		t.Fatalf("events=%+v, want one operation event", events)
+		t.Fatalf("events=%+v, esperado one operation event", events)
 	}
 	event := events[0]
 	if event.Type != EventTypeOperation || event.Operation != "resolve_peer" {
@@ -131,7 +129,7 @@ func TestQueryObserverDoesNotExposeReferenceOrRawError(t *testing.T) {
 	}
 	rendered := fmt.Sprintf("%+v", event)
 	if strings.Contains(rendered, sensitiveRef) || strings.Contains(rendered, sensitiveErr) {
-		t.Fatalf("observer event leaked request/upstream error: %s", rendered)
+		t.Fatalf("evento do observer vazou requisição/erro upstream: %s", rendered)
 	}
 }
 
@@ -166,10 +164,10 @@ func TestQueryObserverPreservesFloodMetadataOnly(t *testing.T) {
 	events = nil
 
 	if _, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 1}); err == nil {
-		t.Fatal("History() error=nil, want FLOOD_WAIT")
+		t.Fatal("History() error=nil, esperado FLOOD_WAIT")
 	}
 	if len(events) != 1 {
-		t.Fatalf("events=%+v, want one history event", events)
+		t.Fatalf("events=%+v, esperado one history event", events)
 	}
 	event := events[0]
 	if event.Operation != "history" ||
@@ -184,7 +182,7 @@ func TestObserverPanicDoesNotBreakTelegramBoundary(t *testing.T) {
 	t.Parallel()
 
 	observe(func(Event) {
-		panic("telemetry backend failed")
+		panic("backend de telemetria falhou")
 	}, Event{Type: EventTypeRuntimeState, State: RuntimeStateStarting})
 }
 
@@ -236,11 +234,11 @@ func TestObservedSessionStorageNeverExposesBytesOrRawError(t *testing.T) {
 
 	base.loadErr = errors.New(rawError)
 	if _, err := storage.LoadSession(context.Background()); err == nil {
-		t.Fatal("LoadSession() error=nil, want failure")
+		t.Fatal("LoadSession() error=nil, esperado failure")
 	}
 
 	if len(events) != 3 {
-		t.Fatalf("events=%+v, want load/store/failed-load", events)
+		t.Fatalf("events=%+v, esperado load/store/failed-load", events)
 	}
 	if events[0].Operation != "session_load" ||
 		events[1].Operation != "session_store" ||
@@ -248,12 +246,12 @@ func TestObservedSessionStorageNeverExposesBytesOrRawError(t *testing.T) {
 		t.Fatalf("operations=%+v", events)
 	}
 	if events[2].Outcome != EventOutcomeError {
-		t.Fatalf("failed load outcome=%q, want error", events[2].Outcome)
+		t.Fatalf("failed load outcome=%q, esperado error", events[2].Outcome)
 	}
 	for _, event := range events {
 		rendered := fmt.Sprintf("%+v", event)
 		if strings.Contains(rendered, sessionSecret) || strings.Contains(rendered, rawError) {
-			t.Fatalf("session observer leaked sensitive material: %s", rendered)
+			t.Fatalf("observer de sessão vazou material sensível: %s", rendered)
 		}
 	}
 }

@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -9,15 +7,14 @@ import (
 	"sync"
 )
 
-var ErrAuthorizationInUse = errors.New("telegram authorization: identity already active")
+var ErrAuthorizationInUse = errors.New("autorização do Telegram: identidade já está ativa")
 
-// AuthorizationCoordinator is the explicit process owner registry for Telegram
-// authorization identities. Runtime and bootstrap operations for the same
-// identity must share one coordinator.
+// AuthorizationCoordinator é o registro explícito de ownership do processo para identidades
+// de autorização do Telegram. Operações de runtime e bootstrap da mesma identidade devem
+// compartilhar um único coordenador.
 //
-// It deliberately fails fast instead of queueing ownership: a second main
-// client for the same authorization is a configuration/lifecycle error, not
-// work that should silently wait.
+// Ele falha imediatamente em vez de enfileirar ownership: um segundo client principal para
+// a mesma autorização é erro de configuração/lifecycle, não trabalho que deva aguardar silenciosamente.
 type AuthorizationCoordinator struct {
 	mu     sync.Mutex
 	active map[string]struct{}
@@ -29,11 +26,11 @@ func NewAuthorizationCoordinator() *AuthorizationCoordinator {
 
 func (c *AuthorizationCoordinator) acquire(identityKey string) (func(), error) {
 	if c == nil {
-		return nil, fmt.Errorf("%w: nil authorization coordinator", ErrInvalidRuntimeConfig)
+		return nil, fmt.Errorf("%w: coordenador de autorização ausente", ErrInvalidRuntimeConfig)
 	}
 	key := strings.TrimSpace(identityKey)
 	if key == "" {
-		return nil, fmt.Errorf("%w: empty authorization identity key", ErrInvalidRuntimeConfig)
+		return nil, fmt.Errorf("%w: chave da identidade de autorização vazia", ErrInvalidRuntimeConfig)
 	}
 
 	c.mu.Lock()

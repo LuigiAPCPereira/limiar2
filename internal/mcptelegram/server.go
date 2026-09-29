@@ -1,5 +1,3 @@
-//go:build linux
-
 package mcptelegram
 
 import (
@@ -21,7 +19,7 @@ const (
 	observationKind        = "telegram_realtime_not_source_evidence"
 )
 
-var ErrInvalidConfig = errors.New("mcp telegram: invalid configuration")
+var ErrInvalidConfig = errors.New("mcp telegram: configuração inválida")
 
 type Target struct {
 	Name string
@@ -53,9 +51,9 @@ type targetsOutput struct {
 }
 
 type historyInput struct {
-	Target string `json:"target" jsonschema:"configured Telegram target name"`
-	Limit  int    `json:"limit,omitempty" jsonschema:"messages in this page; omit for the default page size"`
-	Cursor string `json:"cursor,omitempty" jsonschema:"opaque next_cursor returned by a previous telegram.history call"`
+	Target string `json:"target" jsonschema:"nome do target do Telegram configurado"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"mensagens nesta página; omita para usar o tamanho padrão da página"`
+	Cursor string `json:"cursor,omitempty" jsonschema:"next_cursor opaco retornado por uma chamada anterior de telegram.history"`
 }
 
 type historyOutput struct {
@@ -82,11 +80,11 @@ type messageOutput struct {
 
 func New(query telegram.TelegramQuery, cfg Config) (*Adapter, error) {
 	if query == nil {
-		return nil, fmt.Errorf("%w: nil TelegramQuery", ErrInvalidConfig)
+		return nil, fmt.Errorf("%w: TelegramQuery ausente", ErrInvalidConfig)
 	}
 	if cfg.MaxHistoryPageSize < 1 || cfg.MaxHistoryPageSize > telegram.MaxHistoryPageSize {
 		return nil, fmt.Errorf(
-			"%w: max history page size must be between 1 and %d",
+			"%w: o tamanho máximo da página de histórico deve ficar entre 1 e %d",
 			ErrInvalidConfig,
 			telegram.MaxHistoryPageSize,
 		)
@@ -103,10 +101,10 @@ func New(query telegram.TelegramQuery, cfg Config) (*Adapter, error) {
 		name := strings.TrimSpace(configured.Name)
 		ref := strings.TrimSpace(configured.Ref.Value)
 		if name == "" || ref == "" {
-			return nil, fmt.Errorf("%w: target name and ref must be non-empty", ErrInvalidConfig)
+			return nil, fmt.Errorf("%w: nome e referência do target não podem estar vazios", ErrInvalidConfig)
 		}
 		if _, exists := a.targetByName[name]; exists {
-			return nil, fmt.Errorf("%w: duplicate target %q", ErrInvalidConfig, name)
+			return nil, fmt.Errorf("%w: target duplicado %q", ErrInvalidConfig, name)
 		}
 		target := Target{Name: name, Ref: telegram.PeerRef{Value: ref}}
 		a.targets = append(a.targets, target)
@@ -126,7 +124,7 @@ func (a *Adapter) Server() *mcp.Server {
 
 func (a *Adapter) HTTPServer(address string) (*http.Server, error) {
 	if a == nil || a.server == nil {
-		return nil, fmt.Errorf("%w: invalid adapter", ErrInvalidConfig)
+		return nil, fmt.Errorf("%w: adapter inválido", ErrInvalidConfig)
 	}
 	if err := validateLoopbackAddress(address); err != nil {
 		return nil, err
@@ -167,16 +165,16 @@ func (a *Adapter) newMCPServer() *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "telegram.targets",
-		Title:       "Telegram targets",
-		Description: "List the Telegram targets configured for this MCP read scope. Use these names when calling telegram.history.",
+		Title:       "Targets do Telegram",
+		Description: "List the Targets do Telegram configured for this MCP read scope. Use these names when calling telegram.history.",
 		Annotations: annotations,
 	}, a.handleTargets)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:  "telegram.history",
-		Title: "Telegram history",
+		Title: "Histórico do Telegram",
 		Description: fmt.Sprintf(
-			"Read one bounded page of Telegram messages from a configured target. limit defaults to %d and may be 1-%d. To read more, call again with next_cursor; do not assume one call is unbounded.",
+			"Lê uma página limitada de mensagens do Telegram de um target configurado. limit usa %d por padrão e pode variar de 1 a %d. Para ler mais, chame novamente com next_cursor; uma única chamada não é ilimitada.",
 			min(defaultHistoryPageSize, a.maxHistoryPageSize),
 			a.maxHistoryPageSize,
 		),
@@ -209,7 +207,7 @@ func (a *Adapter) handleHistory(
 	targetName := strings.TrimSpace(in.Target)
 	target, ok := a.targetByName[targetName]
 	if !ok {
-		return nil, historyOutput{}, fmt.Errorf("telegram target %q is not configured", targetName)
+		return nil, historyOutput{}, fmt.Errorf("target do Telegram %q não está configurado", targetName)
 	}
 
 	limit := in.Limit
@@ -218,7 +216,7 @@ func (a *Adapter) handleHistory(
 	}
 	if limit < 1 || limit > a.maxHistoryPageSize {
 		return nil, historyOutput{}, fmt.Errorf(
-			"telegram history limit must be between 1 and %d; use next_cursor for additional pages",
+			"o limite do histórico do Telegram deve ficar entre 1 e %d; use next_cursor para páginas adicionais",
 			a.maxHistoryPageSize,
 		)
 	}
@@ -279,39 +277,39 @@ func safeTelegramError(err error) error {
 	case errors.Is(err, context.DeadlineExceeded):
 		return context.DeadlineExceeded
 	case errors.Is(err, telegram.ErrInvalidCursor):
-		return errors.New("telegram cursor is invalid")
+		return errors.New("cursor do Telegram inválido")
 	case errors.Is(err, telegram.ErrPeerNotResolved):
-		return errors.New("telegram peer is not resolved")
+		return errors.New("peer do Telegram não resolvido")
 	case errors.Is(err, telegram.ErrUnsupportedPeer):
-		return errors.New("telegram peer type is unsupported")
+		return errors.New("tipo de peer do Telegram não suportado")
 	case errors.Is(err, telegram.ErrInvalidQuery):
-		return errors.New("telegram query is invalid")
+		return errors.New("consulta Telegram inválida")
 	case errors.Is(err, telegram.ErrInvalidUpstreamMessage):
-		return errors.New("telegram returned an invalid message")
+		return errors.New("Telegram retornou uma mensagem inválida")
 	}
 
 	var operationErr *telegram.OperationError
 	if errors.As(err, &operationErr) {
 		if operationErr.RetryAfter > 0 {
-			return fmt.Errorf("telegram %s; retry after %s", operationErr.Kind, operationErr.RetryAfter)
+			return fmt.Errorf("telegram %s; tente novamente após %s", operationErr.Kind, operationErr.RetryAfter)
 		}
 		return fmt.Errorf("telegram %s", operationErr.Kind)
 	}
-	return errors.New("telegram request failed")
+	return errors.New("requisição ao Telegram falhou")
 }
 
 func validateLoopbackAddress(address string) error {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
-		return fmt.Errorf("%w: listen address must be host:port", ErrInvalidConfig)
+		return fmt.Errorf("%w: endereço de escuta deve usar host:porta", ErrInvalidConfig)
 	}
 	ip := net.ParseIP(host)
 	if ip == nil || !ip.IsLoopback() {
-		return fmt.Errorf("%w: MCP listener must use an IP loopback address", ErrInvalidConfig)
+		return fmt.Errorf("%w: listener MCP deve usar um endereço IP de loopback", ErrInvalidConfig)
 	}
 	portNumber, err := strconv.Atoi(port)
 	if err != nil || portNumber < 0 || portNumber > 65535 {
-		return fmt.Errorf("%w: invalid listen port", ErrInvalidConfig)
+		return fmt.Errorf("%w: porta de escuta inválida", ErrInvalidConfig)
 	}
 	return nil
 }
