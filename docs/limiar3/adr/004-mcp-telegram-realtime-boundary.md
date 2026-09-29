@@ -9,11 +9,13 @@ L3-003 precisa expor a `TelegramQuery` read-only para ChatGPT cedo, antes do mod
 
 A superfície MCP é uma boundary estrutural: introduz protocolo/dependência externa, transporte e uma authority de autorização do consumidor distinta da `TelegramAuthorizationIdentity`. Portanto não deve nascer de defaults implícitos nem ser tratada como simples detalhe de handler.
 
-### Evidence externa verificada em 2026-09-24
+### Evidence externa verificada em 2026-09-24 e revalidada em 2026-09-29
 
 - `github.com/modelcontextprotocol/go-sdk v1.8.0` é a latest stable upstream observada, publicada em 2026-09-14. O módulo declara Go 1.25.0, compatível com o baseline Limiar Go 1.27.1.
 - v1.8.0 negocia MCP `2026-07-28` como versão mais nova e inclui hardening de transportes contra resource exhaustion, session leaks, deadlocks e teardown hangs.
 - MCP `2026-07-28` adota core stateless/sessionless. No Go SDK, Streamable HTTP serve essa revisão com `StreamableHTTPOptions.Stateless = true`.
+- Na tag v1.8.0, `StreamableHTTPOptions` mantém proteção de localhost/DNS rebinding habilitada por default, limita request body a 4 MiB por default e exige opt-in explícito de `PropagateRequestCancellation` para vincular o handler ao lifecycle do request HTTP em `2026-07-28`.
+- Na mesma tag, `ServerOptions.Capabilities == nil` preserva por compatibilidade uma capability `logging` default; como logging está deprecated em MCP `2026-07-28`, a primeira superfície Limiar deve anunciar capabilities mínimas explicitamente em vez de herdar esse default histórico.
 - O SDK oficial fornece `mcp.NewServer`, `mcp.AddTool` tipado e `mcp.NewStreamableHTTPHandler`; não há motivo para o Limiar reimplementar JSON-RPC, SSE ou schema generation.
 - A documentação atual da OpenAI permite conectar MCP privado a ChatGPT/Codex/API através de Secure MCP Tunnel. O `tunnel-client` inicia conexão HTTPS outbound e pode encaminhar para MCP local por HTTP ou stdio; o servidor privado não precisa ganhar listener público.
 - Permissões de tunnel e acesso a developer mode são authorities externas e separadas. Esta Proposal **não assume** que o mantenedor ou um workspace específico já possua essas permissões.
@@ -36,15 +38,31 @@ O servidor opera em **Streamable HTTP stateless**. A implementação não restri
 
 ### 2. Private by default
 
-A primeira topologia é single-host e privada.
+A primeira topologia é single-host, single-operator e **loopback-only**.
 
-- listener local/privado por default;
+- o listener HTTP inicial faz bind somente em loopback (`127.0.0.1`/`::1`) e configuração non-loopback falha fechado;
+- `0.0.0.0`, endereço de LAN, reverse proxy ou ingress externo ficam fora da primeira fatia e exigem Decision proporcional sobre autenticação, trust boundary e deployment;
+- o host/usuário do SO é parte explícita do trust model: loopback reduz reachability, mas não autentica outros processos locais; host multiusuário ou não confiável fica fora do contrato inicial;
 - nenhum endpoint público é requisito de L3-003;
 - nenhum listener público sem nova Decision de segurança/deployment;
-- Secure MCP Tunnel é uma opção operacional para dar reachability a produtos OpenAI sem abrir inbound público;
+- para ChatGPT/Codex/API alcançar o servidor privado, Secure MCP Tunnel é o caminho operacional suportado verificado nesta revisão; `tunnel-client` deve rodar na mesma trust boundary que já consegue alcançar o MCP local;
 - `tunnel-client`, `tunnel_id`, runtime API key e permissões OpenAI não pertencem ao core do Limiar e não são gerenciados pelo Telegram boundary.
 
 Tunnel é transporte/reachability; não é identidade Telegram nem substituto da autorização de dados.
+
+### 2.1 Hardening HTTP mínimo da primeira fatia
+
+A implementação inicial deve usar os primitives do SDK/stdlib sem enfraquecer defaults de segurança:
+
+- `StreamableHTTPOptions.Stateless = true`;
+- `StreamableHTTPOptions.PropagateRequestCancellation = true` para que cancelamento do request moderno alcance a tool e a `TelegramQuery`;
+- não desabilitar a proteção de localhost/DNS rebinding do SDK;
+- manter request body explicitamente bounded; o default de 4 MiB do SDK é limite aceitável inicial e pode ser reduzido sem novo ADR;
+- envolver o handler MCP com `http.CrossOriginProtection` da stdlib, sem liberar origins arbitrárias por default;
+- criar o `mcp.Server` com capabilities explícitas mínimas, evitando a capability `logging` histórica que o SDK anuncia quando `Capabilities` é nil;
+- não habilitar roots, sampling, prompts, resources ou outras capabilities sem necessidade do slice.
+
+Esse hardening protege a superfície local sem introduzir auth server, proxy próprio ou stack de transporte paralela.
 
 ### 3. Authorization/read scope separado da credencial Telegram
 
@@ -106,7 +124,7 @@ O MCP adapter:
 
 O Limiar **não implementa um OAuth server próprio em L3-003 inicial**.
 
-Justificativa: a primeira superfície é privada, single-operator, read-only, com listener não público e scope fixo de targets. Quando conectada a ChatGPT, a reachability pode usar Secure MCP Tunnel e as permissões do produto/workspace; essas permissões não são tratadas como credencial Telegram.
+Justificativa: a primeira superfície é privada, single-operator, read-only, loopback-only e com scope fixo de targets. O trust model inicial depende do usuário/host local confiável; loopback não é reinterpretado como autenticação multiusuário. Quando conectada a ChatGPT, a reachability usa Secure MCP Tunnel e as permissões do produto/workspace; essas permissões não são tratadas como credencial Telegram.
 
 Se surgir qualquer um destes requisitos, esta parte deve ser revisada por Decision proporcional antes de exposição:
 
@@ -132,18 +150,22 @@ Antes de marcar a primeira fatia L3-003 como validada:
 1. pin exato do SDK oficial + `go.sum`;
 2. build/vet/test/race/govulncheck no toolchain aceito quando o canal de execução existir;
 3. teste do server/tool com client MCP real ou harness oficial, não apenas chamada direta de handler;
-4. Streamable HTTP com `Stateless: true`;
-5. somente tools read-only esperadas aparecem em discovery/list;
-6. target ausente/desabilitado falha antes de invocar `TelegramQuery`;
-7. input não permite peer arbitrário nem access hash;
-8. limit/cursor/cancellation preservados;
-9. erros Telegram são traduzidos sem vazar raw error/payload;
-10. output não contém session bytes, OTP, password, API hash, access hash ou tipos `tg.*`;
-11. mensagens continuam marcadas semanticamente como realtime/not-Evidence;
-12. nenhum import/acesso a SQLite/Evidence no MCP realtime adapter;
-13. teste de payload hostil confirma que conteúdo Telegram não vira comando do servidor;
-14. teste de teardown/cancelamento do HTTP adapter;
-15. integração ChatGPT/tunnel somente quando houver autorização/permissões reais; não assumir `tunnel_id`, developer mode ou credenciais.
+4. Streamable HTTP com `Stateless: true` e `PropagateRequestCancellation: true`;
+5. listener inicial limitado a loopback; configuração non-loopback rejeitada;
+6. proteção de localhost/DNS rebinding não desabilitada, `http.CrossOriginProtection` aplicada e request body bounded;
+7. capabilities explícitas mínimas: tool read-only esperada, sem `logging` default, roots, sampling, prompts ou resources;
+8. somente tools read-only esperadas aparecem em discovery/list;
+9. target ausente/desabilitado falha antes de invocar `TelegramQuery`;
+10. input não permite peer arbitrário nem access hash;
+11. limit/cursor/cancellation preservados end-to-end;
+12. erros Telegram são traduzidos sem vazar raw error/payload;
+13. output não contém session bytes, OTP, password, API hash, access hash ou tipos `tg.*`;
+14. mensagens continuam marcadas semanticamente como realtime/not-Evidence;
+15. nenhum import/acesso a SQLite/Evidence no MCP realtime adapter;
+16. teste de payload hostil confirma que conteúdo Telegram não vira comando do servidor;
+17. teste de request cross-origin hostil confirma rejeição antes da tool;
+18. teste de teardown/cancelamento do HTTP adapter;
+19. integração ChatGPT/tunnel somente quando houver autorização/permissões reais; não assumir `tunnel_id`, developer mode ou credenciais.
 
 ## Fora do escopo
 

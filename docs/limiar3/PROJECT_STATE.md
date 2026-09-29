@@ -22,17 +22,17 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 ## Gate paralelo L3-003 — MCP Telegram realtime
 
-Em 2026-09-24 foi feita uma investigação estreita da superfície MCP atual, sem reabrir pesquisa ampla de fundação. Evidence externa verificada:
+Em 2026-09-24 foi feita uma investigação estreita da superfície MCP atual, sem reabrir pesquisa ampla de fundação. A Evidence externa material foi revalidada em 2026-09-29 antes do Decision Gate:
 
-- `modelcontextprotocol/go-sdk v1.8.0` é a latest stable upstream observada; declara Go 1.25.0 e suporta MCP `2026-07-28`;
+- `modelcontextprotocol/go-sdk v1.8.0` continua a latest stable upstream observada; declara Go 1.25.0 e suporta MCP `2026-07-28`;
 - MCP `2026-07-28` usa core stateless/sessionless; o SDK Go serve essa revisão sobre Streamable HTTP com `Stateless: true`;
-- a stable v1.8.0 adiciona hardening de transporte/resource exhaustion e correções de lifecycle;
-- OpenAI Secure MCP Tunnel permite conectar MCP privado a produtos suportados sem inbound público, encaminhando para servidor local por HTTP ou stdio;
-- permissões do tunnel e ChatGPT developer mode são externas/separadas e **não foram presumidas**.
+- a stable v1.8.0 adiciona hardening de transporte/resource exhaustion e correções de lifecycle; `PropagateRequestCancellation` é opt-in, request body é bounded por default e a proteção de localhost/DNS rebinding fica habilitada salvo override;
+- `ServerOptions.Capabilities == nil` anuncia `logging` por compatibilidade histórica; como logging está deprecated em `2026-07-28`, a Proposal foi refinada para capabilities explícitas mínimas;
+- OpenAI Secure MCP Tunnel continua permitindo conectar MCP privado a produtos suportados sem inbound público; permissões de tunnel/workspace são externas/separadas e **não foram presumidas**.
 
-Foi criado [L3 ADR 004](adr/004-mcp-telegram-realtime-boundary.md) com status **Proposed**. A Proposal usa SDK oficial v1.8.0, Streamable HTTP stateless/private e um read scope de targets nomeados; a primeira tool é history read-only e não aceita peer arbitrário. Tunnel é opção operacional, não credential/auth Telegram. Não há OAuth próprio no primeiro single-operator/private slice; exposição pública/multi-user/write actions exigem nova Decision.
+Foi criado [L3 ADR 004](adr/004-mcp-telegram-realtime-boundary.md) com status **Proposed**. A revisão de 2026-09-29 preservou SDK oficial v1.8.0, Streamable HTTP stateless e read scope por targets nomeados, mas tornou explícitos os hardenings necessários antes do aceite: listener loopback-only, trust model single trusted operator, cancelamento HTTP propagado, proteção localhost/cross-origin, request body bounded e capabilities MCP mínimas sem `logging` default. A primeira tool continua history read-only e não aceita peer arbitrário. Secure MCP Tunnel é reachability operacional, não credential/auth Telegram. Não há OAuth próprio no primeiro slice; non-loopback/public/multi-user/write actions exigem nova Decision proporcional.
 
-**Gate:** enquanto L3 ADR 004 permanecer Proposed, não adicionar a dependência MCP nem implementar server/tool/tunnel. L3-002 continua EM ANDAMENTO/UNKNOWN nos gates reais já registrados. Após aceite explícito do ADR 004, L3-003 pode ser implementada e testada contra uma `TelegramQuery` fake mesmo antes da integração Telegram real; o E2E com ChatGPT/Telegram continua dependente dos gates/permissões correspondentes.
+**Gate:** a revisão técnica do L3 ADR 004 está concluída para esta rodada, mas o ADR permanece **Proposed**. A próxima ação do Decision Gate é o mantenedor **aceitar, revisar ou rejeitar** a Proposal; esta revisão de agente não promove a Decision. Enquanto permanecer Proposed, não adicionar dependência MCP nem implementar server/tool/tunnel. L3-002 continua IMPLEMENTADA NO CÓDIGO / NÃO VALIDADA EM INTEGRAÇÃO REAL nos gates já registrados. Após aceite explícito do ADR 004, L3-003 pode ser implementada e testada contra uma `TelegramQuery` fake mesmo antes da integração Telegram real; o E2E com ChatGPT/Telegram continua dependente dos gates/permissões correspondentes.
 
 ## Restrições e desconhecidos
 
