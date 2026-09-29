@@ -4,7 +4,7 @@
   <p>
     <a href="#o-que-é">O que é</a> •
     <a href="#como-funciona">Como Funciona</a> •
-    <a href="#quickstart">Quickstart</a> •
+    <a href="#início-rápido">Início rápido</a> •
     <a href="#comandos-da-cli">CLI</a> •
     <a href="#configuração">Configuração</a> •
     <a href="#regras-do-projeto">⚠️ Regras do Projeto</a>
@@ -37,7 +37,7 @@ flowchart LR
 2. **Processor:** Na implementação atual, pega os payloads brutos, extrai URLs, detecta preços e cupons, categoriza se a promoção acabou, deduplica produtos iguais em canais diferentes, e gera os *processed_messages*.
 3. **API & Dashboard:** Entrega os dados formatados (REST) e atualizações ao vivo (Server-Sent Events) para que o *Limiar Frontend* mostre a mágica acontecendo.
 
-## ⚡ Quickstart
+## ⚡ Início rápido
 
 O Limiar não requer instalações complexas. Apenas o Go (versão 1.22+) instalado na máquina.
 
