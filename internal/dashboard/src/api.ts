@@ -5,24 +5,24 @@ const BASE_URL = '/api';
 export const api = {
   async getHealth(): Promise<HealthStats> {
     const res = await fetch('/healthz');
-    if (!res.ok) throw new Error('Health check failed');
+    if (!res.ok) throw new Error('Falha na verificação de integridade');
     return res.json();
   },
   async getChannels(): Promise<ChannelStats[]> {
     const res = await fetch(`${BASE_URL}/channels`);
-    if (!res.ok) throw new Error('Failed to fetch channels');
+    if (!res.ok) throw new Error('Falha ao carregar canais');
     return res.json();
   },
   async getRawMessages(limit: number = 100, channelId?: number): Promise<RawMessage[]> {
     let url = `${BASE_URL}/messages?limit=${limit}`;
     if (channelId !== undefined) url += `&channel_id=${channelId}`;
     const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to fetch raw messages');
+    if (!res.ok) throw new Error('Falha ao carregar mensagens brutas');
     return res.json();
   },
   async getRawMessage(id: number): Promise<RawMessage> {
     const res = await fetch(`${BASE_URL}/message/${id}`);
-    if (!res.ok) throw new Error('Failed to fetch raw message');
+    if (!res.ok) throw new Error('Falha ao carregar mensagem bruta');
     return res.json();
   },
   async getProcessedMessages(limit: number = 100, type?: string, merchant?: string): Promise<ProcessedMessage[]> {
@@ -30,12 +30,12 @@ export const api = {
     if (type) url += `&type=${encodeURIComponent(type)}`;
     if (merchant) url += `&merchant=${encodeURIComponent(merchant)}`;
     const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to fetch processed messages');
+    if (!res.ok) throw new Error('Falha ao carregar mensagens processadas');
     return res.json();
   },
   async getProcessedStats(): Promise<ProcessedStats> {
     const res = await fetch(`${BASE_URL}/processed/stats`);
-    if (!res.ok) throw new Error('Failed to fetch processed stats');
+    if (!res.ok) throw new Error('Falha ao carregar estatísticas de processamento');
     return res.json();
   },
   getMediaUrl(id: number): string {
