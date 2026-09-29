@@ -460,9 +460,12 @@ func TestHandleIndex_NotFound(t *testing.T) {
 
 // flusherRecorder wraps httptest.ResponseRecorder to also satisfy http.Flusher.
 type flusherRecorder struct {
-	*httptest.ResponseRecorder
+	rec *httptest.ResponseRecorder
 }
 
+func (f *flusherRecorder) Header() http.Header { return f.rec.Header() }
+func (f *flusherRecorder) Write(b []byte) (int, error) { return f.rec.Write(b) }
+func (f *flusherRecorder) WriteHeader(statusCode int) { f.rec.WriteHeader(statusCode) }
 func (f *flusherRecorder) Flush() {}
 
 func TestHandleEvents_Subscribe(t *testing.T) {
@@ -472,7 +475,7 @@ func TestHandleEvents_Subscribe(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
-	w := &flusherRecorder{httptest.NewRecorder()}
+	w := &flusherRecorder{rec: httptest.NewRecorder()}
 
 	done := make(chan struct{})
 	go func() {
@@ -492,10 +495,10 @@ func TestHandleEvents_Subscribe(t *testing.T) {
 	cancel()
 	<-done
 
-	if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
+	if ct := w.rec.Header().Get("Content-Type"); ct != "text/event-stream" {
 		t.Errorf("Content-Type = %q, want text/event-stream", ct)
 	}
-	body := w.Body.String()
+	body := w.rec.Body.String()
 	if body == "" {
 		t.Error("expected SSE event in body")
 	}
