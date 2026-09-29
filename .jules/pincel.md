@@ -18,3 +18,6 @@
 ## 2026-06-12 - Estados Vazios Orientadores (Dashboard)
 **Aprendizado:** Estados vazios causados por falta de configuração prévia do usuário não devem apenas dizer "nenhum dado", mas devem guiar o usuário proativamente com o passo exato para resolver o problema.
 **Ação:** Ao projetar empty states causados por ausência de dados de configuração (como ausência de canais monitorados), sempre inclua uma instrução clara e acionável, como o comando CLI exato (`limiar-collector channels add`) necessário para alterar esse estado.
+## 2024-08-08 - Dashboard Vanilla A11y and UX Improvements
+**Aprendizado:** It's important to provide dynamic page titles when important context is presented, such as processing stats, to allow users on background tabs to stay updated. Using ARIA properties on dynamically updated lists without a framework requires setting `role="log"` and `aria-live="polite"` explicitly on the list containers.
+**Ação:** Use Alpine's `x-effect` directly on the body or head to dynamically update document.title based on application state. Ensure container elements used for logs or continuously updated streams have proper semantic roles and ARIA live regions set for screen reader support.
