@@ -102,7 +102,7 @@
             </div>
 
             <div class="flex-1 overflow-hidden flex">
-              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto">
+              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto" role="log" aria-live="polite" aria-label="Lista de mensagens raw">
                 <div x-show="loading" class="p-4 space-y-3">
                   <template x-for="i in 5">
                     <div class="h-20 bg-[#111111] border border-[#262626] rounded-[4px] animate-pulse"></div>
@@ -156,7 +156,7 @@
             </div>
 
             <div class="flex-1 overflow-hidden flex">
-              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto">
+              <div class="flex-1 divide-y divide-[#262626] overflow-y-auto" role="log" aria-live="polite" aria-label="Lista de deals processados">
                 <div x-show="loading" class="p-4 space-y-3">
                   <template x-for="i in 5">
                     <div class="h-32 bg-[#111111] border border-[#262626] rounded-[4px] animate-pulse"></div>
