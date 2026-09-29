@@ -1,7 +1,10 @@
 # L3 ADR 004 — MCP Telegram realtime: SDK oficial, transporte privado e read scope
 
 Authority: Decision Record — Limiar 3.0
-Status: Proposed
+Status: Accepted
+Accepted-by: Mantenedor do Limiar
+Accepted-at: 2026-09-29
+Acceptance-reference: `f24c55535560102c3184d0752bf5f78dc2104bdc`
 
 ## Contexto
 
@@ -231,12 +234,8 @@ A integração MCP permanece substituível: protocolo/transport ficam no SDK ofi
 
 Há uma nova dependência de produto e uma nova configuração de scope, mas não nasce uma segunda stack de rede, auth Telegram ou persistence layer.
 
-## Acceptance Gate
+## Acceptance
 
-Enquanto este ADR estiver `Proposed`:
+O mantenedor aceitou esta Decision em 2026-09-29, com referência durável `f24c55535560102c3184d0752bf5f78dc2104bdc` e registro em `docs/limiar3/DECISION_ACCEPTANCE_2026-09-29_MCP_REALTIME.md`.
 
-- não adicionar `modelcontextprotocol/go-sdk` ao root;
-- não implementar servidor/tool MCP de produto;
-- não criar tunnel, app, OAuth ou endpoint público.
-
-O mantenedor pode aceitar, revisar ou rejeitar esta Proposal. Só `Accepted` autoriza a implementação estrutural descrita aqui.
+A aceitação autoriza a implementação estrutural de L3-003 **dentro dos limites deste ADR**. Não autoriza por si só conexão Telegram real, OTP/2FA, Secure MCP Tunnel real, listener público/non-loopback, OAuth/multi-user, write tools, merge ou deploy.
