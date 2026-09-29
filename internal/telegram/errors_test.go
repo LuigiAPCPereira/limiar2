@@ -33,7 +33,7 @@ func TestClassifyTelegramErrorFloodWait(t *testing.T) {
 
 	var opErr *OperationError
 	if !errors.As(got, &opErr) {
-		t.Fatalf("error=%v, esperado OperationError", got)
+		t.Fatalf("erro=%v; esperado OperationError", got)
 	}
 	if opErr.Kind != ErrorKindFloodWait || opErr.RetryAfter != 17*time.Second {
 		t.Fatalf("OperationError=%+v", opErr)
@@ -66,7 +66,7 @@ func TestClassifyTelegramErrorSemanticCategories(t *testing.T) {
 			got := classifyTelegramError("resolve_peer", tt.err)
 			var opErr *OperationError
 			if !errors.As(got, &opErr) {
-				t.Fatalf("error=%v, esperado OperationError", got)
+				t.Fatalf("erro=%v; esperado OperationError", got)
 			}
 			if opErr.Kind != tt.esperado {
 				t.Fatalf("kind=%q, esperado %q", opErr.Kind, tt.want)
@@ -83,17 +83,17 @@ func TestClassifyTelegramErrorNetworkIsTemporary(t *testing.T) {
 
 	var opErr *OperationError
 	if !errors.As(got, &opErr) {
-		t.Fatalf("error=%v, esperado OperationError", got)
+		t.Fatalf("erro=%v; esperado OperationError", got)
 	}
 	if opErr.Kind != ErrorKindTemporary {
-		t.Fatalf("kind=%q, esperado temporary", opErr.Kind)
+		t.Fatalf("kind=%q; esperado temporary", opErr.Kind)
 	}
 }
 
 func TestOperationErrorStringDoesNotEchoUpstreamPayload(t *testing.T) {
 	t.Parallel()
 
-	source := errors.New("sensitive-upstream-details")
+	source := errors.New("detalhes-upstream-sensiveis")
 	err := &OperationError{
 		Operation: "history",
 		Kind:      ErrorKindInternal,

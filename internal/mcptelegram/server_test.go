@@ -66,7 +66,7 @@ func TestServerDiscoveryExposesOnlyReadOnlyTracerTools(t *testing.T) {
 		}
 		names = append(names, tool.Name)
 		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint || !tool.Annotations.IdempotentHint {
-			t.Fatalf("tool %q annotations=%+v, esperado read-only/idempotent", tool.Name, tool.Annotations)
+			t.Fatalf("tool %q annotations=%+v; esperado read-only/idempotent", tool.Name, tool.Annotations)
 		}
 	}
 	sort.Strings(names)
@@ -104,7 +104,7 @@ func TestTargetsReturnsConfiguredNamesWithoutPeerReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(payload), "@phones") {
-		t.Fatalf("referência de peer vazou in targets output: %s", payload)
+		t.Fatalf("referência de peer vazou na saída de targets: %s", payload)
 	}
 }
 
@@ -144,25 +144,25 @@ func TestHistoryPassesRequestedPageAndPreservesCursor(t *testing.T) {
 	}
 
 	if fake.resolveCalls != 1 || fake.historyCalls != 1 {
-		t.Fatalf("calls resolve=%d history=%d", fake.resolveCalls, fake.historyCalls)
+		t.Fatalf("chamadas resolve=%d history=%d", fake.resolveCalls, fake.historyCalls)
 	}
 	if fake.lastRef.Value != "@phones" {
 		t.Fatalf("resolved ref=%q", fake.lastRef.Value)
 	}
 	if fake.lastRequest.Limit != 20 || fake.lastRequest.Cursor != "opaque-previous" {
-		t.Fatalf("history request=%+v", fake.lastRequest)
+		t.Fatalf("requisição de histórico=%+v", fake.lastRequest)
 	}
 
 	var out historyOutput
 	decodeStructured(t, result, &out)
 	if out.RequestedLimit != 20 || out.NextCursor != "tg-history-v1:101:1700000000" {
-		t.Fatalf("history output=%+v", out)
+		t.Fatalf("saída de histórico=%+v", out)
 	}
 	if len(out.Messages) != 1 || out.Messages[0].Text != "Galaxy S26 R$ 3.999" {
 		t.Fatalf("messages=%+v", out.Messages)
 	}
 	if out.Messages[0].Date != "2023-11-14T22:13:20Z" {
-		t.Fatalf("message date=%q", out.Messages[0].Date)
+		t.Fatalf("data da mensagem=%q", out.Messages[0].Date)
 	}
 }
 
@@ -184,7 +184,7 @@ func TestHistoryDefaultsToTwentyButAllowsUpToConfiguredPageCeiling(t *testing.T)
 		t.Fatalf("histórico padrão retornou erro: %s", resultText(result))
 	}
 	if fake.lastRequest.Limit != 20 {
-		t.Fatalf("default limit=%d, esperado 20", fake.lastRequest.Limit)
+		t.Fatalf("limite padrão=%d; esperado 20", fake.lastRequest.Limit)
 	}
 
 	result, err = session.CallTool(context.Background(), &mcp.CallToolParams{
@@ -223,10 +223,10 @@ func TestHistoryRejectsUnboundedSingleCallBeforeTelegram(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !result.IsError {
-		t.Fatal("limite acima do teto da página foi aceito, esperado tool error")
+		t.Fatal("limite acima do teto da página foi aceito, esperado erro da tool")
 	}
 	if fake.resolveCalls != 0 || fake.historyCalls != 0 {
-		t.Fatalf("TelegramQuery called for rejected limit: resolve=%d history=%d", fake.resolveCalls, fake.historyCalls)
+		t.Fatalf("TelegramQuery foi chamada para limite rejeitado: resolve=%d history=%d", fake.resolveCalls, fake.historyCalls)
 	}
 	if !strings.Contains(resultText(result), "next_cursor") {
 		t.Fatalf("erro não explica a paginação: %q", resultText(result))
@@ -248,10 +248,10 @@ func TestHistoryRejectsUnknownTargetBeforeTelegram(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !result.IsError {
-		t.Fatal("target desconhecido foi aceito, esperado tool error")
+		t.Fatal("target desconhecido foi aceito, esperado erro da tool")
 	}
 	if fake.resolveCalls != 0 || fake.historyCalls != 0 {
-		t.Fatalf("TelegramQuery called for unknown target: resolve=%d history=%d", fake.resolveCalls, fake.historyCalls)
+		t.Fatalf("TelegramQuery foi chamada para target desconhecido: resolve=%d history=%d", fake.resolveCalls, fake.historyCalls)
 	}
 }
 
@@ -293,7 +293,7 @@ func TestHTTPServerIsLoopbackOnlyAndRejectsCrossOrigin(t *testing.T) {
 		":8080",
 	} {
 		if _, err := adapter.HTTPServer(address); !errors.Is(err, ErrInvalidConfig) {
-			t.Fatalf("HTTPServer(%q) error=%v, esperado ErrInvalidConfig", address, err)
+			t.Fatalf("HTTPServer(%q) erro=%v, esperado ErrInvalidConfig", address, err)
 		}
 	}
 

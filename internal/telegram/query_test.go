@@ -27,7 +27,7 @@ func TestQueryResolveCachesOperationalPeerWithoutLeakingAccessHash(t *testing.T)
 
 	got, err := q.ResolvePeer(context.Background(), PeerRef{Value: "@offers"})
 	if err != nil {
-		t.Fatalf("ResolvePeer() error=%v", err)
+		t.Fatalf("ResolvePeer() erro=%v", err)
 	}
 	if got.Key != (PeerKey{Kind: PeerKindChannel, ID: 42}) {
 		t.Fatalf("ResolvePeer()=%+v", got)
@@ -59,7 +59,7 @@ func TestQueryHistoryRequiresPeerResolvedInThisRuntime(t *testing.T) {
 
 	_, err = q.History(context.Background(), PeerKey{Kind: PeerKindChannel, ID: 42}, HistoryRequest{Limit: 10})
 	if !errors.Is(err, ErrPeerNotResolved) {
-		t.Fatalf("History() error=%v, esperado ErrPeerNotResolved", err)
+		t.Fatalf("History() erro=%v, esperado ErrPeerNotResolved", err)
 	}
 }
 
@@ -103,23 +103,23 @@ func TestQueryHistoryMapsBoundedPageAndOpaqueCursor(t *testing.T) {
 	}
 	page, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 2, Cursor: encodeHistoryCursor(12, time.Unix(1_700_000_200, 0).UTC())})
 	if err != nil {
-		t.Fatalf("History() error=%v", err)
+		t.Fatalf("History() erro=%v", err)
 	}
 	if gotLimit != 2 || gotOffset.ID != 12 || gotOffset.Date != 1_700_000_200 {
-		t.Fatalf("history args limit=%d offset=%+v", gotLimit, gotOffset)
+		t.Fatalf("argumentos do histórico limit=%d offset=%+v", gotLimit, gotOffset)
 	}
 	if len(page.Messages) != 2 {
 		t.Fatalf("messages=%d, esperado 2", len(page.Messages))
 	}
 	first := page.Messages[0]
 	if first.ID != 11 || first.Text != "promo one" || first.Peer != desc.Key || first.Kind != MessageKindRegular {
-		t.Fatalf("first message=%+v", first)
+		t.Fatalf("primeira mensagem=%+v", first)
 	}
 	if first.UpstreamType != "message" {
-		t.Fatalf("first upstream type=%q, esperado message", first.UpstreamType)
+		t.Fatalf("primeiro tipo upstream=%q; esperado message", first.UpstreamType)
 	}
 	if first.GroupedID != 77 || first.EditedAt.IsZero() {
-		t.Fatalf("message optional metadata=%+v", first)
+		t.Fatalf("metadados opcionais da mensagem=%+v", first)
 	}
 	if page.NextCursor != "tg-history-v1:10:1699999900" {
 		t.Fatalf("NextCursor=%q", page.NextCursor)
@@ -185,14 +185,14 @@ func TestQueryValidatesLimitCursorAndPeer(t *testing.T) {
 		{Limit: 1, Cursor: "tg-history-v1:10"},
 	} {
 		if _, err := q.History(context.Background(), desc.Key, req); err == nil {
-			t.Fatalf("History(%+v) error=nil, esperado validation error", req)
+			t.Fatalf("History(%+v) error=nil, esperado erro de validação", req)
 		}
 	}
 	if _, err := q.ResolvePeer(context.Background(), PeerRef{}); !errors.Is(err, ErrInvalidQuery) {
-		t.Fatalf("empty ResolvePeer error=%v", err)
+		t.Fatalf("erro de ResolvePeer vazio=%v", err)
 	}
 	if _, err := q.History(context.Background(), PeerKey{}, HistoryRequest{Limit: 1}); !errors.Is(err, ErrInvalidQuery) {
-		t.Fatalf("invalid key error=%v", err)
+		t.Fatalf("erro de chave inválida=%v", err)
 	}
 }
 
@@ -218,17 +218,17 @@ func TestQueryHistoryRespectsConfiguredPageLimit(t *testing.T) {
 	}
 
 	if _, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 3}); !errors.Is(err, ErrInvalidQuery) {
-		t.Fatalf("History() error=%v, esperado ErrInvalidQuery", err)
+		t.Fatalf("History() erro=%v, esperado ErrInvalidQuery", err)
 	}
 	if called {
-		t.Fatal("backend de histórico foi chamado for request above configured page limit")
+		t.Fatal("backend de histórico foi chamado para requisição acima do limite configurado da página")
 	}
 
 	if _, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 2}); err != nil {
-		t.Fatalf("History() at configured limit error=%v", err)
+		t.Fatalf("History() no limite configurado erro=%v", err)
 	}
 	if !called {
-		t.Fatal("backend de histórico não foi chamado at configured page limit")
+		t.Fatal("backend de histórico não foi chamado no limite configurado da página")
 	}
 }
 
@@ -298,7 +298,7 @@ func TestPeerKeySupportsSourceKindsWithoutAccessHash(t *testing.T) {
 	for _, tt := range tests {
 		got, err := peerKey(tt.input)
 		if err != nil {
-			t.Fatalf("peerKey(%T) error=%v", tt.input, err)
+			t.Fatalf("peerKey(%T) erro=%v", tt.input, err)
 		}
 		if got != tt.esperado {
 			t.Fatalf("peerKey(%T)=%+v esperado %+v", tt.input, got, tt.want)
@@ -425,7 +425,7 @@ func TestQueryHistoryRejectsInvalidUpstreamMessages(t *testing.T) {
 				t.Fatal(err)
 			}
 			if _, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 1}); !errors.Is(err, ErrInvalidUpstreamMessage) {
-				t.Fatalf("History() error=%v, esperado ErrInvalidUpstreamMessage", err)
+				t.Fatalf("History() erro=%v, esperado ErrInvalidUpstreamMessage", err)
 			}
 		})
 	}
@@ -447,6 +447,6 @@ func TestQueryConstructorRejectsPageSizeAboveTelegramLimit(t *testing.T) {
 		},
 	)
 	if !errors.Is(err, ErrInvalidQuery) {
-		t.Fatalf("newQueryClientWithFuncs() error=%v, esperado ErrInvalidQuery", err)
+		t.Fatalf("newQueryClientWithFuncs() erro=%v, esperado ErrInvalidQuery", err)
 	}
 }

@@ -166,7 +166,7 @@ func (a *Adapter) newMCPServer() *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "telegram.targets",
 		Title:       "Targets do Telegram",
-		Description: "List the Targets do Telegram configured for this MCP read scope. Use these names when calling telegram.history.",
+		Description: "Lista os targets do Telegram configurados neste escopo de leitura MCP. Use esses nomes ao chamar telegram.history.",
 		Annotations: annotations,
 	}, a.handleTargets)
 

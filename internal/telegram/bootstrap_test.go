@@ -61,7 +61,7 @@ func goodBootstrapConfig(storage gotdSessionStorageForTest) BootstrapConfig {
 	}
 }
 
-// gotdSessionStorageForTest mirrors the gotd session.Storage shape only to make
+// gotdSessionStorageForTest espelha o formato de gotd session.Storage somente para tornar
 // test helpers accept either memory adapter or other in-package implementations.
 type gotdSessionStorageForTest interface {
 	LoadSession(context.Context) ([]byte, error)
@@ -133,13 +133,13 @@ func TestBootstrapPrepareFreshDoesNotPersistAnything(t *testing.T) {
 		t.Fatalf("prepare() error=%v", err)
 	}
 	if replaced {
-		t.Fatal("fresh bootstrap unexpectedly marked as replacement")
+		t.Fatal("bootstrap novo foi marcado indevidamente como substituição")
 	}
 	if got := staging.snapshot(); len(got) != 0 {
-		t.Fatalf("staging snapshot=%q, esperado empty", got)
+		t.Fatalf("snapshot de staging=%q; esperado vazio", got)
 	}
 	if base.stores != 0 || len(base.data) != 0 {
-		t.Fatalf("underlying storage changed during prepare: stores=%d data=%q", base.stores, base.data)
+		t.Fatalf("storage subjacente mudou durante prepare: stores=%d data=%q", base.stores, base.data)
 	}
 }
 
@@ -158,7 +158,7 @@ func TestBootstrapExistingCredentialRequiresExplicitReplacement(t *testing.T) {
 		t.Fatalf("prepare() error=%v, esperado ErrBootstrapAlreadyProvisioned", err)
 	}
 	if got := string(base.data); got != "old-session" {
-		t.Fatalf("existing credential changed: %q", got)
+		t.Fatalf("credencial existente mudou: %q", got)
 	}
 }
 
@@ -183,10 +183,10 @@ func TestBootstrapReplacementStagesWithoutTouchingOldCredential(t *testing.T) {
 		t.Fatal("replacement was not recorded")
 	}
 	if len(staging.snapshot()) != 0 {
-		t.Fatal("staging unexpectedly loaded old credential")
+		t.Fatal("staging carregou indevidamente a credencial antiga")
 	}
 	if got := string(base.data); got != "old-session" {
-		t.Fatalf("old credential changed before authentication: %q", got)
+		t.Fatalf("credencial antiga mudou antes da autenticação: %q", got)
 	}
 }
 
@@ -213,7 +213,7 @@ func TestBootstrapCommitPublishesOnlyFinalStagedSnapshot(t *testing.T) {
 	}
 	first[0] = 'X'
 	if got := string(base.data); got != "old-session" {
-		t.Fatalf("intermediate stage leaked to durable storage: %q", got)
+		t.Fatalf("estado intermediário vazou para o storage durável: %q", got)
 	}
 
 	final := []byte("final-session")
@@ -260,7 +260,7 @@ func TestBootstrapCommitUsesIndependentBoundedContext(t *testing.T) {
 func TestBootstrapCommitFailureDoesNotMutateMemoryStorage(t *testing.T) {
 	t.Parallel()
 
-	sentinel := errors.New("disk full")
+	sentinel := errors.New("disco cheio")
 	base := &memoryBootstrapStorage{data: []byte("old-session"), storeErr: sentinel}
 	storage := bootstrapStorageAdapter{base}
 	cfg := goodBootstrapConfig(storage)
@@ -280,7 +280,7 @@ func TestBootstrapCommitFailureDoesNotMutateMemoryStorage(t *testing.T) {
 		t.Fatalf("commit() error=%v, esperado sentinel", err)
 	}
 	if got := string(base.data); got != "old-session" {
-		t.Fatalf("old credential changed after failed durable commit: %q", got)
+		t.Fatalf("credencial antiga mudou após falha no commit durável: %q", got)
 	}
 }
 
@@ -322,7 +322,7 @@ func TestExistingAccountAdapterBlocksSignupAndPlaintextPassword(t *testing.T) {
 
 	a := existingAccountAuthAdapter{input: existingInputStub{}}
 	if _, err := a.Password(context.Background()); err == nil {
-		t.Fatal("Password() error=nil, plaintext path must be disabled")
+		t.Fatal("Password() erro=nil; caminho em texto puro deve permanecer desabilitado")
 	}
 	if err := a.AcceptTermsOfService(context.Background(), tg.HelpTermsOfService{}); !errors.Is(err, ErrBootstrapSignUpRequired) {
 		t.Fatalf("AcceptTermsOfService() error=%v", err)
@@ -338,7 +338,7 @@ func TestExistingAccountAdapterBlocksSignupAndPlaintextPassword(t *testing.T) {
 func TestBootstrapPreparePreservesStorageFailure(t *testing.T) {
 	t.Parallel()
 
-	sentinel := errors.New("permission denied")
+	sentinel := errors.New("permissão negada")
 	base := &memoryBootstrapStorage{loadErr: sentinel}
 	b, err := NewBootstrapper(goodBootstrapConfig(bootstrapStorageAdapter{base}))
 	if err != nil {
@@ -387,7 +387,7 @@ func TestBootstrapFinalizeRequiresVerifiedSelfBeforeDurableCommit(t *testing.T) 
 		t.Fatalf("finalize() error=%v, esperado ErrBootstrapUnauthorized", err)
 	}
 	if got := string(base.data); got != "old-session" {
-		t.Fatalf("durable credential changed without verified self: %q", got)
+		t.Fatalf("credencial durável mudou sem self verificado: %q", got)
 	}
 	if base.stores != 0 {
 		t.Fatalf("StoreSession calls=%d, esperado 0", base.stores)
@@ -453,7 +453,7 @@ func TestBootstrapOwnershipLeaseIsReleasedOnPrepareFailure(t *testing.T) {
 
 	release, err := coordinator.acquire("primary")
 	if err != nil {
-		t.Fatalf("ownership remained stuck after bootstrap failure: %v", err)
+		t.Fatalf("ownership permaneceu preso após falha de bootstrap: %v", err)
 	}
 	release()
 }
@@ -480,7 +480,7 @@ func TestBootstrapOwnershipConflictDoesNotConsumeOneShot(t *testing.T) {
 		t.Fatalf("QR() error=%v, esperado ErrAuthorizationInUse", err)
 	}
 	if qrBootstrapper.started.Load() {
-		t.Fatal("QR bootstrapper consumed one-shot state after ownership conflict")
+		t.Fatal("bootstrapper QR consumiu estado de uso único após conflito de ownership")
 	}
 
 	codeBootstrapper, err := NewBootstrapper(cfg)
@@ -491,13 +491,13 @@ func TestBootstrapOwnershipConflictDoesNotConsumeOneShot(t *testing.T) {
 		t.Fatalf("Code() error=%v, esperado ErrAuthorizationInUse", err)
 	}
 	if codeBootstrapper.started.Load() {
-		t.Fatal("Code bootstrapper consumed one-shot state after ownership conflict")
+		t.Fatal("bootstrapper Code consumiu estado de uso único após conflito de ownership")
 	}
 
 	release()
 	reacquired, err := coordinator.acquire("primary")
 	if err != nil {
-		t.Fatalf("ownership not reusable after release: %v", err)
+		t.Fatalf("ownership não ficou reutilizável após liberação: %v", err)
 	}
 	reacquired()
 }

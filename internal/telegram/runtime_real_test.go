@@ -48,7 +48,7 @@ func TestRealRuntimeRestartReuse(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 		cancel()
 		if err != nil {
-			t.Fatalf("real runtime subprocess %d failed: %s; child output=%s", i+1, safeIntegrationError(err), sanitizeChildOutput(output))
+			t.Fatalf("subprocesso %d do runtime real falhou: %s; saída do processo filho=%s", i+1, safeIntegrationError(err), sanitizeChildOutput(output))
 		}
 	}
 
@@ -141,7 +141,7 @@ func requireEnv(t *testing.T, key string) string {
 	t.Helper()
 	value := os.Getenv(key)
 	if value == "" {
-		t.Skipf("%s is not configured for opt-in Telegram integration", key)
+		t.Skipf("%s não está configurada para a integração Telegram opt-in", key)
 	}
 	return value
 }
@@ -151,7 +151,7 @@ func parseRequiredEnvInt(t *testing.T, key string) int {
 	value := requireEnv(t, key)
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
-		t.Fatalf("%s must be a positive integer", key)
+		t.Fatalf("%s deve ser um inteiro positivo", key)
 	}
 	return parsed
 }
@@ -161,7 +161,7 @@ func parseRequiredEnvInt64(t *testing.T, key string) int64 {
 	value := requireEnv(t, key)
 	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || parsed <= 0 {
-		t.Fatalf("%s must be a positive integer", key)
+		t.Fatalf("%s deve ser um inteiro positivo", key)
 	}
 	return parsed
 }

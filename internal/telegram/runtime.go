@@ -181,8 +181,8 @@ func preflightPersistedSession(ctx context.Context, storage gotdtelegram.Session
 	loader := gotdsession.Loader{Storage: staticSessionStorage{data: raw}}
 	if _, err := loader.Load(ctx); err != nil {
 		if errors.Is(err, gotdsession.ErrNotFound) {
-			// At this point physical storage was present and non-empty, so gotd's
-			// ErrNotFound can only represent an incompatible serialized version.
+			// Neste ponto o armazenamento físico estava presente e não vazio; portanto,
+			// ErrNotFound do gotd só pode representar uma versão serializada incompatível.
 			return newRebootstrapError(fmt.Errorf("%w: %v", ErrIncompatibleSession, err))
 		}
 		return fmt.Errorf("runtime do Telegram: decodificar autorização persistida: %w", err)

@@ -30,7 +30,7 @@ func TestRuntimeObserverEmitsLifecycleWithoutSecrets(t *testing.T) {
 	}
 
 	if err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil }); err != nil {
-		t.Fatalf("Run() error=%v", err)
+		t.Fatalf("Run() erro=%v", err)
 	}
 
 	if len(events) != 3 {
@@ -39,7 +39,7 @@ func TestRuntimeObserverEmitsLifecycleWithoutSecrets(t *testing.T) {
 	if events[0].State != RuntimeStateStarting ||
 		events[1].State != RuntimeStateReady ||
 		events[2].State != RuntimeStateStopped {
-		t.Fatalf("unexpected lifecycle order: %+v", events)
+		t.Fatalf("ordem inesperada do lifecycle: %+v", events)
 	}
 	for _, event := range events {
 		if event.IdentityKey != "primary" {
@@ -73,16 +73,16 @@ func TestRuntimeObserverEmitsFailedOnReadinessFailure(t *testing.T) {
 
 	err := r.Run(context.Background(), func(context.Context, Capabilities) error { return nil })
 	if !errors.Is(err, ErrRebootstrapRequired) {
-		t.Fatalf("Run() error=%v, esperado ErrRebootstrapRequired", err)
+		t.Fatalf("Run() erro=%v, esperado ErrRebootstrapRequired", err)
 	}
 	if len(events) != 2 {
-		t.Fatalf("events=%+v, esperado starting/failed", events)
+		t.Fatalf("events=%+v; esperado starting/failed", events)
 	}
 	if events[0].State != RuntimeStateStarting || events[1].State != RuntimeStateFailed {
-		t.Fatalf("unexpected events=%+v", events)
+		t.Fatalf("eventos inesperados=%+v", events)
 	}
 	if events[1].Outcome != EventOutcomeError {
-		t.Fatalf("failed outcome=%q, esperado error", events[1].Outcome)
+		t.Fatalf("resultado de falha=%q; esperado error", events[1].Outcome)
 	}
 }
 
@@ -115,10 +115,10 @@ func TestQueryObserverDoesNotExposeReferenceOrRawError(t *testing.T) {
 	}
 
 	if _, err := q.ResolvePeer(context.Background(), PeerRef{Value: sensitiveRef}); err == nil {
-		t.Fatal("ResolvePeer() error=nil, esperado failure")
+		t.Fatal("ResolvePeer() erro=nil; esperada falha")
 	}
 	if len(events) != 1 {
-		t.Fatalf("events=%+v, esperado one operation event", events)
+		t.Fatalf("events=%+v; esperado um evento de operação", events)
 	}
 	event := events[0]
 	if event.Type != EventTypeOperation || event.Operation != "resolve_peer" {
@@ -164,10 +164,10 @@ func TestQueryObserverPreservesFloodMetadataOnly(t *testing.T) {
 	events = nil
 
 	if _, err := q.History(context.Background(), desc.Key, HistoryRequest{Limit: 1}); err == nil {
-		t.Fatal("History() error=nil, esperado FLOOD_WAIT")
+		t.Fatal("History() erro=nil; esperado FLOOD_WAIT")
 	}
 	if len(events) != 1 {
-		t.Fatalf("events=%+v, esperado one history event", events)
+		t.Fatalf("events=%+v; esperado um evento de histórico", events)
 	}
 	event := events[0]
 	if event.Operation != "history" ||
@@ -234,11 +234,11 @@ func TestObservedSessionStorageNeverExposesBytesOrRawError(t *testing.T) {
 
 	base.loadErr = errors.New(rawError)
 	if _, err := storage.LoadSession(context.Background()); err == nil {
-		t.Fatal("LoadSession() error=nil, esperado failure")
+		t.Fatal("LoadSession() erro=nil; esperada falha")
 	}
 
 	if len(events) != 3 {
-		t.Fatalf("events=%+v, esperado load/store/failed-load", events)
+		t.Fatalf("events=%+v; esperado load/store/failed-load", events)
 	}
 	if events[0].Operation != "session_load" ||
 		events[1].Operation != "session_store" ||
@@ -246,7 +246,7 @@ func TestObservedSessionStorageNeverExposesBytesOrRawError(t *testing.T) {
 		t.Fatalf("operations=%+v", events)
 	}
 	if events[2].Outcome != EventOutcomeError {
-		t.Fatalf("failed load outcome=%q, esperado error", events[2].Outcome)
+		t.Fatalf("resultado de falha no load=%q; esperado error", events[2].Outcome)
 	}
 	for _, event := range events {
 		rendered := fmt.Sprintf("%+v", event)
