@@ -439,7 +439,7 @@ func TestQueryConstructorRejectsPageSizeAboveTelegramLimit(t *testing.T) {
 
 	_, err := newQueryClientWithFuncs(
 		1,
-		maxTelegramHistoryPageSize+1,
+		MaxHistoryPageSize+1,
 		8,
 		func(context.Context, string) (tg.InputPeerClass, error) {
 			return &tg.InputPeerChannel{ChannelID: 42, AccessHash: 7}, nil
