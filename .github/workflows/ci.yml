@@ -31,6 +31,11 @@ jobs:
       - name: Verificar módulo
         run: go mod verify
 
+      - name: Verificar go.mod e go.sum sincronizados
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
       - name: Verificar contenção do legado
         if: runner.os == 'Linux'
         run: bash scripts/ci/check-no-legacy-imports.sh
