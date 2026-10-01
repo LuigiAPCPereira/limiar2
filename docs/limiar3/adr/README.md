@@ -28,12 +28,14 @@ Aplicam-se integralmente `AGENTS.md` e `docs/DOCUMENTATION_AND_CONTINUITY.md`:
 | [003](003-repository-topology-and-legacy-containment.md) | Repository topology and legacy containment | **Accepted** | `70dcd4982b90a26fa6eb7f722a679537f54bb1e0` |
 | [004](004-mcp-telegram-realtime-boundary.md) | MCP Telegram realtime: SDK oficial, transporte privado e read scope | **Accepted** | `f24c55535560102c3184d0752bf5f78dc2104bdc` |
 | [005](005-platform-agnostic-runtime-and-storage.md) | Runtime, Telegram, MCP e armazenamento agnósticos à plataforma por padrão | **Accepted** | `c940373f46d2a522e3f3c0d74ab72ecaa0f28d1f` |
+| [006](006-acquisition-subscription-identity.md) | Identidade e lifecycle de Acquisition Subscription | **Accepted** | `0ce7d88f2b47db397ae6463d9857c5ca9212e013` |
 
 ## Relação com ADRs históricos
 
 - `legacy/limiar2/docs/adr/023-hardened-mtproto-session-file-boundary.md` permanece `Proposed` no registry histórico. L3 ADR 001 reaproveita Evidence e refinamentos dele, mas sua aceitação **não promove** o ADR histórico.
 - ADR histórico 004 continua sob o registry transitório da rebaseline; ele não é a autoridade do mecanismo concreto de sessão do Limiar 3.
-- ADRs 016–020 Accepted continuam relevantes para a futura fatia de Evidence/acquisition quando explicitamente herdados pelos documentos L3.
+- ADRs 016–020 Accepted continuam relevantes para Evidence/acquisition quando explicitamente herdados pelos documentos L3.
+- `legacy/limiar2/docs/adr/024-acquisition-subscription-identity.md` permanece `Proposed` como artefato histórico; a authority corrente de identidade de acquisition no Limiar 3 é a **L3 ADR 006 Accepted**.
 
 ## Baseline de dependências
 
