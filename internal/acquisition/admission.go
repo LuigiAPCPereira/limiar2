@@ -13,9 +13,8 @@ import (
 // Admission garante o ordering mínimo aceito pelo ADR 018:
 // Source Evidence durável antes de qualquer encaminhamento downstream.
 //
-// A origem de SubscriptionID não pertence a este tipo. O caller fornece a Evidence
-// já contextualizada; ligar esse contexto à configuração produtiva continua sujeito
-// à Decision específica de identidade de subscription.
+// Este é o core de baixo nível já contextualizado. O caminho configurado de produção
+// deve usar ConfiguredAdmission para aplicar a identidade definida pela L3 ADR 006.
 type Admission struct {
 	appender evidence.EvidenceAppender
 }
