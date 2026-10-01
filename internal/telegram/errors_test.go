@@ -69,7 +69,7 @@ func TestClassifyTelegramErrorSemanticCategories(t *testing.T) {
 				t.Fatalf("erro=%v; esperado OperationError", got)
 			}
 			if opErr.Kind != tt.esperado {
-				t.Fatalf("kind=%q, esperado %q", opErr.Kind, tt.want)
+				t.Fatalf("kind=%q, esperado %q", opErr.Kind, tt.esperado)
 			}
 		})
 	}

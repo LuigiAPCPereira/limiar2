@@ -71,8 +71,8 @@ func TestServerDiscoveryExposesOnlyReadOnlyTracerTools(t *testing.T) {
 	}
 	sort.Strings(names)
 	esperado := []string{"telegram.history", "telegram.targets"}
-	if strings.Join(names, ",") != strings.Join(want, ",") {
-		t.Fatalf("tools=%v, esperado %v", names, want)
+	if strings.Join(names, ",") != strings.Join(esperado, ",") {
+		t.Fatalf("tools=%v, esperado %v", names, esperado)
 	}
 }
 
