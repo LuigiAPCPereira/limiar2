@@ -301,7 +301,7 @@ func TestPeerKeySupportsSourceKindsWithoutAccessHash(t *testing.T) {
 			t.Fatalf("peerKey(%T) erro=%v", tt.input, err)
 		}
 		if got != tt.esperado {
-			t.Fatalf("peerKey(%T)=%+v esperado %+v", tt.input, got, tt.want)
+			t.Fatalf("peerKey(%T)=%+v esperado %+v", tt.input, got, tt.esperado)
 		}
 	}
 }
