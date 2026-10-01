@@ -10,6 +10,10 @@ Na conversa do projeto, após revisar a função de `subscription_id` e sua dist
 
 Esta autorização resolve o bloqueio arquitetural da identidade de Acquisition Subscription, mas não autoriza merge, deploy, Telegram real ou outras Decisions pendentes.
 
+## Refinamento explícito do mantenedor
+
+Após a proposta inicial de manter a Decision deliberadamente mínima para o MVP, o mantenedor esclareceu que **não precisa ser uma decisão simples se ela for importante e pode ser avançada**. Portanto, a Decision pode fechar de forma durável lifecycle, ownership, correlação, evolução da identidade, multiplicidade e failure semantics, desde que não introduza complexidade sem necessidade nem transforme detalhes de implementação ainda abertos em obrigação arquitetural.
+
 ## Decisão aceita
 
 1. `subscription_id` identifica uma **configuração de aquisição** do Limiar.
