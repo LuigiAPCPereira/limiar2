@@ -1,6 +1,4 @@
-//go:build linux
-
-// Package telegram owns the Limiar Telegram authorization runtime boundary.
+// Package telegram contém o boundary de runtime da autorização Telegram do Limiar.
 package telegram
 
 import (
@@ -16,18 +14,18 @@ import (
 )
 
 var (
-	ErrInvalidRuntimeConfig = errors.New("telegram runtime: invalid config")
-	ErrAlreadyStarted       = errors.New("telegram runtime: already started")
-	ErrRebootstrapRequired  = errors.New("telegram runtime: rebootstrap required")
-	ErrSessionAbsent        = errors.New("telegram runtime: persisted session absent")
-	ErrAuthorizationRejected = errors.New("telegram runtime: persisted authorization rejected")
-	ErrIncompatibleSession  = errors.New("telegram runtime: incompatible persisted session")
-	ErrSelfMismatch         = errors.New("telegram runtime: authorization identity mismatch")
-	ErrInvalidAuthStatus    = errors.New("telegram runtime: invalid authorization status")
+	ErrInvalidRuntimeConfig = errors.New("runtime do Telegram: configuração inválida")
+	ErrAlreadyStarted       = errors.New("runtime do Telegram: já iniciado")
+	ErrRebootstrapRequired  = errors.New("runtime do Telegram: novo bootstrap obrigatório")
+	ErrSessionAbsent        = errors.New("runtime do Telegram: sessão persistida ausente")
+	ErrAuthorizationRejected = errors.New("runtime do Telegram: autorização persistida rejeitada")
+	ErrIncompatibleSession  = errors.New("runtime do Telegram: sessão persistida incompatível")
+	ErrSelfMismatch         = errors.New("runtime do Telegram: identidade de autorização divergente")
+	ErrInvalidAuthStatus    = errors.New("runtime do Telegram: status de autorização inválido")
 )
 
-// AuthorizationIdentity is the Limiar-local owner key for one persisted
-// Telegram authorization. It is deliberately distinct from MTProto session_id.
+// AuthorizationIdentity é a chave local do Limiar que identifica o owner de uma autorização
+// Telegram persistida. Ela é deliberadamente distinta do session_id do MTProto.
 type AuthorizationIdentity struct {
 	Key                string
 	ExpectedSelfUserID int64
@@ -35,16 +33,16 @@ type AuthorizationIdentity struct {
 
 func (i AuthorizationIdentity) validate() error {
 	if strings.TrimSpace(i.Key) == "" {
-		return fmt.Errorf("%w: empty authorization identity key", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: chave da identidade de autorização vazia", ErrInvalidRuntimeConfig)
 	}
 	if i.ExpectedSelfUserID <= 0 {
-		return fmt.Errorf("%w: expected Telegram self user id must be positive", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: ID esperado do próprio usuário Telegram deve ser positivo", ErrInvalidRuntimeConfig)
 	}
 	return nil
 }
 
-// RuntimeConfig contains only the configuration needed to own a gotd client.
-// AppHash and session bytes are credentials and must never be logged.
+// RuntimeConfig contém somente a configuração necessária para possuir um client gotd.
+// AppHash e bytes da sessão são credenciais e nunca devem ser registrados em log.
 type RuntimeConfig struct {
 	Identity         AuthorizationIdentity
 	AppID            int
@@ -63,28 +61,28 @@ func (c RuntimeConfig) validate() error {
 		return err
 	}
 	if c.AppID <= 0 {
-		return fmt.Errorf("%w: app id must be positive", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: app ID deve ser positivo", ErrInvalidRuntimeConfig)
 	}
 	if strings.TrimSpace(c.AppHash) == "" {
-		return fmt.Errorf("%w: app hash is required", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: app hash é obrigatório", ErrInvalidRuntimeConfig)
 	}
 	if c.SessionStorage == nil {
-		return fmt.Errorf("%w: session storage is required", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: armazenamento de sessão é obrigatório", ErrInvalidRuntimeConfig)
 	}
 	if c.Coordinator == nil {
-		return fmt.Errorf("%w: authorization coordinator is required", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: coordenador de autorização é obrigatório", ErrInvalidRuntimeConfig)
 	}
 	if c.ReadinessTimeout <= 0 {
-		return fmt.Errorf("%w: readiness timeout must be positive", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: timeout de prontidão deve ser positivo", ErrInvalidRuntimeConfig)
 	}
 	if c.MaxConcurrentQueries <= 0 {
-		return fmt.Errorf("%w: max concurrent queries must be positive", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: máximo de consultas concorrentes deve ser positivo", ErrInvalidRuntimeConfig)
 	}
 	if c.MaxHistoryPageSize <= 0 || c.MaxHistoryPageSize > MaxHistoryPageSize {
-		return fmt.Errorf("%w: max history page size must be between 1 and %d", ErrInvalidRuntimeConfig, MaxHistoryPageSize)
+		return fmt.Errorf("%w: tamanho máximo da página de histórico deve ficar entre 1 e %d", ErrInvalidRuntimeConfig, MaxHistoryPageSize)
 	}
 	if c.MaxResolvedPeers <= 0 {
-		return fmt.Errorf("%w: max resolved peers must be positive", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: máximo de peers resolvidos deve ser positivo", ErrInvalidRuntimeConfig)
 	}
 	return nil
 }
@@ -98,13 +96,13 @@ type runFunc func(context.Context, func(context.Context) error) error
 type statusFunc func(context.Context) (authorizationStatus, error)
 type preflightFunc func(context.Context) error
 
-// Capabilities are exposed only after semantic readiness succeeds.
+// Capabilities são expostas somente após a prontidão semântica ser confirmada.
 type Capabilities struct {
 	Query TelegramQuery
 }
 
-// Runtime owns exactly one main gotd telegram.Client for one authorization
-// identity. The client is intentionally not exposed to consumers.
+// Runtime possui exatamente um telegram.Client principal do gotd para uma identidade de autorização.
+// O client não é exposto aos consumidores intencionalmente.
 type Runtime struct {
 	identity         AuthorizationIdentity
 	coordinator      *AuthorizationCoordinator
@@ -118,7 +116,7 @@ type Runtime struct {
 	started          atomic.Bool
 }
 
-// NewRuntime constructs an unstarted Telegram runtime. It never performs login.
+// NewRuntime constrói um runtime Telegram ainda não iniciado. Ele nunca executa login.
 func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
@@ -131,7 +129,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	})
 	queryClient, err := newQueryClient(client.API(), cfg.MaxConcurrentQueries, cfg.MaxHistoryPageSize, cfg.MaxResolvedPeers)
 	if err != nil {
-		return nil, fmt.Errorf("telegram runtime: construct query capability: %w", err)
+		return nil, fmt.Errorf("runtime do Telegram: construir capability de consulta: %w", err)
 	}
 	queryClient.observer = cfg.Observer
 	queryClient.identityKey = cfg.Identity.Key
@@ -166,12 +164,12 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	}, nil
 }
 
-// Identity returns the non-secret Limiar authorization identity binding.
+// Identity retorna o vínculo não secreto da identidade de autorização do Limiar.
 
 func preflightPersistedSession(ctx context.Context, storage gotdtelegram.SessionStorage) error {
 	raw, err := storage.LoadSession(ctx)
 	if err != nil {
-		return fmt.Errorf("telegram runtime: load persisted authorization: %w", err)
+		return fmt.Errorf("runtime do Telegram: carregar autorização persistida: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -183,11 +181,11 @@ func preflightPersistedSession(ctx context.Context, storage gotdtelegram.Session
 	loader := gotdsession.Loader{Storage: staticSessionStorage{data: raw}}
 	if _, err := loader.Load(ctx); err != nil {
 		if errors.Is(err, gotdsession.ErrNotFound) {
-			// At this point physical storage was present and non-empty, so gotd's
-			// ErrNotFound can only represent an incompatible serialized version.
+			// Neste ponto o armazenamento físico estava presente e não vazio; portanto,
+			// ErrNotFound do gotd só pode representar uma versão serializada incompatível.
 			return newRebootstrapError(fmt.Errorf("%w: %v", ErrIncompatibleSession, err))
 		}
-		return fmt.Errorf("telegram runtime: decode persisted authorization: %w", err)
+		return fmt.Errorf("runtime do Telegram: decodificar autorização persistida: %w", err)
 	}
 	return nil
 }
@@ -233,7 +231,7 @@ func (s staticSessionStorage) LoadSession(ctx context.Context) ([]byte, error) {
 }
 
 func (staticSessionStorage) StoreSession(context.Context, []byte) error {
-	return errors.New("telegram runtime: read-only session validation storage")
+	return errors.New("runtime do Telegram: armazenamento de validação de sessão somente leitura")
 }
 
 func (r *Runtime) Identity() AuthorizationIdentity {
@@ -243,16 +241,15 @@ func (r *Runtime) Identity() AuthorizationIdentity {
 	return r.identity
 }
 
-// Run starts the owned gotd client, verifies semantic readiness, then runs
-// serve while the client lifecycle is active. Returning from serve stops the
-// gotd client. A Runtime is intentionally one-shot; construct a new one after
-// shutdown/restart.
+// Run inicia o client gotd de propriedade do runtime, verifica a prontidão semântica e executa
+// serve enquanto o lifecycle do client estiver ativo. O retorno de serve encerra o client gotd.
+// Runtime é intencionalmente de uso único; construa outro após shutdown/restart.
 func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilities) error) (retErr error) {
 	if r == nil || r.run == nil || r.status == nil || r.preflight == nil || r.query == nil || r.coordinator == nil || r.readinessTimeout <= 0 {
-		return fmt.Errorf("%w: invalid runtime", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: runtime inválido", ErrInvalidRuntimeConfig)
 	}
 	if serve == nil {
-		return fmt.Errorf("%w: nil serve callback", ErrInvalidRuntimeConfig)
+		return fmt.Errorf("%w: callback serve ausente", ErrInvalidRuntimeConfig)
 	}
 	release, err := r.coordinator.acquire(r.identity.Key)
 	if err != nil {
@@ -308,7 +305,7 @@ func (r *Runtime) Run(ctx context.Context, serve func(context.Context, Capabilit
 	default:
 	}
 	if runErr != nil {
-		return fmt.Errorf("telegram runtime: gotd client run: %w", runErr)
+		return fmt.Errorf("runtime do Telegram: execução do client gotd: %w", runErr)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -331,7 +328,7 @@ func (r *Runtime) runReady(ctx context.Context, startedAt time.Time, serve func(
 		return ErrInvalidAuthStatus
 	}
 	if status.SelfUserID != r.identity.ExpectedSelfUserID {
-		return fmt.Errorf("%w: expected user id %d, got %d", ErrSelfMismatch, r.identity.ExpectedSelfUserID, status.SelfUserID)
+		return fmt.Errorf("%w: ID de usuário esperado %d; obtido %d", ErrSelfMismatch, r.identity.ExpectedSelfUserID, status.SelfUserID)
 	}
 	observe(r.observer, Event{
 		Type:        EventTypeRuntimeState,
@@ -341,7 +338,7 @@ func (r *Runtime) runReady(ctx context.Context, startedAt time.Time, serve func(
 		Duration:    time.Since(startedAt),
 	})
 	if err := serve(ctx, Capabilities{Query: r.query}); err != nil {
-		return fmt.Errorf("telegram runtime: serve ready runtime: %w", err)
+		return fmt.Errorf("runtime do Telegram: executar runtime pronto: %w", err)
 	}
 	return nil
 }

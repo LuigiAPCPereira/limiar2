@@ -1,12 +1,9 @@
-//go:build linux
-
 package telegram
 
 import (
 	"context"
 	"errors"
 	"net"
-	"syscall"
 	"testing"
 	"time"
 
@@ -23,7 +20,7 @@ func TestClassifyTelegramErrorPreservesContext(t *testing.T) {
 		}
 		var opErr *OperationError
 		if errors.As(got, &opErr) {
-			t.Fatalf("context error unexpectedly wrapped as OperationError: %+v", opErr)
+			t.Fatalf("erro de contexto foi encapsulado indevidamente como OperationError: %+v", opErr)
 		}
 	}
 }
@@ -36,13 +33,13 @@ func TestClassifyTelegramErrorFloodWait(t *testing.T) {
 
 	var opErr *OperationError
 	if !errors.As(got, &opErr) {
-		t.Fatalf("error=%v, want OperationError", got)
+		t.Fatalf("erro=%v; esperado OperationError", got)
 	}
 	if opErr.Kind != ErrorKindFloodWait || opErr.RetryAfter != 17*time.Second {
 		t.Fatalf("OperationError=%+v", opErr)
 	}
 	if !errors.Is(got, source) {
-		t.Fatal("wrapped source error not preserved")
+		t.Fatal("erro de origem encapsulado não foi preservado")
 	}
 }
 
@@ -52,7 +49,7 @@ func TestClassifyTelegramErrorSemanticCategories(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
-		want ErrorKind
+		esperado ErrorKind
 	}{
 		{"unauthorized", tgerr.New(401, "AUTH_KEY_UNREGISTERED"), ErrorKindUnauthorized},
 		{"revoked", tgerr.New(401, "SESSION_REVOKED"), ErrorKindUnauthorized},
@@ -69,10 +66,10 @@ func TestClassifyTelegramErrorSemanticCategories(t *testing.T) {
 			got := classifyTelegramError("resolve_peer", tt.err)
 			var opErr *OperationError
 			if !errors.As(got, &opErr) {
-				t.Fatalf("error=%v, want OperationError", got)
+				t.Fatalf("erro=%v; esperado OperationError", got)
 			}
-			if opErr.Kind != tt.want {
-				t.Fatalf("kind=%q, want %q", opErr.Kind, tt.want)
+			if opErr.Kind != tt.esperado {
+				t.Fatalf("kind=%q, esperado %q", opErr.Kind, tt.esperado)
 			}
 		})
 	}
@@ -81,22 +78,22 @@ func TestClassifyTelegramErrorSemanticCategories(t *testing.T) {
 func TestClassifyTelegramErrorNetworkIsTemporary(t *testing.T) {
 	t.Parallel()
 
-	source := &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}
+	source := &net.OpError{Op: "read", Net: "tcp", Err: errors.New("falha de rede simulada")}
 	got := classifyTelegramError("history", source)
 
 	var opErr *OperationError
 	if !errors.As(got, &opErr) {
-		t.Fatalf("error=%v, want OperationError", got)
+		t.Fatalf("erro=%v; esperado OperationError", got)
 	}
 	if opErr.Kind != ErrorKindTemporary {
-		t.Fatalf("kind=%q, want temporary", opErr.Kind)
+		t.Fatalf("kind=%q; esperado temporary", opErr.Kind)
 	}
 }
 
 func TestOperationErrorStringDoesNotEchoUpstreamPayload(t *testing.T) {
 	t.Parallel()
 
-	source := errors.New("sensitive-upstream-details")
+	source := errors.New("detalhes-upstream-sensiveis")
 	err := &OperationError{
 		Operation: "history",
 		Kind:      ErrorKindInternal,
@@ -106,6 +103,6 @@ func TestOperationErrorStringDoesNotEchoUpstreamPayload(t *testing.T) {
 		t.Fatalf("Error()=%q", got)
 	}
 	if !errors.Is(err, source) {
-		t.Fatal("Unwrap() did not preserve source")
+		t.Fatal("Unwrap() não preservou a origem")
 	}
 }

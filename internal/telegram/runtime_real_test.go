@@ -1,4 +1,4 @@
-//go:build linux && telegram_real
+//go:build telegram_real
 
 package telegram
 
@@ -17,24 +17,23 @@ import (
 
 const realChildEnv = "LIMIAR_TG_REAL_CHILD"
 
-// TestRealRuntimeRestartReuse is an opt-in integration gate.
+// TestRealRuntimeRestartReuse é um gate de integração opt-in.
 //
-// It never bootstraps or asks for credentials. The operator must provision a
-// disposable/test Telegram authorization beforehand and point the environment
-// at its hardened session file. The test starts two distinct subprocesses to
-// prove that the same persisted authorization can be restored by a new process
-// without any login flow.
+// Ele nunca executa bootstrap nem solicita credenciais. O operador deve provisionar antes uma
+// autorização Telegram descartável/de teste e apontar o ambiente para o arquivo de sessão.
+// O teste inicia dois subprocessos distintos para provar que a mesma autorização persistida
+// pode ser restaurada por um novo processo sem qualquer fluxo de login.
 //
-// Required environment:
+// Variáveis obrigatórias:
 //   LIMIAR_TELEGRAM_APP_ID
 //   LIMIAR_TELEGRAM_APP_HASH
 //   LIMIAR_TELEGRAM_SESSION_PATH
 //   LIMIAR_TELEGRAM_SELF_USER_ID
 //
-// Optional:
-//   LIMIAR_TELEGRAM_PEER_REF  - if set, each child performs ResolvePeer+History.
+// Opcional:
+//   LIMIAR_TELEGRAM_PEER_REF  - quando definida, cada processo filho executa ResolvePeer+History.
 //
-// Run manually:
+// Execução manual:
 //   go test -tags=telegram_real ./internal/telegram -run '^TestRealRuntimeRestartReuse$' -count=1
 func TestRealRuntimeRestartReuse(t *testing.T) {
 	if os.Getenv(realChildEnv) == "1" {
@@ -49,14 +48,14 @@ func TestRealRuntimeRestartReuse(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 		cancel()
 		if err != nil {
-			t.Fatalf("real runtime subprocess %d failed: %s; child output=%s", i+1, safeIntegrationError(err), sanitizeChildOutput(output))
+			t.Fatalf("subprocesso %d do runtime real falhou: %s; saída do processo filho=%s", i+1, safeIntegrationError(err), sanitizeChildOutput(output))
 		}
 	}
 
 	_ = cfg // parent validates environment without logging it.
 }
 
-// TestRealRuntimeChild is invoked only by TestRealRuntimeRestartReuse.
+// TestRealRuntimeChild é chamado apenas por TestRealRuntimeRestartReuse.
 func TestRealRuntimeChild(t *testing.T) {
 	if os.Getenv(realChildEnv) != "1" {
 		t.Skip("integration child is invoked by TestRealRuntimeRestartReuse")
@@ -142,7 +141,7 @@ func requireEnv(t *testing.T, key string) string {
 	t.Helper()
 	value := os.Getenv(key)
 	if value == "" {
-		t.Skipf("%s is not configured for opt-in Telegram integration", key)
+		t.Skipf("%s não está configurada para a integração Telegram opt-in", key)
 	}
 	return value
 }
@@ -152,7 +151,7 @@ func parseRequiredEnvInt(t *testing.T, key string) int {
 	value := requireEnv(t, key)
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
-		t.Fatalf("%s must be a positive integer", key)
+		t.Fatalf("%s deve ser um inteiro positivo", key)
 	}
 	return parsed
 }
@@ -162,7 +161,7 @@ func parseRequiredEnvInt64(t *testing.T, key string) int64 {
 	value := requireEnv(t, key)
 	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || parsed <= 0 {
-		t.Fatalf("%s must be a positive integer", key)
+		t.Fatalf("%s deve ser um inteiro positivo", key)
 	}
 	return parsed
 }
@@ -197,9 +196,9 @@ func sanitizeChildOutput(output []byte) string {
 	if len(output) == 0 {
 		return "(none)"
 	}
-	// The child tests intentionally never log Telegram payloads or credentials.
-	// Keep output bounded anyway so an unexpected dependency message cannot flood
-	// CI/operator logs.
+	// Os processos filhos intencionalmente nunca registram payloads ou credenciais do Telegram.
+	// Ainda assim, a saída permanece limitada para que uma mensagem inesperada de dependência
+	// não inunde os logs da CI/do operador.
 	const max = 2048
 	if len(output) > max {
 		output = output[:max]

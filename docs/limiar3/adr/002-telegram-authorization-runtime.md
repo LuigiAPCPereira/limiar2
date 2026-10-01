@@ -5,6 +5,8 @@ Status: Accepted
 Accepted-by: Mantenedor do Limiar
 Accepted-at: 2026-09-23
 Acceptance-reference: `baa626b59ec21d36f0dbde9a8a1fb3bbb5a4a2a6`
+> **Atualização de autoridade — L3 ADR 005:** a restrição de plataforma Linux deste ADR foi corrigida pela decisão aceita em [L3 ADR 005](005-platform-agnostic-runtime-and-storage.md). O Limiar é agnóstico ao sistema operacional por padrão. Permanecem vigentes os demais contratos deste ADR que não conflitarem com a ADR 005.
+
 
 ## Contexto
 

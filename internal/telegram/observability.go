@@ -1,5 +1,3 @@
-//go:build linux
-
 package telegram
 
 import (
@@ -10,9 +8,9 @@ import (
 	gotdtelegram "github.com/gotd/td/telegram"
 )
 
-// EventType is a low-cardinality observability category.
-// Events intentionally never include Telegram payloads, peer references,
-// session bytes, phone numbers, OTPs, passwords, API hashes or raw errors.
+// EventType é uma categoria de observabilidade de baixa cardinalidade.
+// Os eventos intencionalmente nunca incluem payloads do Telegram, referências de peer,
+// bytes de sessão, telefones, OTPs, senhas, hashes de API ou erros brutos.
 type EventType string
 
 const (
@@ -38,9 +36,9 @@ const (
 	EventOutcomeError    EventOutcome = "error"
 )
 
-// Event is safe-by-construction metadata for the Telegram boundary.
-// IdentityKey is the local non-secret authorization alias, never Telegram self
-// identity or credential material.
+// Event contém metadados seguros por construção para o boundary do Telegram.
+// IdentityKey é o alias local e não secreto da autorização; nunca representa a identidade
+// própria do Telegram nem material de credencial.
 type Event struct {
 	Type        EventType
 	IdentityKey string
@@ -54,12 +52,11 @@ type Event struct {
 	RetryAfter time.Duration
 }
 
-// Observer receives synchronous, low-cardinality events.
+// Observer recebe eventos síncronos e de baixa cardinalidade.
 //
-// Implementations must be fast and non-blocking. Observer panics are isolated
-// so telemetry cannot take down the Telegram boundary. The boundary does not
-// expose raw errors through this hook to prevent accidental secret/payload
-// logging.
+// Implementações devem ser rápidas e não bloqueantes. Panics do Observer são isolados
+// para que telemetria não derrube o boundary do Telegram. O boundary não expõe erros
+// brutos por este hook, evitando registro acidental de segredos ou payloads.
 type Observer func(Event)
 
 func observe(observer Observer, event Event) {
