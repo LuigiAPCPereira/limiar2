@@ -1,6 +1,6 @@
 # PROJECT_STATE — Limiar 3.0 (checkpoint documental)
 
-**Data de preparação:** 2026-09-22 (America/Bahia). **Última reconciliação:** 2026-09-29. **Repositório:** `LuigiAPCPereira/limiar2`. **Branch atual:** `fix/limiar3-platform-agnostic-20260929`. **Base:** `feat/limiar3-l3-003-mcp-realtime@f6ab9ced2477ef17aedc7845fe3edbf720057a99`. **Entrega:** Draft PR #220. Revalidar HEAD, base, main e gates no início da próxima execução; este checkpoint não registra o SHA do próprio commit. Não houve merge/deploy.
+**Data de preparação:** 2026-09-22 (America/Bahia). **Última reconciliação:** 2026-10-01. **Repositório:** `LuigiAPCPereira/limiar2`. **Branch atual:** `fix/limiar3-platform-agnostic-20260929`. **Base:** `feat/limiar3-l3-003-mcp-realtime@f6ab9ced2477ef17aedc7845fe3edbf720057a99`. **Entrega:** Draft PR #220. Revalidar HEAD, base, main e gates no início da próxima execução; este checkpoint não registra o SHA do próprio commit. Não houve merge/deploy.
 
 ## Objetivo confirmado pelo mantenedor
 
@@ -8,7 +8,7 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 ## Tarefas e estado
 
-**Frentes ativas:** `L3-PLAT-001` corrige a restrição Linux introduzida na fundação e está **IMPLEMENTADA NO CÓDIGO / VALIDAÇÃO EXECUTÁVEL UNKNOWN** no Draft PR #220; `L3-003` continua com tracer MCP implementado e validação executável pendente; `L3-002` continua implementada no código e não validada em integração real. A correção de plataforma não autoriza Telegram real, tunnel, merge ou deploy.
+**Frentes ativas:** `L3-PLAT-001` está **VALIDADA EM CI MULTIPLATAFORMA / PR DRAFT NÃO MERGEADA** no Draft PR #220; `L3-003` está **TRACER IMPLEMENTADO / TOOLCHAIN CI PASS / INTEGRAÇÃO REAL PENDENTE**; `L3-002` está **IMPLEMENTADA / TOOLCHAIN CI PASS / NÃO VALIDADA EM INTEGRAÇÃO TELEGRAM REAL**. A correção de plataforma não autoriza Telegram real, tunnel, merge ou deploy.
 
 **Integridade das fontes:** o Engineering DNA histórico permanece preservado nesta ref conforme os artefatos L3 já registrados. Para o Agent Development Protocol, esta branch L3 ainda contém `docs/DOCUMENTATION_AND_CONTINUITY.md` no blob histórico `78b2e86564fb287886f9df065fdb727b20c52727`. O Draft PR #214 (`docs/adopt-agent-protocol-v2-20260920@91d521a296bc11445f3ab5e7f0dad1ec819ed561`) contém uma versão posterior do protocolo, blob `7a5e4a39bb13b5e0bb750caba9acc5377ffefc62`, com a política explícita de pt-BR. Portanto, **não assumir que a cópia desta branch, a cópia do ChatGPT Project e o PR #214 estão sincronizados**; verificar a ref concreta em cada execução. O estado da adoção v2 no PR #214 permanece **ADOÇÃO PARCIAL**, sem merge.
 
@@ -18,7 +18,9 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 **L3-001C — stop condition atingida:** [L3_001C_GOTD_UPSTREAM_AUDIT.md](L3_001C_GOTD_UPSTREAM_AUDIT.md) conclui que não há blocker upstream para iniciar L3-002 e que não é necessária nova pesquisa ampla de fundação. A extensão mínima proposta é hardened `session.Storage`, runtime ownership/readiness, TelegramQuery adapter, error translation e bounded admission; gotd permanece owner de reconnect/pools/migration/RPC/MTProto/query/media machinery.
 
-**Próxima ação:** validar o candidato do Draft PR #220 no toolchain aceito assim que houver canal executável: `go build ./...`, `go vet ./...`, `go test ./...`, `go test -race ./...` e `govulncheck`; quando CI estiver disponível, incluir pelo menos Linux e Windows para provar a neutralidade de plataforma. Só depois reconciliar/continuar a validação funcional de L3-002/L3-003. Até esses gates, portabilidade está implementada e verificada estaticamente, não validada por execução.
+**Validação executável reconciliada:** o candidato `a4f7836f0673f234b54d1a950b33f212b6106ab1` passou no GitHub Actions run #764 (`36846123134`). Windows: Go 1.27.1, módulo, build, vet e testes PASS. Ubuntu: Go 1.27.1, módulo, contenção do legado, build, vet, testes, race e `govulncheck v1.8.0` PASS. Isso valida a neutralidade de compilação/teste do slice e remove o UNKNOWN de toolchain de L3-002/L3-003 nessa árvore; não valida Telegram real, Secure MCP Tunnel ou integração ChatGPT real.
+
+**Próxima ação:** manter o Draft PR #220 sem merge até autorização aplicável; na próxima execução, reconciliar o CI do commit documental deste checkpoint e, somente depois, decidir com o mantenedor se a entrega deve sair de Draft/ser mergeada ou se deve continuar a integração real de L3-002/L3-003. Não iniciar nova arquitetura por default.
 
 ## Gate paralelo L3-003 — MCP Telegram realtime
 
@@ -32,7 +34,7 @@ Em 2026-09-24 foi feita uma investigação estreita da superfície MCP atual, se
 
 O [L3 ADR 004](adr/004-mcp-telegram-realtime-boundary.md) está **Accepted** desde 2026-09-29. A Decision mantém SDK oficial v1.8.0, Streamable HTTP stateless, read scope por targets nomeados, listener loopback-only, trust model single trusted operator, cancelamento HTTP propagado, proteção localhost/cross-origin, request body bounded e capabilities MCP mínimas sem `logging` default. Busca/filtragem/comparação pertencem ao ChatGPT; o MCP entrega acesso read-only fiel e paginável. Secure MCP Tunnel é reachability operacional, não credential/auth Telegram. Não há OAuth próprio no primeiro slice; non-loopback/public/multi-user/write actions exigem nova Decision proporcional.
 
-**Implementação L3-003 iniciada:** o tracer slice foi codificado em `feat/limiar3-l3-003-mcp-realtime@202fe46e1c6ab59e3c0721dea71c02ef14c9a54f`. Ele pina `modelcontextprotocol/go-sdk v1.8.0`, expõe `telegram.targets` e `telegram.history` sobre `TelegramQuery`, valida target antes de I/O, usa default 20 e teto técnico 100 por página, devolve `next_cursor` para continuidade sem teto total artificial entre páginas, marca a resposta como realtime/not-Evidence e sanitiza erros. O adapter HTTP foi codificado stateless, com propagação de cancelamento, listener apenas loopback, cross-origin protection e request body bounded. Testes fake-backed com o client MCP oficial foram **escritos**, mas build/vet/test/race/govulncheck em Go 1.27.1 permanecem **UNKNOWN** porque o canal executável aceito continua indisponível. Não houve Telegram real, Secure MCP Tunnel real, PR, merge ou deploy. L3-002 permanece IMPLEMENTADA NO CÓDIGO / NÃO VALIDADA EM INTEGRAÇÃO REAL.
+**Implementação L3-003 iniciada:** o tracer slice foi codificado em `feat/limiar3-l3-003-mcp-realtime@202fe46e1c6ab59e3c0721dea71c02ef14c9a54f`. Ele pina `modelcontextprotocol/go-sdk v1.8.0`, expõe `telegram.targets` e `telegram.history` sobre `TelegramQuery`, valida target antes de I/O, usa default 20 e teto técnico 100 por página, devolve `next_cursor` para continuidade sem teto total artificial entre páginas, marca a resposta como realtime/not-Evidence e sanitiza erros. O adapter HTTP foi codificado stateless, com propagação de cancelamento, listener apenas loopback, cross-origin protection e request body bounded. Testes fake-backed com o client MCP oficial foram executados dentro de `go test ./...` e passaram no run #764; build/vet/test em Ubuntu+Windows e race/govulncheck no Ubuntu também passaram no candidato `a4f7836f0673f234b54d1a950b33f212b6106ab1`. Não houve Telegram real, Secure MCP Tunnel real, PR, merge ou deploy. L3-002 permanece IMPLEMENTADA NO CÓDIGO / NÃO VALIDADA EM INTEGRAÇÃO REAL.
 
 ## Restrições e desconhecidos
 
@@ -127,7 +129,7 @@ Validação local proporcional: `go test -count=10 ./...`, `go vet ./...` e `go 
 | Gate / componente | Estado | Evidência atual |
 | --- | --- | --- |
 | Go 1.27.1 + gotd v0.162.0 pinados | **Implementado** | root `go.mod` / `go.sum` |
-| Credential/session storage portável | **Implementado no PR #220; validação executável atual UNKNOWN** | stdlib portável; sem `syscall`/UID; symlink/non-regular rejeitados; escrita temporária + file sync + rename; checks Go 1.27.1 pendentes |
+| Credential/session storage portável | **Implementado; CI multiplataforma PASS no PR #220** | stdlib portável; sem `syscall`/UID; symlink/non-regular rejeitados; escrita temporária + file sync + rename; `go test ./...` PASS em Ubuntu/Windows e race PASS no Ubuntu no run #764 |
 | Owner único por authorization identity | **Implementado** | `AuthorizationCoordinator`; runtime e bootstrap compartilham lease |
 | Bootstrap explícito | **Implementado, não integrado com conta real** | QR-first; code/2FA fallback via SRP hash; staging antes do commit; replacement exige self binding |
 | Runtime steady-state | **Implementado, não integrado com Telegram real** | preflight; razões de rebootstrap; `Auth().Status`; same-self; capability só após readiness |
@@ -135,7 +137,7 @@ Validação local proporcional: `go test -count=10 ./...`, `go vet ./...` e `go 
 | Error taxonomy / FLOOD_WAIT | **Implementado** | cancellation preservada; unauthorized/peer/access/flood/transient/internal |
 | Observabilidade segura | **Implementado** | eventos low-cardinality; sem session/OTP/password/API hash/payload/raw error; panic do observer isolado |
 | API upstream v0.162.0 usada pelo código | **Verificação estática PASS** | signatures confrontadas diretamente com a tag v0.162.0 |
-| Build/vet/test/race/govulncheck em Go 1.27.1 | **UNKNOWN** | Actions sem horas; download local do toolchain bloqueado por rede |
+| Build/vet/test/race/govulncheck em Go 1.27.1 | **PASS EM CI** | run #764 (`36846123134`) no candidato `a4f7836f0673f234b54d1a950b33f212b6106ab1`: build/vet/test Ubuntu+Windows; race+govulncheck Ubuntu |
 | Bootstrap → restart/reuse → same-self → first RPC | **UNKNOWN** | requer ambiente/credenciais explicitamente autorizados |
 | Reconnect / clock-skew / cross-DC | **UNKNOWN** | experimentos estreitos ainda não executados |
 
