@@ -80,7 +80,7 @@ Telegram envelope + AcquisitionSubscription
         -> forward ao recovery/manager
 ```
 
-`subscription_id` nunca nasce de `channel_id` por conveniência. ADR 024 continua Proposed.
+`subscription_id` nunca nasce de `channel_id` por conveniência. A **L3 ADR 006 Accepted** define identidade/lifecycle da Acquisition Subscription: ID explícito, estável e não secreto; mudanças materiais do scope recebem nova identidade enquanto Evidence não carregar versão de configuração.
 
 ### B7 — Live Recovery / SourceSyncState
 
@@ -236,13 +236,14 @@ Depois de S3, MCP realtime e o ramo Evidence/admission/recovery podem evoluir em
 
 ## 7. Decisões ainda necessárias
 
-1. Sessão: revisar/aceitar/rejeitar ADR 023 ou substituto.
-2. Subscription identity: resolver ADR 024 antes de Source Admission produtiva.
-3. SourceSyncState: aceitar/revisar ADR 021 antes do schema produtivo.
-4. BackfillProgress: aceitar/revisar ADR 022 antes do schema produtivo.
-5. Boundary concreto Telegram: consolidar `TelegramAuthorizationIdentity`, owner único do `telegram.Client`, bootstrap explícito e `TelegramQuery` mínima sem abstração excessiva.
-6. Auth/autorização MCP realtime: definir scopes quando a primeira tool real for implementada.
-7. Media: investigar boundary e bug real antes de Decision estrutural.
+`Subscription identity` foi resolvida pela **L3 ADR 006 Accepted** em 2026-10-01 e sai da lista de Decisions bloqueantes.
+
+1. Sessão: revisar/aceitar/rejeitar ADR 023 ou substituto quando novo gap concreto exigir; L3 ADR 001 já governa o storage atual.
+2. SourceSyncState: aceitar/revisar ADR 021 antes do schema produtivo.
+3. BackfillProgress: aceitar/revisar ADR 022 antes do schema produtivo.
+4. Boundary concreto Telegram: integrar Acquisition Subscription configurada ao ingress preservando `TelegramAuthorizationIdentity`, owner único do `telegram.Client`, bootstrap explícito e `TelegramQuery` mínima sem abstração excessiva.
+5. Auth/autorização MCP realtime: definir scopes adicionais somente quando uma nova superfície real exigir; L3 ADR 004 governa o tracer atual.
+6. Media: investigar boundary e bug real antes de Decision estrutural.
 8. Processing generations/projections: Decision quando storage derivado exigir.
 
 ## 8. Fundação pronta

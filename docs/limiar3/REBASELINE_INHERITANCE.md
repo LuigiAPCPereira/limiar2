@@ -88,9 +88,9 @@ Permanece `Proposed`. Há Evidence para progresso próprio por subscription, ava
 
 Permanece `Proposed`. Limiar 3 ainda não escolheu arquivo como session storage.
 
-### ADR 024 — Acquisition Subscription Identity
+### ADR histórico 024 / L3 ADR 006 — Acquisition Subscription Identity
 
-Permanece `Proposed`. ADR 020 exige `subscription_id` em Evidence, mas o runtime não pode inventá-lo a partir de `channel_id`. A authority/configuração da subscription precisa ser resolvida antes do Source Admission produtivo.
+O ADR histórico 024 permanece `Proposed` e preservado como Evidence da lacuna original. No Limiar 3, a questão foi resolvida pela **L3 ADR 006 Accepted**: `subscription_id` identifica uma Acquisition Subscription explícita, estável e não secreta; nasce na configuração antes do ingress; não deriva de canal, sessão, authorization identity ou target MCP; e mudanças materiais do scope recebem nova identidade enquanto Evidence não carregar versão separada da configuração.
 
 ## 4. Sessão MTProto e peer cache são authorities diferentes
 
@@ -157,7 +157,7 @@ Limiar 3 deve:
 | SourceSyncState | ADR 021 Proposed | Não materializar sem aceite |
 | BackfillProgress | ADR 022 Proposed | Não materializar sem aceite |
 | Session storage | F-STO-006 + EXP-018/019; ADR 023 Proposed | Investigar/decidir antes do runtime |
-| Subscription identity | lacuna real; ADR 024 Proposed | Resolver antes de Source Admission produtiva |
+| Subscription identity | **L3 ADR 006 Accepted**; lacuna arquitetural resolvida | Implementar transporte/configuração explícitos e gates da ADR 006 antes do wiring produtivo |
 | Peer state | cache operacional separado | Definir reconstrução/lifecycle; não copiar tabela |
 | Tursogo | legado histórico/read-only | Compatibilidade/importação/rollback |
 | Processamento | direção conceitual da baseline | Construir como derivados reprocessáveis |
