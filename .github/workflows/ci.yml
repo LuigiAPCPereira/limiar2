@@ -49,6 +49,12 @@ jobs:
       - name: Executar testes
         run: go test -count=1 ./...
 
+      - name: Executar testes sem CGO
+        if: runner.os == 'Linux'
+        env:
+          CGO_ENABLED: "0"
+        run: go test -count=1 ./...
+
       - name: Executar race detector
         if: runner.os == 'Linux'
         run: go test -race -count=1 ./...
