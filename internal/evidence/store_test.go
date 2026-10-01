@@ -186,7 +186,7 @@ func createLegacyDatabase(t *testing.T, path string) {
 func sampleEvidence(payload []byte) Evidence {
 	sourceOccurredAt := int64(1_787_103_000_000)
 	return Evidence{
-		SubscriptionID:   "telegram:channel:42",
+		SubscriptionID:   "acq:fixture:ofertas",
 		Acquisition:      "live_update",
 		EventKind:        "source_update",
 		SourceEventType:  "updates",
@@ -253,6 +253,12 @@ func TestEvidenceAppendRoundTripAndHashAuthority(t *testing.T) {
 	wantHash := sha256.Sum256(wantPayload)
 
 	requireBytesEqual(t, "id round-trip", row.id, id[:])
+	requireEqual(t, "subscription_id", row.subscription, evidence.SubscriptionID)
+	requireEqual(t, "acquisition", row.acquisition, evidence.Acquisition)
+	requireEqual(t, "event_kind", row.eventKind, evidence.EventKind)
+	requireEqual(t, "source_event_type", row.sourceType, evidence.SourceEventType)
+	requireEqual(t, "payload_format", row.payloadFormat, evidence.PayloadFormat)
+	requireEqual(t, "payload_schema", row.payloadSchema, evidence.PayloadSchema)
 	requireBytesEqual(t, "payload round-trip", row.payload, wantPayload)
 	requireBytesEqual(t, "payload_sha256", row.hash, wantHash[:])
 	requireEqual(t, "source_occurred_at", row.sourceOccurredAt.Int64, *evidence.SourceOccurredAt)
