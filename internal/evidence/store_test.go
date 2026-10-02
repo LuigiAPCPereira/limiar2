@@ -208,7 +208,7 @@ func TestOpenAppliesADR019BaselineAndMigration(t *testing.T) {
 	requireEqual(t, "synchronous", mustQueryInt64(t, store.db, `PRAGMA synchronous`), int64(2))
 	requireEqual(t, "foreign_keys", mustQueryInt64(t, store.db, `PRAGMA foreign_keys`), int64(1))
 	requireEqual(t, "busy_timeout", mustQueryInt64(t, store.db, `PRAGMA busy_timeout`), int64(5000))
-	requireEqual(t, "user_version", mustQueryInt64(t, store.db, `PRAGMA user_version`), int64(1))
+	requireEqual(t, "user_version", mustQueryInt64(t, store.db, `PRAGMA user_version`), int64(2))
 	requireEqual(t, "application_id", mustQueryInt64(t, store.db, `PRAGMA application_id`), int64(applicationID))
 	requireContains(t, "evidence schema", mustQueryString(t, store.db,
 		`SELECT sql FROM sqlite_master WHERE type='table' AND name='evidence'`), "STRICT")
@@ -346,7 +346,7 @@ func TestEvidenceAppendOnlyGuardsSurviveReopen(t *testing.T) {
 	requireEqual(t, "evidence rows após reopen", mustQueryInt64(t, reopened.db,
 		`SELECT COUNT(*) FROM evidence`), int64(1))
 	requireEqual(t, "integrity_check", mustQueryString(t, reopened.db, `PRAGMA integrity_check`), "ok")
-	requireEqual(t, "user_version após reopen", mustQueryInt64(t, reopened.db, `PRAGMA user_version`), int64(1))
+	requireEqual(t, "user_version após reopen", mustQueryInt64(t, reopened.db, `PRAGMA user_version`), int64(2))
 }
 
 func TestMigrationVersion(t *testing.T) {
