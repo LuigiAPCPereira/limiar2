@@ -1,6 +1,6 @@
-// Package evidence implementa o kernel local de Source Evidence do Limiar 3
-// conforme os contratos aceitos dos ADRs 016, 019 e 020. O pacote legado permanece
-// somente como referência de Evidence e não é importado pelo código corrente.
+// Package evidence possui o ciclo de vida do banco SQLite L3 e implementa o kernel
+// local de Source Evidence. Outras authorities persistidas são expostas somente por
+// capabilities estreitas; o pacote legado permanece apenas como referência.
 package evidence
 
 import (
@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/LuigiAPCPereira/limiar2/internal/syncstate"
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
@@ -139,6 +140,9 @@ func initializeDatabase(ctx context.Context, db *sql.DB, needsClaim bool) error 
 	}
 	if err := validateEvidenceSchema(ctx, db); err != nil {
 		return fmt.Errorf("storage de Evidence: %w", err)
+	}
+	if err := syncstate.ValidateSchema(ctx, db); err != nil {
+		return fmt.Errorf("storage L3: %w", err)
 	}
 	return nil
 }
@@ -296,6 +300,15 @@ type EvidenceAppender interface {
 // privada ao Store.
 func (s *Store) EvidenceAppender() EvidenceAppender {
 	return evidenceAppender{db: s.db, entropy: rand.Reader}
+}
+
+// SourceSyncState retorna a capability física de continuidade live scoped por uma
+// Acquisition Subscription. A conexão SQL permanece privada ao Store.
+func (s *Store) SourceSyncState(subscriptionID string) (*syncstate.Storage, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("storage L3: Store não inicializado")
+	}
+	return syncstate.New(s.db, subscriptionID)
 }
 
 type evidenceAppender struct {

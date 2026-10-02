@@ -24,6 +24,9 @@ func TestOpenRejectsMissingOrMisplacedEvidenceSchemaWithoutRepair(t *testing.T) 
 		{name: "view no lugar da tabela", mutation: `ALTER TABLE evidence RENAME TO evidence_saved; CREATE VIEW evidence AS SELECT * FROM evidence_saved`, object: "evidence", objectType: "view", preservesRow: true},
 		{name: "guard de update em outra tabela", mutation: `CREATE TABLE other_evidence (id INTEGER); DROP TRIGGER evidence_no_update; CREATE TRIGGER evidence_no_update BEFORE UPDATE ON other_evidence BEGIN SELECT RAISE(ABORT, 'guard'); END`, object: "evidence_no_update", objectType: "trigger", table: "other_evidence", preservesRow: true},
 		{name: "guard de delete em outra tabela", mutation: `CREATE TABLE other_evidence (id INTEGER); DROP TRIGGER evidence_no_delete; CREATE TRIGGER evidence_no_delete BEFORE DELETE ON other_evidence BEGIN SELECT RAISE(ABORT, 'guard'); END`, object: "evidence_no_delete", objectType: "trigger", table: "other_evidence", preservesRow: true},
+		{name: "common state removido", mutation: `DROP TABLE source_sync_state`, object: "source_sync_state", preservesRow: true},
+		{name: "channel state removido", mutation: `DROP TABLE source_sync_channel_state`, object: "source_sync_channel_state", preservesRow: true},
+		{name: "common state com shape incorreto", mutation: `ALTER TABLE source_sync_state RENAME TO source_sync_state_saved; CREATE TABLE source_sync_state (subscription_id TEXT NOT NULL, user_id INTEGER NOT NULL, pts INTEGER NOT NULL, qts INTEGER NOT NULL, date INTEGER NOT NULL, seq TEXT NOT NULL, PRIMARY KEY(subscription_id, user_id)) STRICT`, object: "source_sync_state", objectType: "table", table: "source_sync_state", preservesRow: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

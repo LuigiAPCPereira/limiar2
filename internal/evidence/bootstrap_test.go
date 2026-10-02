@@ -37,7 +37,7 @@ func TestOpenResumesClaimedUnmigratedDatabase(t *testing.T) {
 	requireEqual(t, "application_id",
 		mustQueryInt64(t, store.db, `PRAGMA application_id`), int64(applicationID))
 	requireEqual(t, "user_version após retomada",
-		mustQueryInt64(t, store.db, `PRAGMA user_version`), int64(1))
+		mustQueryInt64(t, store.db, `PRAGMA user_version`), int64(2))
 	requireEqual(t, "evidence table count", mustQueryInt64(t, store.db,
 		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='evidence'`), int64(1))
 }
