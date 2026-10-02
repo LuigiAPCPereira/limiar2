@@ -25,11 +25,12 @@ type DurabilityBarrier struct {
 	mu     sync.Mutex
 	closed bool
 	cause  error
+	done   chan struct{}
 }
 
 // NewDurabilityBarrier cria uma barrier inicialmente aberta.
 func NewDurabilityBarrier() *DurabilityBarrier {
-	return &DurabilityBarrier{}
+	return &DurabilityBarrier{done: make(chan struct{})}
 }
 
 // Close fecha a barrier de forma terminal.
@@ -47,9 +48,31 @@ func (b *DurabilityBarrier) Close(cause error) bool {
 	if b.closed {
 		return false
 	}
-	b.closed = true
-	b.cause = cause
+	b.closeLocked(cause)
 	return true
+}
+
+// Done é fechado exatamente quando a barrier entra no estado terminal.
+//
+// A channel existe também para o zero value de DurabilityBarrier. Receiver nil retorna
+// uma channel já fechada, preservando fail-closed para supervisors mal configurados.
+func (b *DurabilityBarrier) Done() <-chan struct{} {
+	if b == nil {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.done == nil {
+		b.done = make(chan struct{})
+		if b.closed {
+			close(b.done)
+		}
+	}
+	return b.done
 }
 
 // Err retorna nil enquanto a barrier está aberta. Depois do fechamento, retorna um erro
@@ -69,9 +92,9 @@ func (b *DurabilityBarrier) Err() error {
 // Guard executa operation somente enquanto a barrier está aberta, mantendo a checagem e
 // a operação na mesma região crítica.
 //
-// Esse contrato permite que um GuardedStateStorage futuro faça barrier-check + state-write
-// sem TOCTOU. Se operation falhar, a barrier é fechada com esse erro antes de Guard
-// retornar. O callback não deve reentrar na mesma barrier.
+// Esse contrato permite que GuardedStateStorage faça barrier-check + state-write sem
+// TOCTOU. Se operation falhar, a barrier é fechada com esse erro antes de Guard retornar.
+// O callback não deve reentrar na mesma barrier.
 func (b *DurabilityBarrier) Guard(operation func() error) error {
 	if b == nil {
 		return &barrierClosedError{
@@ -92,12 +115,19 @@ func (b *DurabilityBarrier) Guard(operation func() error) error {
 	}
 
 	if err := operation(); err != nil {
-		b.closed = true
-		b.cause = err
+		b.closeLocked(err)
 		return b.errLocked()
 	}
 
 	return nil
+}
+
+func (b *DurabilityBarrier) closeLocked(cause error) {
+	b.closed = true
+	b.cause = cause
+	if b.done != nil {
+		close(b.done)
+	}
 }
 
 func (b *DurabilityBarrier) errLocked() error {
