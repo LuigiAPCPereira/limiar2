@@ -171,3 +171,61 @@ func TestDurabilityBarrierConcurrentCloseHasSingleWinner(t *testing.T) {
 		t.Fatalf("barrier não fechou após corrida de Close: %v", err)
 	}
 }
+
+
+func TestDurabilityBarrierDoneSignalsCloseAndGuardFailure(t *testing.T) {
+	t.Run("Close", func(t *testing.T) {
+		barrier := NewDurabilityBarrier()
+		done := barrier.Done()
+		select {
+		case <-done:
+			t.Fatal("Done fechada antes da barrier")
+		default:
+		}
+
+		barrier.Close(errors.New("falha"))
+		select {
+		case <-done:
+		default:
+			t.Fatal("Done não fechou com Close")
+		}
+	})
+
+	t.Run("Guard failure", func(t *testing.T) {
+		barrier := NewDurabilityBarrier()
+		done := barrier.Done()
+		if err := barrier.Guard(func() error { return errors.New("write falhou") }); err == nil {
+			t.Fatal("Guard deveria falhar")
+		}
+		select {
+		case <-done:
+		default:
+			t.Fatal("Done não fechou com falha de Guard")
+		}
+	})
+}
+
+func TestDurabilityBarrierDoneSupportsZeroValueAndNilReceiver(t *testing.T) {
+	var zero DurabilityBarrier
+	done := zero.Done()
+	select {
+	case <-done:
+		t.Fatal("zero value aberto sinalizou fechamento")
+	default:
+	}
+	if !zero.Close(errors.New("falha")) {
+		t.Fatal("zero value não fechou")
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("Done do zero value não fechou")
+	}
+
+	var nilBarrier *DurabilityBarrier
+	select {
+	case <-nilBarrier.Done():
+	default:
+		t.Fatal("nil receiver deveria sinalizar fail-closed")
+	}
+}
