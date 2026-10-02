@@ -8,7 +8,7 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 ## Tarefas e estado
 
-**Frentes ativas:** `L3-004` está **S5/B5 + S6 CORE VALIDADOS / L3 ADR 006 ACCEPTED / WIRING PRODUTIVO E RECOVERY PENDENTES**; o S6 está no Draft PR #222 empilhado sobre #221 e a Decision de identidade está na branch `docs/limiar3-l3-004-subscription-identity`. `L3-PLAT-001` está **VALIDADA EM CI MULTIPLATAFORMA / PR DRAFT NÃO MERGEADA** no Draft PR #220; `L3-003` está **TRACER IMPLEMENTADO / TOOLCHAIN CI PASS / INTEGRAÇÃO REAL PENDENTE**; `L3-002` está **IMPLEMENTADA / TOOLCHAIN CI PASS / NÃO VALIDADA EM INTEGRAÇÃO TELEGRAM REAL**. Nenhuma dessas frentes autoriza Telegram real, tunnel, merge ou deploy.
+**Frentes ativas:** `L3-004` está **LIVE ADMISSION + DURABILITY BARRIER VALIDADOS / L3 ADRs 006/007 ACCEPTED / SOURCE SYNC STATE STORAGE PENDENTE**; o live ingress está no Draft PR #225, a `DurabilityBarrier` no Draft PR #226 e a Decision de SourceSyncState na branch `docs/limiar3-l3-004-source-sync-state`. `L3-PLAT-001` está **VALIDADA EM CI MULTIPLATAFORMA / PR DRAFT NÃO MERGEADA** no Draft PR #220; `L3-003` está **TRACER IMPLEMENTADO / TOOLCHAIN CI PASS / INTEGRAÇÃO REAL PENDENTE**; `L3-002` está **IMPLEMENTADA / TOOLCHAIN CI PASS / NÃO VALIDADA EM INTEGRAÇÃO TELEGRAM REAL**. Nenhuma dessas frentes autoriza Telegram real, tunnel, merge ou deploy.
 
 **Integridade das fontes:** o Engineering DNA histórico permanece preservado nesta ref conforme os artefatos L3 já registrados. Para o Agent Development Protocol, esta branch L3 ainda contém `docs/DOCUMENTATION_AND_CONTINUITY.md` no blob histórico `78b2e86564fb287886f9df065fdb727b20c52727`. O Draft PR #214 (`docs/adopt-agent-protocol-v2-20260920@91d521a296bc11445f3ab5e7f0dad1ec819ed561`) contém uma versão posterior do protocolo, blob `7a5e4a39bb13b5e0bb750caba9acc5377ffefc62`, com a política explícita de pt-BR. Portanto, **não assumir que a cópia desta branch, a cópia do ChatGPT Project e o PR #214 estão sincronizados**; verificar a ref concreta em cada execução. O estado da adoção v2 no PR #214 permanece **ADOÇÃO PARCIAL**, sem merge.
 
@@ -24,7 +24,9 @@ Limiar 3.0: reconstrução integral do agrupador de promoções, incremental e b
 
 **Decision L3-004 / subscription identity:** a **L3 ADR 006 Accepted** resolve o bloqueio do `subscription_id`: Acquisition Subscription explícita, estável, não secreta, anterior ao ingress e separada de canal, autorização Telegram e target MCP. O modelo suporta pluralidade sem exigir framework multi-subscription no MVP; mudanças materiais do scope recebem nova identidade enquanto Evidence não carregar versão de configuração; sobreposição exige Evidence por subscription antes do forward protegido.
 
-**Próxima ação:** validar a branch documental da L3 ADR 006 e, no bloco seguinte, implementar o menor slice de configuração/transporte que injete a identidade aceita no ingress sem ainda adicionar recovery/state/backfill. Manter #220/#221/#222 e a nova entrega documental sem merge até autorização aplicável.
+**Decision L3-004 / SourceSyncState:** a **L3 ADR 007 Accepted** substitui, para Limiar 3, a Proposal histórica 021 como authority de schema/boundary: common state usa `(subscription_id,user_id)`, channel state usa `(subscription_id,user_id,channel_id)`, setters parciais não criam state e writes produtivas permanecem guardadas por `DurabilityBarrier`/`GuardedStateStorage`.
+
+**Próxima ação:** validar a branch documental da ADR 007 e, em slice separado, implementar migration SQL + repository/capability estreita de `SourceSyncState`; depois integrar `GuardedStateStorage`/Supervisor. Manter `Runtime.NoUpdates=true` até o recovery path estar composto. Sem merge/deploy ou Telegram real.
 
 ## Gate paralelo L3-003 — MCP Telegram realtime
 

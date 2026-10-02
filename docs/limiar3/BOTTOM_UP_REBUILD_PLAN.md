@@ -84,7 +84,7 @@ Telegram envelope + AcquisitionSubscription
 
 ### B7 — Live Recovery / SourceSyncState
 
-Compor `updates.Manager`, GuardedRecoveryAPI, DurabilityBarrier, Supervisor e GuardedStateStorage. ADR 021 continua Proposed.
+Compor `updates.Manager`, GuardedRecoveryAPI, DurabilityBarrier, Supervisor e GuardedStateStorage. A **L3 ADR 007 Accepted** governa o schema/boundary físico de `SourceSyncState`; a ADR histórica 021 permanece Proposed como artefato histórico.
 
 ```text
 Evidence durável + state antigo = seguro/replay
@@ -239,7 +239,7 @@ Depois de S3, MCP realtime e o ramo Evidence/admission/recovery podem evoluir em
 `Subscription identity` foi resolvida pela **L3 ADR 006 Accepted** em 2026-10-01 e sai da lista de Decisions bloqueantes.
 
 1. Sessão: revisar/aceitar/rejeitar ADR 023 ou substituto quando novo gap concreto exigir; L3 ADR 001 já governa o storage atual.
-2. SourceSyncState: aceitar/revisar ADR 021 antes do schema produtivo.
+2. SourceSyncState: **resolvido pela L3 ADR 007 Accepted**; próximo slice implementa migration/repository e depois `GuardedStateStorage` sem remover os gates de recovery.
 3. BackfillProgress: aceitar/revisar ADR 022 antes do schema produtivo.
 4. Boundary concreto Telegram: integrar Acquisition Subscription configurada ao ingress preservando `TelegramAuthorizationIdentity`, owner único do `telegram.Client`, bootstrap explícito e `TelegramQuery` mínima sem abstração excessiva.
 5. Auth/autorização MCP realtime: definir scopes adicionais somente quando uma nova superfície real exigir; L3 ADR 004 governa o tracer atual.
