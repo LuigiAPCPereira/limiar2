@@ -11,7 +11,7 @@ require (
 	golang.org/x/sync v0.23.0
 	golang.org/x/term v0.46.0
 	pgregory.net/rapid v1.3.0
-	turso.tech/database/tursogo v0.7.2
+	turso.tech/database/tursogo v0.8.1
 )
 
 require (
@@ -49,7 +49,7 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tursodatabase/turso-go-platform-libs v0.7.2 // indirect
+	github.com/tursodatabase/turso-go-platform-libs v0.8.1 // indirect
 	github.com/xyproto/randomstring v1.2.0 // indirect
 	github.com/yuin/goldmark v1.8.4 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
