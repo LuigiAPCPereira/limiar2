@@ -257,6 +257,9 @@ func TestGuardedRecoveryAPICommonDifferenceClassification(t *testing.T) {
 }
 
 func TestGuardedRecoveryAPIChannelDifferenceClassification(t *testing.T) {
+	tooLongDialog := &tg.Dialog{Peer: &tg.PeerChannel{ChannelID: 77}}
+	tooLongDialog.SetPts(42)
+
 	tests := []struct {
 		name      string
 		diff      tg.UpdatesChannelDifferenceClass
@@ -280,7 +283,7 @@ func TestGuardedRecoveryAPIChannelDifferenceClassification(t *testing.T) {
 		},
 		{
 			name:      "too long",
-			diff:      &tg.UpdatesChannelDifferenceTooLong{},
+			diff:      &tg.UpdatesChannelDifferenceTooLong{Dialog: tooLongDialog},
 			wantItems: 1,
 			wantKind:  recoveryEventDiscontinuity,
 		},
