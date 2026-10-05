@@ -44,10 +44,11 @@ func (f LiveSubscriptionClassifierFunc) SubscriptionIDs(ctx context.Context, upd
 // Runtime. A composição produtiva deve fazê-lo explicitamente quando recovery/lifecycle
 // estiverem prontos para esse caminho.
 type LiveIngress struct {
-	admission  *acquisition.ConfiguredAdmission
-	classifier LiveSubscriptionClassifier
-	forward    gotdtelegram.UpdateHandler
-	now        func() time.Time
+	admission      *acquisition.ConfiguredAdmission
+	classifier     LiveSubscriptionClassifier
+	forward        gotdtelegram.UpdateHandler
+	now            func() time.Time
+	onSourceFailure func(error)
 }
 
 var _ gotdtelegram.UpdateHandler = (*LiveIngress)(nil)
@@ -71,6 +72,16 @@ func newLiveIngressWithClock(
 	forward gotdtelegram.UpdateHandler,
 	now func() time.Time,
 ) (*LiveIngress, error) {
+	return newLiveIngressWithClockAndFailure(admission, classifier, forward, now, nil)
+}
+
+func newLiveIngressWithClockAndFailure(
+	admission *acquisition.ConfiguredAdmission,
+	classifier LiveSubscriptionClassifier,
+	forward gotdtelegram.UpdateHandler,
+	now func() time.Time,
+	onSourceFailure func(error),
+) (*LiveIngress, error) {
 	switch {
 	case admission == nil:
 		return nil, fmt.Errorf("%w: Source Admission configurada ausente", ErrInvalidLiveIngress)
@@ -82,10 +93,11 @@ func newLiveIngressWithClock(
 		return nil, fmt.Errorf("%w: relógio ausente", ErrInvalidLiveIngress)
 	default:
 		return &LiveIngress{
-			admission:  admission,
-			classifier: classifier,
-			forward:    forward,
-			now:        now,
+			admission:       admission,
+			classifier:      classifier,
+			forward:         forward,
+			now:             now,
+			onSourceFailure: onSourceFailure,
 		}, nil
 	}
 }
@@ -101,17 +113,17 @@ func (h *LiveIngress) Handle(ctx context.Context, updates tg.UpdatesClass) error
 		return fmt.Errorf("%w: adapter não inicializado", ErrInvalidLiveIngress)
 	}
 	if updates == nil {
-		return fmt.Errorf("%w: envelope Telegram ausente", ErrInvalidLiveIngress)
+		return h.failSource(fmt.Errorf("%w: envelope Telegram ausente", ErrInvalidLiveIngress))
 	}
 
 	subscriptionIDs, err := h.classifier.SubscriptionIDs(ctx, updates)
 	if err != nil {
-		return fmt.Errorf("ingress live do Telegram: classificar subscriptions: %w", err)
+		return h.failSource(fmt.Errorf("ingress live do Telegram: classificar subscriptions: %w", err))
 	}
 
 	payload, sourceEventType, err := encodeLiveUpdates(updates)
 	if err != nil {
-		return err
+		return h.failSource(err)
 	}
 
 	item := evidence.Evidence{
@@ -127,6 +139,13 @@ func (h *LiveIngress) Handle(ctx context.Context, updates tg.UpdatesClass) error
 	return h.admission.Admit(ctx, subscriptionIDs, item, func(ctx context.Context) error {
 		return h.forward.Handle(ctx, updates)
 	})
+}
+
+func (h *LiveIngress) failSource(err error) error {
+	if h != nil && h.onSourceFailure != nil && err != nil {
+		h.onSourceFailure(err)
+	}
+	return err
 }
 
 func encodeLiveUpdates(updates tg.UpdatesClass) ([]byte, string, error) {
