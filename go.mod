@@ -8,7 +8,7 @@ require (
 	github.com/ncruces/go-sqlite3 v0.35.4
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	golang.org/x/sync v0.23.0
+	golang.org/x/sync v0.24.0
 	golang.org/x/term v0.47.0
 	pgregory.net/rapid v1.3.0
 	turso.tech/database/tursogo v0.8.2
